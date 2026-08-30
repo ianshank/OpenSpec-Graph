@@ -5,6 +5,27 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed — post-merge quality review (`post-merge-quality-review` change package)
+
+- **Lint hygiene**: `Finding.render` uses `contextlib.suppress(ValueError)`
+  (SIM105); `scaffold.plan_init` drops a dead assignment before `return`
+  (RET504). Extended ruff families now report zero findings.
+- **Type safety**: `graph.build_graph` carries `dict[str, object]` type
+  arguments; `mypy --strict` on the package is clean (advisory, not a gate —
+  DEC-PR-001).
+- **No magic numbers in the graph contract**: node-text truncation is the named
+  `NODE_TEXT_LIMIT = 200` constant (preserves the prior value exactly).
+- **Reusable gate helpers**: `tools/_common.py` (`repo_root()`, `read_text()`)
+  is shared by `check_docs.py`, `check_no_hardcoded_thresholds.py`, and
+  `check_secrets.py` via the standalone-script `sys.path` bootstrap — repo-root
+  discovery is now defined once.
+- **Edge-case tests**: unknown `SPECGRAPH_LOG_LEVEL`, path-outside-root
+  fallback, `init --dry-run`, and mixed-dialect warning. Branch coverage
+  90.8% → 91.3%.
+- **Docs**: optional pre-push hook in `docs/hooks.md`; deferred hooks/loops
+  (watch loop, scheduled self-validation cron, pre-push) and skills/agents
+  (entry-point rule registration) extension points in `docs/next-steps.md`.
+
 ### Added — enterprise hardening (`enterprise-hardening` change package)
 
 - **`make pre-pr`**: one-command enterprise AQA gate (test + lint + typecheck +

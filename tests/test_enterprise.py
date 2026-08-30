@@ -302,3 +302,85 @@ def test_docs_check_passes() -> None:
         capture_output=True, text=True, check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+# --- Peer-review edge cases (post-merge-quality-review) ---------------------
+# Targeted coverage of high-risk branches surfaced by the coverage report,
+# not a chase for 100%. Each test names the uncovered line it closes.
+
+from openspec_graph import graph as graph_mod
+from openspec_graph import log as log_mod
+from openspec_graph.rules import Finding
+
+
+def test_log_level_from_unknown_env_returns_default() -> None:
+    # Closes log.py:28 — an unrecognized SPECGRAPH_LOG_LEVEL must fall back to
+    # the default (WARNING), not raise and not crash the CLI.
+    # logging: DEBUG=10, INFO=20, WARNING=30, ERROR=40.
+    assert log_mod.level_from(verbose=False, env="BOGUS") == 30  # WARNING
+    assert log_mod.level_from(verbose=False, env="DEBUG") == 10
+    assert log_mod.level_from(verbose=False, env="INFO") == 20
+    # --verbose overrides any env var, including an unknown one.
+    assert log_mod.level_from(verbose=True, env="BOGUS") == 10
+
+
+def test_graph_relative_to_outside_root_falls_back() -> None:
+    # Closes graph.py:160-161 — a spec path not under the repo root must fall
+    # back to its absolute string rather than raising ValueError.
+    outside = Path("/elsewhere/not/under/root/spec.md")
+    assert graph_mod._relative_to(outside, Path("/repo")) == str(outside)
+    # And a path under root still resolves relatively.
+    assert graph_mod._relative_to(Path("/repo/openspec/x.md"), Path("/repo")) == "openspec/x.md"
+
+
+def test_finding_render_when_path_outside_root() -> None:
+    # Closes rules.py:47-48 (the contextlib.suppress path) — a Finding whose
+    # path is not under root still renders, showing the absolute path.
+    f = Finding(
+        rule="G004",
+        severity="ERROR",
+        message="criterion cites a stage the repo lacks",
+        path=Path("/elsewhere/spec.md"),
+        line=12,
+    )
+    rendered = f.render(root=Path("/repo"))
+    assert "/elsewhere/spec.md:12" in rendered
+    assert "G004" in rendered
+
+
+def test_init_dry_run_writes_nothing(repo: Path) -> None:
+    # Closes cli.py:72-73 — `init --dry-run` lists the planned files but writes
+    # nothing (no openspec/ tree created).
+    result = _run_cli(repo, "init", "--dry-run")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "dry run" in result.stdout.lower()
+    assert not (repo / "openspec").exists(), "--dry-run must not create openspec/"
+
+
+_UPSTREAM_SPEC = """\
+# Spec delta — Demo capability
+
+## ADDED Requirements
+
+### Requirement: the writer SHALL attest every write
+
+Prose obligation.
+
+#### Scenario: attested writes record an evidence id
+
+- **GIVEN** an attested writer
+- **WHEN** `make test` runs the suite
+- **THEN** an evidence id is recorded
+"""
+
+
+def test_detect_warns_on_mixed_dialects(repo: Path) -> None:
+    # Closes cli.py:62 + parse.py:284 — a repo containing both an upstream-form
+    # spec and a harness-form spec is classified "mixed" and `detect` emits the
+    # warning rather than silently resolving per file.
+    _write_spec(repo, "c1", "cap", GOOD_HARNESS)
+    _write_spec(repo, "c2", "cap2", _UPSTREAM_SPEC)
+    result = _run_cli(repo, "detect")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "mixed" in result.stdout.lower()
+    assert "WARN" in result.stdout

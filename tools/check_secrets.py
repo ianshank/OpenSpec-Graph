@@ -18,7 +18,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _common import repo_root
+
+REPO_ROOT = repo_root()
 GITLEAKS_CONFIG = REPO_ROOT / ".gitleaks.toml"
 
 # High-entropy token patterns for the fallback scanner. Intentionally narrow:

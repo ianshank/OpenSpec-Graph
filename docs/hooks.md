@@ -22,6 +22,27 @@ tool-version pins to drift from the dev extras:
 
 Every hook is fail-closed: a violation blocks the commit.
 
+## Optional pre-push hook
+
+The commit-time hook runs lint + typecheck + security + validate. If you also
+want to block a broken **push** (catching what CI would catch, including the
+full test suite + coverage floor) before it leaves your machine, install a
+pre-push hook that runs the one-command gate:
+
+```bash
+cat > .git/hooks/pre-push <<'EOF'
+#!/usr/bin/env sh
+# Run the full enterprise gate before a push reaches CI.
+exec make pre-pr
+EOF
+chmod +x .git/hooks/pre-push
+```
+
+This is **optional and not installed by default** — `make pre-pr` runs the full
+coverage suite, so it is slower than the commit-time hook. Pre-commit + CI
+already cover the common case; the pre-push hook is for contributors who want
+a local net before the round-trip to CI.
+
 ## CI hooks (`.github/workflows/ci.yml`)
 
 | Job | Trigger | Gate |

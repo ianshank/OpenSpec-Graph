@@ -237,7 +237,7 @@ Detected by `openspec-graph` — correct anything wrong, this file is authoritat
 3. Every spec carries at least one non-success criterion.
 4. A `(BLOCKING)` open question keeps the spec at `Status: DRAFT`.
 """
-    plans = [
+    return [
         WritePlan(
             root / CONFIG_NAME,
             json.dumps(config, indent=2) + "\n",
@@ -245,7 +245,6 @@ Detected by `openspec-graph` — correct anything wrong, this file is authoritat
         ),
         WritePlan(root / "project.md", project_md, (root / "project.md").exists()),
     ]
-    return plans
 
 
 def apply(plans: list[WritePlan], force: bool = False) -> list[Path]:

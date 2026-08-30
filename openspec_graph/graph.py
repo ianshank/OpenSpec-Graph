@@ -20,6 +20,11 @@ from .detect import StackProfile
 
 __all__ = ["NoOpenSpecTreeError", "build_graph"]
 
+# Truncate node text in the exported graph so a single verbose requirement or
+# criterion cannot bloat the JSON contract. Named (not a magic number) so the
+# graph-diff and golden-fixture tests can reason about it.
+NODE_TEXT_LIMIT = 200
+
 
 class NoOpenSpecTreeError(Exception):
     """Raised when the target has no ``openspec/`` directory to graph."""
@@ -30,7 +35,7 @@ def _stages_cited(criterion_verified_by: str) -> list[str]:
     return parse._MAKE_REF.findall(criterion_verified_by or "")
 
 
-def build_graph(profile: StackProfile) -> dict:
+def build_graph(profile: StackProfile) -> dict[str, object]:
     """Build the dependency graph for every change package under ``openspec/``.
 
     Raises ``NoOpenSpecTreeError`` if the target has no ``openspec/`` tree
@@ -48,8 +53,8 @@ def build_graph(profile: StackProfile) -> dict:
     known_invariants = set(profile.invariant_ids)
     dialect = profile.dialect if profile.dialect != "unknown" else "auto"
 
-    nodes: list[dict] = []
-    edges: list[dict] = []
+    nodes: list[dict[str, object]] = []
+    edges: list[dict[str, object]] = []
     seen_nodes: set[str] = set()
 
     def add_node(node_id: str, **fields: object) -> None:
@@ -77,7 +82,7 @@ def build_graph(profile: StackProfile) -> dict:
             add_node(
                 req.ident,
                 type="requirement",
-                text=req.text[:200],
+                text=req.text[:NODE_TEXT_LIMIT],
                 kind=req.kind,
                 spec=spec_node,
             )
@@ -86,7 +91,7 @@ def build_graph(profile: StackProfile) -> dict:
             add_node(
                 crit.ident,
                 type="criterion",
-                text=crit.text[:200],
+                text=crit.text[:NODE_TEXT_LIMIT],
                 is_negative=crit.is_negative,
                 has_stage=crit.has_stage,
                 spec=spec_node,

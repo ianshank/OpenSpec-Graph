@@ -40,3 +40,35 @@ over-engineering.
 7. **Docker as primary delivery** — the `Dockerfile` is a convenience runner.
    `pip install` remains the primary path; Docker is not required for local dev
    and the Makefile never depends on it (DEC-EH-001).
+
+## Hooks & loops (deliberately not wired yet)
+
+Each of these is a real opportunity, but is deferred until the value is proven so
+it is not cargo-culted into the v0.1 surface.
+
+8. **`make watch` dev loop** — a file-watcher that re-runs `make validate` (or
+   `make test -- -k spec`) on every spec/source change. Worth adding only with a
+   dependency-free watcher (stdlib `asyncio` + `os.stat` polling, or `watchdog`
+   as an optional extra). Today the pre-commit hook already runs validate on
+   commit, which covers the main need.
+
+9. **Scheduled self-validation cron** — a scheduled job that runs `specgraph
+   validate --fail-on ERROR` + `make security` against `main` to catch spec/rules
+   drift introduced by dependency or tooling bumps. Only justified once the repo
+   is consumed by more than one team; for a single-consumer v0.1 tool the PR CI
+   gate already enforces this on every change.
+
+10. **Pre-push hook** — `make pre-pr` is the one-command gate; a `.git/hooks/
+    pre-push` that calls it would catch a broken push before CI. Documented as
+    optional in `docs/hooks.md` rather than forced, because the full suite
+    (coverage included) is slower than the commit-time lint+typecheck+validate
+    hook and most pushes are already covered by pre-commit + CI.
+
+## Skills / agents
+
+11. **Rules as reusable skills** — the 16 rules already are the reusable
+    "skills" and the evaluator is the deterministic harness (see
+    `docs/agents-skills-harness.md`). The future extension point for composing
+    rule packs across repos is item 3 (entry-point `Rule` registration). No
+    autonomous agent layer is planned: the harness evaluates, it never proposes
+    or acts (INV-16 — the evaluator proposes nothing).
