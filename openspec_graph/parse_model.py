@@ -16,6 +16,7 @@ from .parse_semantics import (
     MAKE_REF,
     NEGATIVE_PATTERNS,
     PYTEST_SEL,
+    Waiver,
 )
 
 __all__ = ["Criterion", "ParsedSpec", "Requirement"]
@@ -74,6 +75,7 @@ class ParsedSpec:
     delta_headers: tuple[str, ...]
     scenario_levels: tuple[int, ...] = ()
     suppressed: frozenset[str] = frozenset()
+    waivers: tuple[Waiver, ...] = ()
     raw: str = dataclasses.field(repr=False, default="")
 
     @property

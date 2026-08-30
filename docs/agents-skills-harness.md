@@ -25,7 +25,7 @@ they are not confused with autonomous-agent abstractions.
 
 The whole point of a governance CLI is **reproducibility**: the same spec tree
 must produce the same findings, every time, on every machine. That is
-incompatible with non-deterministic planning. The 16 rules are the "skills" —
+incompatible with non-deterministic planning. The 17 rules are the "skills" —
 fixed, auditable, and byte-stable in their output (AC-EH-4). Waivers are
 explicit inline comments (`<!-- specgraph:allow G003 reason -->`) that downgrade
 a finding to INFO but keep it visible — a suppression is never silent.

@@ -39,19 +39,24 @@ __all__ = [
 
 RULES: tuple[Rule, ...] = GENERIC_RULES + HARNESS_RULES + UPSTREAM_RULES
 
+# G007 (a waiver must state a reason) cannot be silenced by naming itself in
+# a reason-less waiver -- that would let the enforcement rule trivially
+# suppress its own violation report.
+_NON_WAIVABLE = frozenset({"G007"})
+
 
 def evaluate(spec: ParsedSpec, profile: StackProfile) -> list[Finding]:
     """Run every applicable rule.
 
     A spec may waive a rule with an inline ``<!-- specgraph:allow G003 reason -->``
     comment. Waivers are downgraded to INFO rather than dropped, so a suppression
-    stays visible in the report and in CI logs.
+    stays visible in the report and in CI logs. G007 is exempt (_NON_WAIVABLE).
     """
     findings: list[Finding] = []
     for rule in RULES:
         if not rule.applies(spec.dialect):
             continue
-        suppressed = rule.ident in spec.suppressed
+        suppressed = rule.ident in spec.suppressed and rule.ident not in _NON_WAIVABLE
         for message in rule.check(spec, profile):
             findings.append(
                 Finding(

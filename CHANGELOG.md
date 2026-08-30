@@ -5,6 +5,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — waiver reason enforcement / CP-4 slice (`add-waiver-ledger-and-inv-lints` change package, in progress)
+
+- **New rule `G007`** (ERROR): a waiver (`<!-- specgraph:allow RULE reason -->`)
+  with no reason text now fails the gate — previously waivers were silently
+  downgraded to INFO regardless of whether a reason was given. A comment
+  naming multiple rules fires one independent G007 finding per rule name.
+  G007 cannot be silenced by waiving itself with no reason.
+- **`parse_semantics.Waiver`/`parse_waivers`**: the waiver regex always
+  captured the reason text; `suppressions()` discarded it. `ParsedSpec`
+  gains an additive `waivers: tuple[Waiver, ...]` field (rule, reason,
+  line) alongside the existing `suppressed` set, which is now derived from
+  it rather than computed separately.
+- 17 rules total (was 16).
+
 ### Added — dialect cards / CP-2 (`add-dialect-cards` change package)
 
 - **`planlint detect --format json`**: emits a stable, schema-versioned

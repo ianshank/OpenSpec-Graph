@@ -1,4 +1,4 @@
-"""Universal (dialect-agnostic) rules: G001-G005."""
+"""Universal (dialect-agnostic) rules: G001-G005, G007."""
 
 from __future__ import annotations
 
@@ -82,10 +82,20 @@ def _unknown_invariant(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]
             yield f"references {ref}, which is not declared in {src}"
 
 
+def _unjustified_waiver(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
+    for waiver in spec.waivers:
+        if not waiver.reason:
+            yield (
+                f"waiver of {waiver.rule} at line {waiver.line} has no reason; "
+                "a waiver is a claim that must justify itself"
+            )
+
+
 GENERIC_RULES: tuple[Rule, ...] = (
     Rule("G001", ERROR, ("*",), "spec declares verifiable criteria", _no_criteria),
     Rule("G002", ERROR, ("*",), "at least one non-success criterion", _needs_negative),
     Rule("G003", ERROR, ("*",), "no hard-coded thresholds", _hard_coded_threshold),
     Rule("G004", ERROR, ("*",), "cited make targets exist", _unknown_make_target),
     Rule("G005", WARN, ("*",), "cited invariants are declared", _unknown_invariant),
+    Rule("G007", ERROR, ("*",), "every waiver states a reason", _unjustified_waiver),
 )

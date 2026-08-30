@@ -122,6 +122,7 @@ quality without making the document wrong.
 | G003 | ERROR | any | No hard-coded thresholds; read them from the detected locator |
 | G004 | ERROR | any | Every cited `make <target>` exists in the target's Makefile |
 | G005 | WARN | any | Every cited `INV-n` is declared in the invariant source |
+| G007 | ERROR | any | Every waiver (`specgraph:allow`) states a reason |
 | H001 | ERROR | harness | Every AC has `_Verified by:_` naming a runnable stage |
 | H002 | WARN | harness | Every AC traces to an `R-`/`C-` requirement |
 | H003 | WARN | harness | No orphan requirements (every one is verified by some AC) |

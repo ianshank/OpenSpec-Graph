@@ -30,6 +30,12 @@
     "summary": "cited invariants are declared"
   },
   {
+    "id": "G007",
+    "severity": "ERROR",
+    "dialects": "*",
+    "summary": "every waiver states a reason"
+  },
+  {
     "id": "H001",
     "severity": "ERROR",
     "dialects": "harness",

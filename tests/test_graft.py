@@ -848,8 +848,77 @@ def test_waiver_does_not_leak_to_other_rules(repo: Path) -> None:
 
 
 def test_cli_validate_passes_when_the_only_error_is_waived(repo: Path) -> None:
+    # Reason required (CP-4/G007): a reason-less waiver would now also trip
+    # G007, so this fixture must carry one to keep testing what it always
+    # meant to test -- a *justified* waiver passing.
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement",
+        "<!-- specgraph:allow G003 95% is this spec's own coverage floor -->\n\n## Problem Statement",
+    ).replace("An attested write records an evidence id.", "Coverage is at least 95%.")
+    write_spec(repo, "waived-change", "waived-cap", body)
+    assert main(["--target", str(repo), "validate"]) == 0
+
+
+def test_cli_validate_fails_when_a_waiver_has_no_reason(repo: Path) -> None:
     body = GOOD_HARNESS.replace(
         "## Problem Statement", "<!-- specgraph:allow G003 -->\n\n## Problem Statement"
     ).replace("An attested write records an evidence id.", "Coverage is at least 95%.")
     write_spec(repo, "waived-change", "waived-cap", body)
-    assert main(["--target", str(repo), "validate"]) == 0
+    assert main(["--target", str(repo), "validate"]) == 1
+
+
+def test_unreasoned_waiver_downgrades_the_named_rule_and_also_fires_g007(repo: Path) -> None:
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement", "<!-- specgraph:allow G003 -->\n\n## Problem Statement"
+    ).replace("An attested write records an evidence id.", "Coverage is at least 95%.")
+    found = findings_for(repo, body, "harness")
+    g003 = [f for f in found if f.rule == "G003"]
+    g007 = [f for f in found if f.rule == "G007"]
+    assert g003 and all(f.severity == "INFO" and "[waived]" in f.message for f in g003)
+    assert g007 and all(f.severity == "ERROR" for f in g007)
+    assert any("G003" in f.message for f in g007)
+
+
+def test_reasoned_waiver_does_not_trip_g007(repo: Path) -> None:
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement",
+        "<!-- specgraph:allow G003 this spec's subject IS the 95% coverage floor -->"
+        "\n\n## Problem Statement",
+    ).replace("An attested write records an evidence id.", "Coverage is at least 95%.")
+    assert "G007" not in rule_ids(findings_for(repo, body, "harness"))
+
+
+def test_g007_fires_regardless_of_dialect(repo: Path) -> None:
+    body = GOOD_UPSTREAM.replace(
+        "## ADDED Requirements", "<!-- specgraph:allow G002 -->\n\n## ADDED Requirements"
+    )
+    assert "G007" in rule_ids(findings_for(repo, body, "upstream"))
+
+
+def test_g007_is_not_suppressible_by_waiving_itself_without_a_reason(repo: Path) -> None:
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement", "<!-- specgraph:allow G007 -->\n\n## Problem Statement"
+    )
+    g007 = [f for f in findings_for(repo, body, "harness") if f.rule == "G007"]
+    assert g007 and all(f.severity == "ERROR" for f in g007)
+
+
+def test_multi_rule_waiver_with_no_reason_fires_one_g007_per_waived_rule(repo: Path) -> None:
+    # A single comment naming N rules expands to N Waiver records (one per
+    # rule, all sharing that comment's reason/line) -- so an unreasoned
+    # multi-rule waiver produces one independent G007 finding per name, not
+    # one finding for the whole comment.
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement", "<!-- specgraph:allow G003,G004 -->\n\n## Problem Statement"
+    ).replace("An attested write records an evidence id.", "Coverage is at least 95%.")
+    g007 = [f for f in findings_for(repo, body, "harness") if f.rule == "G007"]
+    assert len(g007) == 2
+    messages = " ".join(f.message for f in g007)
+    assert "G003" in messages and "G004" in messages
+
+
+def test_suppressions_unchanged_behavior_after_waiver_refactor() -> None:
+    from openspec_graph.parse_semantics import suppressions
+
+    text = "<!-- specgraph:allow G003, G004 because reasons -->"
+    assert suppressions(text) == {"G003", "G004"}

@@ -45,7 +45,7 @@ _BOUNDARY_EXEMPT = {"cli", "__init__"}
 _EXPECTED_HASHES = {
     "validate": "0a810b4f791fa5684dbf384df7ab626ddf96c3b62fcd9d8299dc8d774a3b82e0",
     "graph": "6a63cc66d2e319f9fde85a37f46f333429c6be9989be5d5eb6686183afedfa9c",
-    "rules": "e25ad6cd262a52447cd11ada2c96494b3a7af2ca83cb8e6af6911f20b719540f",
+    "rules": "6fdc3f0bd20fa3ba4fd95073740ffd95caeda632b4a327f18722d36d6ad7018d",
 }
 
 

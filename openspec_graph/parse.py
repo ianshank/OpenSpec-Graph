@@ -13,9 +13,9 @@ Decomposed into focused modules; this file is the facade:
 - :mod:`parse_upstream` — upstream-dialect parser (Requirement/Scenario headings).
 
 Public surface (``parse_spec``, ``scenario_has_gwt``, ``ParsedSpec``,
-``Criterion``, ``Requirement``, and the compiled ``MAKE_REF``) is re-exported
-here so existing ``from openspec_graph.parse import ...`` imports keep working
-(R-DG-1).
+``Criterion``, ``Requirement``, ``Waiver``, and the compiled ``MAKE_REF``) is
+re-exported here so existing ``from openspec_graph.parse import ...`` imports
+keep working (R-DG-1).
 """
 
 from __future__ import annotations
@@ -31,9 +31,10 @@ from .parse_semantics import (
     NEGATIVE_PATTERNS,
     SECTION,
     STATUS,
+    Waiver,
     hard_coded,
+    parse_waivers,
     scenario_levels,
-    suppressions,
     threshold_values,
 )
 from .parse_semantics import REQUIREMENT as _REQUIREMENT
@@ -49,7 +50,9 @@ __all__ = [
     "Criterion",
     "ParsedSpec",
     "Requirement",
+    "Waiver",
     "parse_spec",
+    "parse_waivers",
     "scenario_has_gwt",
     "threshold_values",
 ]
@@ -75,6 +78,7 @@ def parse_spec(path: Path, dialect: str) -> ParsedSpec:
             reqs, criteria = _parse_upstream(text)
 
     status = STATUS.search(text)
+    waivers = parse_waivers(text)
     return ParsedSpec(
         path=path,
         dialect=resolved,
@@ -87,7 +91,8 @@ def parse_spec(path: Path, dialect: str) -> ParsedSpec:
         hard_coded_thresholds=hard_coded(text),
         delta_headers=tuple(m.group(1) for m in DELTA_HEADER.finditer(text)),
         scenario_levels=scenario_levels(text),
-        suppressed=suppressions(text),
+        suppressed=frozenset(w.rule for w in waivers),
+        waivers=waivers,
         raw=text,
     )
 
