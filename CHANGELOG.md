@@ -22,6 +22,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **Edge-case tests**: unknown `SPECGRAPH_LOG_LEVEL`, path-outside-root
   fallback, `init --dry-run`, and mixed-dialect warning. Branch coverage
   90.8% → 91.3%.
+- **Structural guard tests**: AC-PR-3/4/6/8 are enforced by `make test`, not
+  one-off grep — a regression reintroducing a bare `[:200]`, a duplicated
+  repo-root literal, a third-party import in `_common.py`, or a forced
+  pre-push hook in the Makefile/CI fails the suite. Logging-level assertions
+  use `logging.WARNING`/`DEBUG`/`INFO` constants, not magic integers.
 - **Docs**: optional pre-push hook in `docs/hooks.md`; deferred hooks/loops
   (watch loop, scheduled self-validation cron, pre-push) and skills/agents
   (entry-point rule registration) extension points in `docs/next-steps.md`.

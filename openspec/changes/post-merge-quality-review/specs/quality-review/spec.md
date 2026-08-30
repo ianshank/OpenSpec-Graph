@@ -45,23 +45,24 @@ contributor.
 
 ## Acceptance Criteria
 
-- [x] **AC-PR-1:** `ruff check --select B,SIM,RET,UP,RUF,PTH,PIE,C4 openspec_graph
-  tests tools` reports zero findings (R-PR-1).
-  _Verified by:_ `ruff check --select B,SIM,RET,UP,RUF,PTH,PIE,C4 openspec_graph tests tools` · stage: `make lint`
+- [x] **AC-PR-1:** The default `make lint` ruff config is clean, AND the
+  extended ruff families (run as an advisory diagnostic, not a hard gate) report
+  zero findings (R-PR-1).
+  _Verified by:_ `make lint` (hard gate) + advisory `ruff check --select B,SIM,RET,UP,RUF,PTH,PIE,C4 openspec_graph tests tools` · stage: `make lint`
 
 - [x] **AC-PR-2:** `mypy --strict openspec_graph` reports zero `type-arg`
-  errors (R-PR-1).
-  _Verified by:_ `make typecheck` (mypy) · stage: `make typecheck`
+  errors (R-PR-1). Advisory diagnostic; the hard gate is `make typecheck`.
+  _Verified by:_ `make typecheck` (mypy, hard gate) + advisory `mypy --strict openspec_graph` · stage: `make typecheck`
 
 - [x] **AC-PR-3 (non-success):** The graph node-text truncation is a named
-  constant (`NODE_TEXT_LIMIT`); a grep for a bare `[:200]` literal in
-  `graph.py` finds none (R-PR-2).
-  _Verified by:_ `grep -n '[:200]' openspec_graph/graph.py` (empty) · stage: `make pre-pr`
+  constant (`NODE_TEXT_LIMIT`); a bare `[:200]` literal in `graph.py` fails
+  `make test` (R-PR-2).
+  _Verified by:_ `pytest -k graph_has_no_bare_truncation_magic_number` · stage: `make test`
 
 - [x] **AC-PR-4:** The three gate scripts import `repo_root`/`read_text` from a
-  shared `tools/_common.py`; the duplicated `Path(__file__).resolve().parent.parent`
-  literal appears in none of them (R-PR-3).
-  _Verified by:_ `grep 'Path(__file__).resolve().parent.parent' tools/check_*.py` (empty) · stage: `make pre-pr`
+  shared `tools/_common.py`; a re-introduced `Path(__file__).resolve().parent.parent`
+  literal in any of them fails `make test` (R-PR-3).
+  _Verified by:_ `pytest -k gate_scripts_have_no_duplicated_repo_root_literal` · stage: `make test`
 
 - [x] **AC-PR-5:** Targeted edge-case tests exist and pass for: unknown
   `SPECGRAPH_LOG_LEVEL` (default fallback), path-outside-root in
@@ -69,10 +70,9 @@ contributor.
   (R-PR-4).
   _Verified by:_ `pytest -k "level_from_unknown or relative_to_outside"` · stage: `make test`
 
-- [x] **AC-PR-6 (non-success):** `tools/_common.py` is stdlib-only (no third-party
-  imports); if a third-party import were introduced, `make pre-pr` must fail
-  (R-PR-3).
-  _Verified by:_ `grep -E '^(import|from) ' tools/_common.py` (stdlib only) · stage: `make pre-pr`
+- [x] **AC-PR-6 (non-success):** `tools/_common.py` is stdlib-only; a third-party
+  import introduced into it fails `make test` (R-PR-3).
+  _Verified by:_ `pytest -k common_module_is_stdlib_only` · stage: `make test`
 
 - [x] **AC-PR-7:** `docs/next-steps.md` documents the deferred hooks/loops
   (watch loop, scheduled self-validation cron, pre-push hook) and the
@@ -81,17 +81,17 @@ contributor.
   _Verified by:_ `specgraph validate` · stage: `make pre-pr`
 
 - [x] **AC-PR-8 (non-success):** The pre-push hook is documented as optional and
-  not installed by default; the Makefile and CI workflow do not reference it
-  (a forced slow pre-push hook is rejected) (R-PR-5).
-  _Verified by:_ `grep -rn pre-push Makefile .github/workflows/ci.yml` (empty) · stage: `make pre-pr`
+  not installed by default; a reference to `pre-push` in the Makefile or CI
+  workflow fails `make test` (a forced slow pre-push hook is rejected) (R-PR-5).
+  _Verified by:_ `pytest -k pre_push_hook_is_not_forced_into_makefile_or_ci` · stage: `make test`
 
 ## Validation Matrix
 
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
 | Lint + type | `make lint` + `make typecheck` | AC-PR-1, AC-PR-2 |
-| Tests | `make test` | AC-PR-5 |
-| Full gate | `make pre-pr` | AC-PR-3, AC-PR-4, AC-PR-6, AC-PR-7, AC-PR-8 |
+| Tests | `make test` | AC-PR-3, AC-PR-4, AC-PR-5, AC-PR-6, AC-PR-8 |
+| Full gate | `make pre-pr` | AC-PR-7 |
 
 ---
 

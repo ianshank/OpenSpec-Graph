@@ -8,6 +8,7 @@ subprocesses (deterministic, observable) against fixture repos built in tmp_path
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -315,13 +316,13 @@ from openspec_graph.rules import Finding
 
 def test_log_level_from_unknown_env_returns_default() -> None:
     # Closes log.py:28 — an unrecognized SPECGRAPH_LOG_LEVEL must fall back to
-    # the default (WARNING), not raise and not crash the CLI.
-    # logging: DEBUG=10, INFO=20, WARNING=30, ERROR=40.
-    assert log_mod.level_from(verbose=False, env="BOGUS") == 30  # WARNING
-    assert log_mod.level_from(verbose=False, env="DEBUG") == 10
-    assert log_mod.level_from(verbose=False, env="INFO") == 20
+    # the default (WARNING), not raise and not crash the CLI. Asserts against
+    # the logging constants, not magic integers.
+    assert log_mod.level_from(verbose=False, env="BOGUS") == logging.WARNING
+    assert log_mod.level_from(verbose=False, env="DEBUG") == logging.DEBUG
+    assert log_mod.level_from(verbose=False, env="INFO") == logging.INFO
     # --verbose overrides any env var, including an unknown one.
-    assert log_mod.level_from(verbose=True, env="BOGUS") == 10
+    assert log_mod.level_from(verbose=True, env="BOGUS") == logging.DEBUG
 
 
 def test_graph_relative_to_outside_root_falls_back() -> None:
@@ -384,3 +385,58 @@ def test_detect_warns_on_mixed_dialects(repo: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     assert "mixed" in result.stdout.lower()
     assert "WARN" in result.stdout
+
+
+# --- Structural guards: wire AC-PR-3/4/6/8 into make test ---------------------
+# These read the repo's own source so a regression that reintroduces a banned
+# pattern fails `make test`, not a one-off manual grep.
+
+
+def test_graph_has_no_bare_truncation_magic_number() -> None:
+    # AC-PR-3: the public graph JSON contract must not carry a bare [:200]
+    # literal; the truncation limit is the named NODE_TEXT_LIMIT constant.
+    source = (REPO_ROOT / "openspec_graph" / "graph.py").read_text(encoding="utf-8")
+    assert "[:200]" not in source, "graph.py must use NODE_TEXT_LIMIT, not [:200]"
+    assert "NODE_TEXT_LIMIT" in source, "graph.py must define NODE_TEXT_LIMIT"
+
+
+def test_gate_scripts_have_no_duplicated_repo_root_literal() -> None:
+    # AC-PR-4: no gate script may re-derive the repo root with the inline
+    # Path(__file__).resolve().parent.parent literal; the scripts that need it
+    # import repo_root() from tools/_common.py instead. (Scripts that take root
+    # as a CLI arg are unaffected.)
+    import glob
+
+    scripts = glob.glob(str(REPO_ROOT / "tools" / "check_*.py"))
+    assert scripts, "expected at least one tools/check_*.py script"
+    for script in scripts:
+        text = Path(script).read_text(encoding="utf-8")
+        assert "Path(__file__).resolve().parent.parent" not in text, (
+            f"{script} must use tools/_common.repo_root(), not the literal"
+        )
+
+
+def test_common_module_is_stdlib_only() -> None:
+    # AC-PR-6: tools/_common.py must import only stdlib modules (no third-party
+    # deps), so the gate scripts stay runnable in a bare CI runner.
+    import ast
+
+    tree = ast.parse((REPO_ROOT / "tools" / "_common.py").read_text(encoding="utf-8"))
+    allowed = {"__future__", "pathlib", "os", "sys"}
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module.split(".")[0])
+    third_party = imported - allowed
+    assert not third_party, f"_common.py must be stdlib-only, found: {third_party}"
+
+
+def test_pre_push_hook_is_not_forced_into_makefile_or_ci() -> None:
+    # AC-PR-8: the pre-push hook is optional/docs-only; the Makefile and CI
+    # workflow must never reference or install it (a forced slow hook is rejected).
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "pre-push" not in makefile, "Makefile must not reference pre-push"
+    assert "pre-push" not in ci, "ci.yml must not reference pre-push"
