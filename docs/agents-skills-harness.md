@@ -46,6 +46,14 @@ coverage locator, dialect); `parse` turns prose into structured data; the
 gates. Adding a skill is a one-function, one-test change (see
 `docs/hooks.md`).
 
+Makefile target detection is itself a small illustration of "disposes, does
+not propose": `machinery.py` structurally *reads* a target repo's Makefile
+text and reports what it found — it never executes anything, not even the
+target repo's own `make`, at any confidence level. Where structural
+parsing can't confidently resolve a target, it says so (a low-confidence
+signal) and falls back to the pre-existing detection, rather than guessing
+or acting on the target repo's behalf.
+
 ## Determinism contract
 
 The skills are deterministic by construction: rules iterate in a fixed tuple

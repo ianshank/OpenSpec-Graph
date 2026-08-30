@@ -34,6 +34,7 @@ from .parse_semantics import (
     hard_coded,
     scenario_levels,
     suppressions,
+    threshold_values,
 )
 from .parse_semantics import REQUIREMENT as _REQUIREMENT
 from .parse_upstream import parse_upstream as _parse_upstream
@@ -50,6 +51,7 @@ __all__ = [
     "Requirement",
     "parse_spec",
     "scenario_has_gwt",
+    "threshold_values",
 ]
 
 

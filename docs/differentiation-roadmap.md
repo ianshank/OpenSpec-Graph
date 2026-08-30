@@ -137,33 +137,64 @@ diffs the card so house-style drift becomes a finding.
   3.10–3.13 (dict ordering / set iteration), freeze field order explicitly
   before shipping — do not ship a card that "usually" diffs clean.
 
-### CP-3: `parse-repo-machinery-structurally` (v1)
+### CP-3: `parse-repo-machinery-structurally` (v1) — in progress
+
+> The design below is superseded by the approved spec at
+> `openspec/changes/parse-repo-machinery-structurally/specs/machinery-parsing/spec.md`
+> (`AC-MP-1..7`, not `AC-PM-*`) — that spec is authoritative; this section is
+> kept as a historical sketch, corrected where it was factually wrong.
+> Status: G003/`MAKE_REF` precision (below) and the `machinery.py` core
+> parser are implemented; wiring `machinery.py` into `detect.py` and this
+> doc's own remaining stale references are the last piece.
 
 Stop regex-scanning prose for thresholds and make targets where the repo
 already has the truth as structure. Parse `fail_under`, `[tool.coverage.*]`,
-Makefile recipes, and `specgraph.json` as structured data. This is the G002/G001
-lesson generalized: competitors who only scan markdown will false-positive
-forever; we already learned that.
+and Makefile targets as structured data. This is the **G003/G004** lesson
+generalized (not G002/G001, as this section originally and incorrectly
+said — G001/G002 are about criteria completeness, not prose/Makefile
+scanning): competitors who only scan markdown will false-positive forever;
+we already learned that.
 
-- **AC-PM-1:** `hard_coded_threshold` (G003) no longer flags a threshold that
-  matches the value read from the detected `fail_under` locator. A spec quoting
-  the floor in prose is not a violation when it matches the source of truth.
-- **AC-PM-2:** Makefile parsing reads recipes as an AST (`make -p` parse or a
-  minimal recipe parser), not a `make <word>` regex — so `G004` stops tripping
-  on the word "make" in prose that is not a stage citation.
-- **AC-PM-3 (non-success):** A threshold present in prose but absent from the
-  detected config still fails (G003) — structural parsing does not weaken the
-  rule, it only stops false positives. A spec that invents a floor the repo has
-  no `fail_under` for fails `make test`.
+- **AC-MP-5** (was sketched as AC-PM-1): `hard_coded_threshold` (G003) no
+  longer flags a threshold when it is the single, unambiguous
+  threshold-shaped number on its line and it matches the value read from the
+  detected `fail_under` locator — never merely "the value appears somewhere
+  on the line," which would wrongly excuse a genuine violation sitting next
+  to an unrelated, coincidentally-matching number. **Implemented.**
+- **AC-MP-1/2/3** (was sketched as AC-PM-2, and sketched wrong): Makefile
+  parsing is a stdlib-only, text-based structural parser
+  (`openspec_graph/machinery.py`) that **never shells out to `make`, in any
+  form, at any confidence level** — not even as a fallback. The original
+  sketch here ("`make -p` parse... if `make -p` is unavailable, fall back to
+  regex") is unsafe and was corrected before implementation: GNU Make
+  evaluates `$(shell ...)` calls outside a recipe body at parse/read time,
+  unconditionally, so no flag combination makes shelling out to real `make`
+  safe against an untrusted target repo's Makefile. The structural parser
+  resolves multi-target lines and the full GNU Make special-target set;
+  variable expansion, `include`s, and conditionals lower confidence and fall
+  back to the pre-existing regex detection rather than guessing. **The
+  parser is implemented** (`machinery.py`, Milestone 1); wiring it into
+  `detect.py` so `G004` actually consumes its output is the remaining step
+  (Milestone 2b).
+- **AC-MP-6** (was sketched as part of AC-PM-2): the `make`-citation regex
+  in spec prose (`MAKE_REF`) now requires backtick-fencing, so `G004` stops
+  tripping on the bare English word "make" in prose that is not a stage
+  citation. **Implemented.**
+- **AC-MP-4 (non-success)**, was AC-PM-3: a threshold or make-target citation
+  that is genuinely wrong still fails (G003/G004) at any parser confidence —
+  structural parsing does not weaken either rule, it only stops false
+  positives.
 - **Touch map:** `openspec_graph/parse_semantics.py` (`hard_coded`,
-  `MAKE_REF`), `openspec_graph/detect.py` (`ThresholdSource` already carries
-  `locator`+`value`; extend `profile()` to read `coverage.lines`/Makefile
-  recipes), `openspec_graph/rules_generic.py` (G003/G004). New:
-  `openspec_graph/machinery.py` (structured config + Makefile readers, stdlib
-  only — constrained by the AC-DG-4 guard).
-- **Cutline:** if `make -p` is unavailable in a target repo, fall back to the
-  existing regex `MAKE_REF` and emit an INFO that recipes were not parsed
-  structurally — never fail closed on a missing `make`.
+  `MAKE_REF`, `threshold_values`), `openspec_graph/detect.py`
+  (`_make_target_facts`, additive `StackProfile` confidence fields),
+  `openspec_graph/rules_generic.py` (G003/G004). New:
+  `openspec_graph/machinery.py` (structural, stdlib-only, no-subprocess
+  Makefile reader — constrained by the AC-DG-4 guard).
+- **Cutline:** when structural parsing can't confidently resolve a target
+  (an `include`, a conditional, variable expansion), fall back to the
+  existing regex `MAKE_REF`-adjacent detection and surface an INFO that
+  parsing was low-confidence — never fail closed, and never shell out to
+  `make` to try to do better.
 
 ### CP-4: `add-waiver-ledger-and-inv-lints` (v1)
 
@@ -308,7 +339,7 @@ module below the hub layer imports `cli` or `graph`).
 |---|---|---|
 | Name collision | `specgate` taken on PyPI/GitHub | Use confirmed-free fallback; never ship a colliding name |
 | Card non-determinism | dialect card diffs "clean" across runs | Freeze field order before shipping |
-| `make -p` unavailable | target repo lacks make | Fall back to regex + INFO; never fail closed |
+| Structural Makefile parse is low-confidence | `include`, conditional, or variable expansion in target position | Fall back to regex detection + INFO; never fail closed, never shell out to `make` to try harder |
 | Witness mode destabilizes v1 | `--require-witness` changes default | Opt-in flag only; default `validate` unchanged |
 | SARIF finding loss | GitHub rejects a finding shape | Map to supported subset; never drop ERRORs |
 | Corpus non-reproducible | real-failure spec is proprietary | Drop from public set; keep only publishable fixtures |
@@ -326,9 +357,10 @@ module below the hub layer imports `cli` or `graph`).
    branch off `main` after PR #4 merges.
 
 2. **CP-3 `parse-repo-machinery-structurally`** — the highest-leverage v1
-   change: it removes the G002/G001 false-positive class the competitors will
+   change: it removes the G003/G004 false-positive class the competitors will
    always have, and it is the foundation for delta lint (CP-5) and witness
-   coverage numbers (CP-7).
+   coverage numbers (CP-7). In progress — see the CP-3 section above for
+   current status.
 
 3. **CP-2 `add-dialect-cards`** — turns `detect` into a product and makes the
    read-only guarantee a tested invariant. Together with CP-3, this is the v1

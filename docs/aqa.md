@@ -47,6 +47,17 @@ Tests (`tests/test_enterprise.py`, `*_deterministic`) assert that re-evaluating
 the same fixture tree yields **byte-identical** JSON, so a future change that
 introduces set-iteration or unordered dict building fails CI.
 
+Structural Makefile parsing (`machinery.py`) holds to the same contract:
+`MakefileFacts.targets` is always a sorted, deduplicated tuple
+(`test_makefile_facts_targets_is_a_sorted_deduplicated_tuple`), and it is
+additionally never allowed to shell out to `make` under any confidence
+level — enforced by both a static import guard
+(`test_machinery_never_imports_subprocess`) and a runtime execution test
+that monkeypatches `subprocess.run`/`Popen` to raise if called at all. A
+component that can't be relied on to behave the same way twice, or that can
+execute untrusted input, is not enterprise-gradeable no matter how clean its
+output looks on one run.
+
 ## No NumPy / no heavy runtime deps
 
 `planlint` has **zero runtime dependencies**. Scientific-computing stacks

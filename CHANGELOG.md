@@ -5,6 +5,70 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — parse repo machinery structurally / CP-3 (`parse-repo-machinery-structurally` change package)
+
+- **`openspec_graph/machinery.py`**: new stdlib-only, zero-intra-package-import
+  structural Makefile parser (`MakefileFacts`, `parse_makefile()`). Resolves
+  shared multi-target lines (`foo bar: baz`) as distinct targets — the
+  previous regex silently dropped every name on such a line — and the full
+  12-name GNU Make special-target set (the previous regex's `[a-zA-Z]`-only
+  first character made 9 of the intended 12 unreachable). Never shells out
+  to `make` under any condition: GNU Make evaluates `$(shell ...)` at
+  parse/read time unconditionally, so no flag combination (`-p`/`-n`/`-q`)
+  makes shelling out to a real `make` safe against an untrusted target
+  repo's Makefile. Verified by an executable test, not just design review:
+  a fixture with a `$(shell touch <marker>)`-in-target-position payload,
+  `subprocess.run`/`Popen` patched to raise if called at all. 100%
+  line/branch coverage on the new module.
+- **Wired into `detect.py`**: `_make_target_facts()` calls the structural
+  parser and, only when confidence is low (an `include`, a conditional, or
+  variable expansion was seen), widens — never replaces — with the
+  pre-existing regex fallback, so a target resolved correctly is never lost
+  because something else in the file couldn't be. `StackProfile` gains
+  additive `make_target_confidence`/`make_unresolved_count` fields (JSON
+  shape of the existing `make_targets` field is unchanged); `planlint
+  detect` reports an `INFO` notice on low-confidence parses.
+  `rules_generic._unknown_make_target` (G004) needed no source changes —
+  the widening happens centrally, so G004, `graph.py`, and
+  `scaffold.pick_stage()` all see the same resolved picture.
+- **G003 value-comparison**: `_hard_coded_threshold` now suppresses a
+  finding only when a single, unambiguous, matching threshold-shaped number
+  is on the offending line — never "the real value appears somewhere on the
+  line," which would wrongly excuse a genuine violation sitting next to an
+  unrelated, coincidentally-matching number.
+- **`MAKE_REF` tightened**: requires backtick-fencing (was optional both
+  sides), so bare English "make sure"/"make progress" in ordinary spec
+  prose no longer false-cites a target.
+- **`docs/differentiation-roadmap.md`**: swept for stale `AC-PM-*`/`make -p`
+  -viable-with-fallback references that predated and contradicted the
+  above safety decision, and a G002/G001-vs-G003/G004 mislabel.
+- 27 new tests across `tests/test_machinery.py` (13, new), `tests/test_graft.py`
+  (12, new/modified), and `tests/test_decomposition.py` (2, new) — 156 total.
+
+### Fixed — coverage-floor detection gap (`fix-coverage-floor-detection-gap` change package)
+
+- **`.coveragerc`/`setup.cfg` support**: `detect._threshold()` was silently
+  blind to both standard Python coverage-config locations, checking only
+  governance-policy.json candidates and `pyproject.toml`. Added
+  `configparser`-based detection for both (different section names per
+  coverage.py's own convention — bare `[report]` in `.coveragerc`, namespaced
+  `[coverage:report]` in `setup.cfg`); additive-only precedence —
+  `pyproject.toml` still wins when present. `THRESHOLD_ALLOWLIST` extended
+  so a spec legitimately citing either file by name isn't flagged by G003.
+
+### Fixed — U004 body-blind modal check (`fix-u004-body-blind-modal-check` change package)
+
+- **Upstream-dialect requirements**: rule U004 ("requirements are
+  normative") only ever checked a requirement's heading line for
+  SHALL/MUST, never its body paragraph, because the parsing regex couldn't
+  cross a newline. `Requirement` gains a `body` field and an `is_normative`
+  property checking both. Measured against a real external repo during
+  validation: 20 of 34 requirements previously false-fired under this bug,
+  because their normative sentence lived in the body below a noun-phrase
+  heading — the common real-world authoring style this project's own
+  scaffold template happens to avoid, which is exactly why only
+  self-referential test fixtures never caught it.
+
 ### Changed — rename CLI to `planlint` + positioning (`rename-cli-and-positioning` change package)
 
 - **CLI renamed**: `specgraph` → `planlint` as the primary console script;

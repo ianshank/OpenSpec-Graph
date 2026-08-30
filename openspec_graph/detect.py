@@ -6,10 +6,13 @@ is always safe to run against an unfamiliar clone.
 
 from __future__ import annotations
 
+import configparser
 import dataclasses
 import json
 import re
 from pathlib import Path
+
+from . import machinery
 
 MANIFESTS: dict[str, tuple[str, ...]] = {
     "python": ("pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"),
@@ -57,6 +60,8 @@ class StackProfile:
     invariant_source: Path | None
     invariant_ids: tuple[str, ...]
     has_project_md: bool
+    make_target_confidence: str = "high"
+    make_unresolved_count: int = 0
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -74,6 +79,8 @@ class StackProfile:
             ),
             "invariant_ids": list(self.invariant_ids),
             "has_project_md": self.has_project_md,
+            "make_target_confidence": self.make_target_confidence,
+            "make_unresolved_count": self.make_unresolved_count,
         }
 
 
@@ -86,14 +93,51 @@ def _languages(root: Path) -> tuple[str, ...]:
     return tuple(sorted(found))
 
 
-def _make_targets(root: Path) -> tuple[str, ...]:
-    makefile = root / "Makefile"
-    if not makefile.exists():
-        return ()
-    text = makefile.read_text(encoding="utf-8", errors="replace")
+def _legacy_make_targets(text: str) -> tuple[str, ...]:
+    """Pre-machinery.py regex extraction. Kept, not deleted: R-MP-3 mandates
+    it as the fallback source when structural parsing can't fully resolve a
+    Makefile (see _make_target_facts)."""
     skip = {".PHONY", ".DEFAULT_GOAL", ".SUFFIXES"}
     targets = [t for t in _MAKE_TARGET.findall(text) if t not in skip]
     return tuple(sorted(set(targets)))
+
+
+def _make_target_facts(root: Path) -> machinery.MakefileFacts:
+    makefile = root / "Makefile"
+    if not makefile.exists():
+        return machinery.MakefileFacts((), False, False, 0)
+    text = makefile.read_text(encoding="utf-8", errors="replace")
+    facts = machinery.parse_makefile(text)
+    if facts.confidence == "low":
+        # Widen, never replace: structural parsing found real targets too,
+        # and a target it resolved correctly must not be lost because
+        # something *else* in the file (an include, a conditional) it
+        # couldn't fully resolve. AC-MP-4: never weaken G004, only remove
+        # false positives.
+        widened = tuple(sorted(set(facts.targets) | set(_legacy_make_targets(text))))
+        facts = dataclasses.replace(facts, targets=widened)
+    return facts
+
+
+def _read_ini_fail_under(path: Path, section: str) -> int | None:
+    """Read an integer fail_under from an INI-style coverage config section.
+
+    None if the file is absent, unparsable, or lacks the key -- never raises,
+    matching this module's fail-quiet-and-move-on style for optional config.
+    """
+    if not path.exists():
+        return None
+    parser = configparser.ConfigParser(interpolation=None)
+    try:
+        parser.read(path, encoding="utf-8")
+    except configparser.Error:
+        return None
+    if not parser.has_option(section, "fail_under"):
+        return None
+    try:
+        return parser.getint(section, "fail_under")
+    except ValueError:
+        return None
 
 
 def _threshold(root: Path) -> ThresholdSource | None:
@@ -122,6 +166,20 @@ def _threshold(root: Path) -> ThresholdSource | None:
             return ThresholdSource(
                 "pyproject.toml:[tool.coverage.report].fail_under", int(match.group(1))
             )
+
+    # coverage.py's own convention: bare [report] in .coveragerc, but
+    # namespaced [coverage:report] in setup.cfg (to avoid colliding with
+    # other tools' sections there) -- different section names, not the same.
+    coveragerc = root / ".coveragerc"
+    value = _read_ini_fail_under(coveragerc, "report")
+    if value is not None:
+        return ThresholdSource(f"{coveragerc.relative_to(root)}:[report].fail_under", value)
+
+    setup_cfg = root / "setup.cfg"
+    value = _read_ini_fail_under(setup_cfg, "coverage:report")
+    if value is not None:
+        return ThresholdSource(f"{setup_cfg.relative_to(root)}:[coverage:report].fail_under", value)
+
     return None
 
 
@@ -181,10 +239,11 @@ def profile(root: Path) -> StackProfile:
         else ()
     )
     invariant_source, invariant_ids = _invariants(root)
+    make_facts = _make_target_facts(root)
     return StackProfile(
         root=root,
         languages=_languages(root),
-        make_targets=_make_targets(root),
+        make_targets=make_facts.targets,
         openspec_root=openspec_root if has_openspec else None,
         change_dirs=change_dirs,
         dialect=detect_dialect(spec_files),
@@ -192,4 +251,6 @@ def profile(root: Path) -> StackProfile:
         invariant_source=invariant_source,
         invariant_ids=invariant_ids,
         has_project_md=(openspec_root / "project.md").exists() if has_openspec else False,
+        make_target_confidence=make_facts.confidence,
+        make_unresolved_count=make_facts.unresolved_count,
     )

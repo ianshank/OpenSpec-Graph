@@ -16,6 +16,7 @@ def parse_upstream(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion,
             text=m.group(2),
             kind="shall",
             level=len(m.group(1)),
+            body=text[m.end() : (req_matches[i + 1].start() if i + 1 < len(req_matches) else len(text))],
         )
         for i, m in enumerate(req_matches)
     )

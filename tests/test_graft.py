@@ -147,10 +147,76 @@ def test_detect_prefers_governance_policy_over_pyproject(repo: Path) -> None:
     assert "governance-policy.json" in prof.threshold.locator
 
 
+def test_detect_reads_threshold_from_coveragerc(repo: Path) -> None:
+    (repo / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    (repo / ".coveragerc").write_text("[report]\nfail_under = 88\n")
+    prof = detect.profile(repo)
+    assert prof.threshold is not None
+    assert prof.threshold.value == 88
+    assert ".coveragerc" in prof.threshold.locator
+
+
+def test_detect_reads_threshold_from_setup_cfg(repo: Path) -> None:
+    (repo / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    (repo / "setup.cfg").write_text("[coverage:report]\nfail_under = 82\n")
+    prof = detect.profile(repo)
+    assert prof.threshold is not None
+    assert prof.threshold.value == 82
+    assert "setup.cfg" in prof.threshold.locator
+
+
+def test_detect_prefers_coveragerc_over_setup_cfg(repo: Path) -> None:
+    (repo / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    (repo / ".coveragerc").write_text("[report]\nfail_under = 88\n")
+    (repo / "setup.cfg").write_text("[coverage:report]\nfail_under = 70\n")
+    prof = detect.profile(repo)
+    assert prof.threshold is not None
+    assert prof.threshold.value == 88
+
+
+def test_detect_still_prefers_pyproject_over_coveragerc(repo: Path) -> None:
+    # repo fixture's pyproject.toml already sets fail_under = 90 -- confirms
+    # the additive-only precedence: pyproject.toml keeps winning.
+    (repo / ".coveragerc").write_text("[report]\nfail_under = 70\n")
+    prof = detect.profile(repo)
+    assert prof.threshold is not None
+    assert prof.threshold.value == 90
+
+
 def test_detect_finds_make_targets_and_ignores_phony(repo: Path) -> None:
     prof = detect.profile(repo)
     assert {"test", "regression", "ci", "help"} <= set(prof.make_targets)
     assert ".PHONY" not in prof.make_targets
+
+
+def test_make_targets_json_shape_is_a_list_of_strings(repo: Path) -> None:
+    # AC-MP-7: byte-identical shape (list[str], sorted), regardless of how
+    # machinery.py computes the underlying values.
+    payload = detect.profile(repo).as_dict()
+    assert isinstance(payload["make_targets"], list)
+    assert all(isinstance(t, str) for t in payload["make_targets"])
+    assert payload["make_targets"] == sorted(payload["make_targets"])
+
+
+def test_multi_target_makefile_line_resolves_both_targets_end_to_end(repo: Path) -> None:
+    (repo / "Makefile").write_text(MAKEFILE + "lint typecheck: test\n\techo ok\n")
+    prof = detect.profile(repo)
+    assert {"lint", "typecheck"} <= set(prof.make_targets)
+    assert prof.make_target_confidence == "high"
+
+
+def test_cli_detect_reports_low_confidence_makefile_parse(repo: Path, capsys) -> None:
+    (repo / "Makefile").write_text("include extra.mk\nbuild:\n\techo hi\n")
+    assert main(["--target", str(repo), "detect"]) == 0
+    assert "low confidence" in capsys.readouterr().out.lower()
+
+
+def test_g004_still_fires_on_a_genuinely_absent_target_at_low_confidence(repo: Path) -> None:
+    # AC-MP-4 (non-success): low confidence must never weaken the rule.
+    (repo / "Makefile").write_text(MAKEFILE + "include extra.mk\n")
+    body = GOOD_HARNESS.replace("make regression", "make totally-nonexistent")
+    found = findings_for(repo, body)
+    assert "G004" in rule_ids(found)
 
 
 def test_detect_collects_invariant_ids(repo: Path) -> None:
@@ -201,9 +267,32 @@ def test_g002_fires_when_every_criterion_is_a_happy_path(repo: Path) -> None:
 
 
 def test_g003_fires_on_hard_coded_threshold(repo: Path) -> None:
+    # 95%, not the repo fixture's real floor of 90 -- this line has exactly
+    # one threshold-shaped number, and it does NOT match, so it stays a
+    # genuine violation after the value-comparison suppression lands.
+    body = GOOD_HARNESS.replace(
+        "An attested write records an evidence id.",
+        "Line coverage is at least 95% for the new module.",
+    )
+    assert "G003" in rule_ids(findings_for(repo, body))
+
+
+def test_g003_suppresses_a_bare_number_that_matches_the_real_threshold(repo: Path) -> None:
+    # The repo fixture's real floor is 90 -- a single, unambiguous, matching
+    # number needs no locator name to be excused.
     body = GOOD_HARNESS.replace(
         "An attested write records an evidence id.",
         "Line coverage is at least 90% for the new module.",
+    )
+    assert "G003" not in rule_ids(findings_for(repo, body))
+
+
+def test_g003_still_fires_on_the_non_matching_number_in_a_same_line_collision(repo: Path) -> None:
+    # Two threshold-shaped numbers on one line, only one matching the real
+    # floor -- must never suppress on a coincidental match to unrelated text.
+    body = GOOD_HARNESS.replace(
+        "An attested write records an evidence id.",
+        "Coverage moved from 80% to 90% after the refactor.",
     )
     assert "G003" in rule_ids(findings_for(repo, body))
 
@@ -216,11 +305,31 @@ def test_g003_allows_a_threshold_read_from_the_policy_locator(repo: Path) -> Non
     assert "G003" not in rule_ids(findings_for(repo, body))
 
 
+def test_g003_allows_a_threshold_read_from_coveragerc(repo: Path) -> None:
+    (repo / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    (repo / ".coveragerc").write_text("[report]\nfail_under = 90\n")
+    body = GOOD_HARNESS.replace(
+        "An attested write records an evidence id.",
+        "Coverage meets the floor in `.coveragerc` (currently 90%).",
+    )
+    assert "G003" not in rule_ids(findings_for(repo, body))
+
+
 def test_g004_fires_on_a_make_target_the_target_repo_lacks(repo: Path) -> None:
     body = GOOD_HARNESS.replace("make regression", "make test-governance")
     found = findings_for(repo, body)
     assert "G004" in rule_ids(found)
     assert any("test-governance" in f.message for f in found)
+
+
+def test_g004_does_not_fire_on_a_bare_english_use_of_make(repo: Path) -> None:
+    # Lowercase "make sure"/"make progress" in ordinary prose, with no
+    # backtick-fencing, must not be treated as a stage citation.
+    body = GOOD_HARNESS.replace(
+        "An attested write records an evidence id.",
+        "Reviewers make sure every write is attested, so the team can make progress.",
+    )
+    assert "G004" not in rule_ids(findings_for(repo, body))
 
 
 def test_g005_fires_on_an_undeclared_invariant(repo: Path) -> None:
@@ -295,6 +404,20 @@ def test_u004_fires_on_a_non_normative_requirement(repo: Path) -> None:
         "### Requirement: the writer attests writes",
     )
     assert "U004" in rule_ids(findings_for(repo, body, "upstream"))
+
+
+def test_u004_does_not_fire_when_the_modal_verb_is_only_in_the_body(repo: Path) -> None:
+    # Regression: Requirement.text used to be populated from the heading match
+    # alone, so a heading with no SHALL/MUST but a normative body still
+    # false-fired U004 -- the common real-world authoring style.
+    body = GOOD_UPSTREAM.replace(
+        "### Requirement: the writer SHALL attest every write",
+        "### Requirement: the writer attests every write",
+    ).replace(
+        "Prose obligation.",
+        "The writer SHALL record an evidence id for every write.",
+    )
+    assert "U004" not in rule_ids(findings_for(repo, body, "upstream"))
 
 
 # --- scaffolding -----------------------------------------------------------

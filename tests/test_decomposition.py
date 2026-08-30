@@ -31,6 +31,7 @@ _NEW_MODULES = [
     "rules_generic",
     "rules_harness",
     "rules_upstream",
+    "machinery",
 ]
 
 # Modules that must NOT import cli or graph (the orchestration/output layers).
@@ -178,6 +179,15 @@ def test_new_modules_stdlib_only() -> None:
         assert not third_party, (
             f"{name}.py imports non-stdlib modules: {sorted(third_party)} (R-DG-3)"
         )
+
+
+def test_machinery_never_imports_subprocess() -> None:
+    """DEC-MP-001 is non-negotiable: machinery.py must never shell out to
+    inspect an untrusted Makefile. A static guard alongside the runtime
+    monkeypatch test in test_machinery.py -- stdlib-only (AC-DG-4) alone
+    would not catch this, since subprocess IS stdlib."""
+    forbidden = _imported_roots(PKG / "machinery.py") & {"subprocess", "os"}
+    assert not forbidden, f"machinery.py must never import {forbidden} (DEC-MP-001)"
 
 
 # --- AC-DG-5: shared helper is not duplicated inline ------------------------

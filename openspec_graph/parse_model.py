@@ -52,6 +52,12 @@ class Requirement:
     text: str
     kind: str  # "functional" | "constraint" | "shall"
     level: int = 0  # markdown heading depth, 0 for list-declared requirements
+    body: str = ""  # upstream-dialect prose beneath the heading; "" for harness
+
+    @property
+    def is_normative(self) -> bool:
+        blob = f"{self.text} {self.body}".upper()
+        return any(m in blob for m in ("SHALL", "MUST"))
 
 
 @dataclasses.dataclass(frozen=True)

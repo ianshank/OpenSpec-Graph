@@ -192,6 +192,14 @@ are now regression tests, named after the file that exposed them:
    author.
 3. **Unrecognized third form.** `## REQ 1:` parsed as nothing. Now recognized,
    so the report says "6 requirements but no Scenario" instead of silence.
+4. **U004 body-blind check.** `Requirement.text` was populated from the
+   heading line alone, so a heading with no SHALL/MUST but a normative
+   sentence in the body below it — the common real-world authoring style —
+   still false-fired U004. Some of the "twelve requirements… titled as
+   nouns" above were this bug, not a genuine authoring gap; measured
+   directly, 20 of 34 requirements across four change packages were
+   affected. `Requirement` now carries the body text too, and U004 checks
+   both.
 
 A linter that never fails is a decoration; one that fails wrongly gets disabled.
 Both directions are tested.
@@ -269,6 +277,11 @@ validates clean against the rules it will one day implement.
 ## Design constraints
 
 - **Detection never writes.** `detect` is safe on any clone.
+- **Makefile parsing never executes.** Structural target detection
+  (`machinery.py`) is text-only — it never shells out to `make`, at any
+  confidence level, not even as a fallback. GNU Make evaluates `$(shell
+  ...)` calls at parse time unconditionally, so no flag combination makes
+  invoking a real `make` safe against an untrusted target repo's Makefile.
 - **Scaffolding never clobbers.** Existing files are skipped unless `--force`;
   `--dry-run` prints the plan and writes nothing.
 - **The target's vocabulary wins.** `planlint` adapts to the repo's dialect,
