@@ -20,6 +20,7 @@ Exit codes: 0 clean, 1 findings at or above the fail level, 2 usage error.
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
 import logging
 import sys
@@ -33,6 +34,19 @@ from .parse import parse_spec
 SEVERITY_ORDER = {"INFO": 0, "WARN": 1, "ERROR": 2}
 
 logger = logging.getLogger("planlint")
+
+
+def _version_string() -> str:
+    # Distribution name is "openspec-graph" (pyproject.toml's [project]
+    # name) -- NOT "planlint", which is only the console-script name.
+    try:
+        version = importlib.metadata.version("openspec-graph")
+    except importlib.metadata.PackageNotFoundError:
+        # Uninstalled checkout (e.g. running from a source clone without
+        # `pip install -e .`): fall back to the package's own constant
+        # rather than a third hardcoded copy.
+        from . import __version__ as version
+    return f"%(prog)s {version}"
 
 
 def _profile(args: argparse.Namespace) -> detect.StackProfile:
@@ -202,6 +216,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-v", "--verbose", action="store_true",
         help="emit debug diagnostics to stderr (does not affect stdout)",
+    )
+    parser.add_argument(
+        "-V", "--version", action="version", version=_version_string(),
+        help="print the installed version and exit",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

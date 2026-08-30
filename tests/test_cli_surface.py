@@ -52,6 +52,49 @@ def test_cli_rejects_authoring_verbs() -> None:
     )
 
 
+# --- VER-1: --version/-V ----------------------------------------------------
+
+
+def test_version_flag_prints_version_and_exits_zero(repo: Path) -> None:
+    result = run_cli(repo, "--version")
+    assert result.returncode == 0
+    assert result.stdout.strip()
+
+
+def test_short_version_flag_matches_long_form(repo: Path) -> None:
+    assert run_cli(repo, "-V").stdout == run_cli(repo, "--version").stdout
+
+
+def test_version_flag_does_not_require_a_subcommand(repo: Path) -> None:
+    # --version must short-circuit before argparse's required-subcommand
+    # check, so it works with no verb at all.
+    result = run_cli(repo, "--version")
+    assert "usage" not in result.stderr.lower()
+
+
+def test_version_flag_is_not_a_registered_subcommand() -> None:
+    # A top-level optional flag like --target/--verbose, never a verb --
+    # must not appear in or expand the closed subcommand allow-list.
+    assert "version" not in _subcommand_names(build_parser())
+
+
+def test_version_string_falls_back_when_package_metadata_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # AC-VER-4 (non-success): an uninstalled checkout must not crash --
+    # falls back to the package's own __version__ constant.
+    import importlib.metadata
+
+    from openspec_graph import __version__
+    from openspec_graph.cli import _version_string
+
+    def _raise(_name: str) -> str:
+        raise importlib.metadata.PackageNotFoundError
+
+    monkeypatch.setattr(importlib.metadata, "version", _raise)
+    assert _version_string() == f"%(prog)s {__version__}"
+
+
 # --- AC-RP-1: entry points wired + deprecation alias ------------------------
 
 
