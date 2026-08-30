@@ -131,10 +131,11 @@ quality without making the document wrong.
 | U004 | WARN | upstream | Requirements use SHALL / MUST |
 | U005 | WARN | upstream | Heading depths match the convention |
 
-G002 is the load-bearing one. It mechanizes the rule from
-`docs/specs/SPEC_TEMPLATE.md`: *at least one criterion must name a non-success
+G002 is the load-bearing one: *at least one criterion must name a non-success
 outcome — what this change rejects, denies, or fails closed on.* A plan that
-only describes success has not said what going wrong looks like.
+only describes success has not said what going wrong looks like. See
+`tests/fixtures/good_harness.md` and `tests/fixtures/good_upstream.md` for a
+non-success criterion demonstrated in each dialect.
 
 G003 is the second. Thresholds are a governance input, not a spec literal; a
 number typed into a criterion is a number that will drift from the config that

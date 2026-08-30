@@ -70,8 +70,9 @@ corpus with a published catch-rate. Category claims die; catch-rate claims sell.
 ## Candidate Change Packages
 
 Eight packages. Not scaffolded yet — each is a sketch with acceptance criteria
-(including a non-success criterion, per the repo's own `SPEC_TEMPLATE.md`
-rule), a code touch map against the real current tree, and a cutline.
+(including a non-success criterion, per the repo's own G002 rule — see
+`tests/fixtures/good_harness.md` / `tests/fixtures/good_upstream.md`), a code touch map
+against the real current tree, and a cutline.
 
 ### CP-1: `rename-cli-and-positioning` (v1, first)
 

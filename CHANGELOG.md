@@ -5,6 +5,41 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed — rename CLI to `planlint` + positioning (`rename-cli-and-positioning` change package)
+
+- **CLI renamed**: `specgraph` → `planlint` as the primary console script;
+  `specgraph` remains as a deprecated alias (`main_deprecated`) that warns to
+  stderr, delegates to `main`, and preserves the real exit code — old CI
+  invocations never silently pass.
+- **Backwards-compat contracts kept as `specgraph`**: the waiver syntax
+  `<!-- specgraph:allow ... -->`, the `openspec/specgraph.json` config file,
+  and the `[tool.specgraph]` pyproject section are stable identifiers, not
+  renamed. The log-level env var accepts `PLANLINT_LOG_LEVEL` (preferred) and
+  `SPECGRAPH_LOG_LEVEL` (legacy).
+- **Positioning**: README leads with the wedge statement and a competitive
+  positioning table; explicit non-goals section (not an authoring framework,
+  IDE, MCP server, or autonomous agent).
+- **`tests/test_cli_surface.py`**: verb allow-list guard (AC-RP-3 non-success —
+  an authoring/propose/apply verb added to the CLI fails `make test`) plus
+  deprecation-alias behavior tests.
+- Not yet published to PyPI; install from source or `pip install git+https://github.com/ianshank/OpenSpec-Graph`.
+
+### Changed — decompose god files (`decompose-god-files` change package)
+
+- **Facade-preserving split**: `parse.py`, `rules.py`, `scaffold.py`, and
+  `graph.py` were each split into focused submodules (`parse_model.py`,
+  `parse_semantics.py`, `parse_harness.py`, `parse_upstream.py`;
+  `rule_types.py`, `rules_generic.py`, `rules_harness.py`,
+  `rules_upstream.py`; `scaffold_templates.py`; graph-building helpers), with
+  the original modules kept as stable facades — public imports and CLI
+  behavior are unaffected.
+- **`tests/test_decomposition.py`**: guard tests locking public import
+  compatibility, byte-identical `validate`/`graph`/`rules --json` output
+  (path-normalized), and stable rule-set ordering — written before the
+  production split, to catch any behavioral drift the refactor might cause.
+- **`tests/support.py`**: shared test fixture helper, deduplicating a helper
+  previously copy-pasted across test files.
+
 ### Changed — post-merge quality review (`post-merge-quality-review` change package)
 
 - **Lint hygiene**: `Finding.render` uses `contextlib.suppress(ValueError)`

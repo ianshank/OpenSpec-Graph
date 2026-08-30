@@ -1,8 +1,8 @@
-# Optional reproducible runner for `specgraph`. Not required for local dev —
+# Optional reproducible runner for `planlint`. Not required for local dev —
 # `pip install -e ".[dev]"` is the primary path. This image pins a Python
 # version for CI sandboxes that want a hermetic, dependency-free CLI invocation.
-# Build:  docker build -t specgraph .
-# Run:    docker run --rm -v "$PWD":/repo specgraph --target /repo validate
+# Build:  docker build -t planlint .
+# Run:    docker run --rm -v "$PWD":/repo planlint --target /repo validate
 
 FROM python:3.12-slim
 
@@ -14,4 +14,4 @@ COPY openspec_graph ./openspec_graph
 RUN pip install --no-cache-dir .
 
 WORKDIR /repo
-ENTRYPOINT ["specgraph"]
+ENTRYPOINT ["planlint"]

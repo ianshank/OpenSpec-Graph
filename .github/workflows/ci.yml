@@ -34,7 +34,7 @@ jobs:
         run: make test
 
   self-validate:
-    # specgraph must hold its own specs to the same rules it enforces.
+    # planlint must hold its own specs to the same rules it enforces.
     # Hard gate: if any change package in openspec/ fails a rule, the build
     # fails — no skip, no soft pass.
     runs-on: ubuntu-latest

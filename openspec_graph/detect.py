@@ -1,6 +1,6 @@
 """Detect a target repository's stack, gates, thresholds, and OpenSpec dialect.
 
-Nothing here writes. Detection is read-only by contract so that `graft detect`
+Nothing here writes. Detection is read-only by contract so that `planlint detect`
 is always safe to run against an unfamiliar clone.
 """
 
