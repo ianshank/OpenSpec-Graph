@@ -26,7 +26,7 @@ Zero runtime dependencies. Python 3.10+.
 ```bash
 pip install -e .                     # local dev install (no PyPI release yet)
 planlint --target /path/to/clone detect      # read-only: stack, dialect, threshold
-planlint --target /path/to/clone init        # pin detected conventions into openspec/
+planlint --target /path/to/clone init        # write a snapshot of detected conventions into openspec/
 planlint --target /path/to/clone new add-thing --capability thing-capability
 planlint --target /path/to/clone validate    # exit 1 on any ERROR — the gate
 ```

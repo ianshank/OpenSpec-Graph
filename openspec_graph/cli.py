@@ -8,7 +8,7 @@ spec to that, using the target's own vocabulary. It is a linter under
 
 Verbs:
   detect    read-only report of the target's stack, gates, threshold, dialect
-  init      write openspec/specgraph.json + project.md pinning detected conventions
+  init      write openspec/specgraph.json + project.md, a snapshot of detected conventions
   new       scaffold a change package in the target's own dialect
   validate  run the rule engine over every change package
   graph     emit the spec dependency graph as JSON (pure projection of validate)
@@ -209,7 +209,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_detect.add_argument("--json", action="store_true")
     p_detect.set_defaults(func=cmd_detect)
 
-    p_init = sub.add_parser("init", help="pin detected conventions into openspec/")
+    p_init = sub.add_parser("init", help="write a snapshot of detected conventions into openspec/")
     p_init.add_argument("--dry-run", action="store_true")
     p_init.add_argument("--force", action="store_true")
     p_init.set_defaults(func=cmd_init)
