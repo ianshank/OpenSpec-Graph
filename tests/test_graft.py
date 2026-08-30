@@ -233,6 +233,19 @@ def test_multi_target_makefile_line_resolves_both_targets_end_to_end(repo: Path)
     assert prof.make_target_confidence == "high"
 
 
+def test_define_block_does_not_leak_a_bogus_target_through_the_legacy_widening_fallback(
+    repo: Path,
+) -> None:
+    # A define block lowers machinery.py's confidence, which triggers
+    # detect.py's legacy-regex widening fallback -- that fallback has the
+    # identical define/endef blindness machinery.py was fixed for, so
+    # fixing machinery.py alone is not sufficient end-to-end.
+    (repo / "Makefile").write_text(MAKEFILE + "\ndefine HELP_TEXT\nUsage: make test\nendef\n")
+    prof = detect.profile(repo)
+    assert "Usage" not in prof.make_targets
+    assert prof.make_target_confidence == "low"
+
+
 def test_cli_detect_reports_low_confidence_makefile_parse(repo: Path, capsys) -> None:
     (repo / "Makefile").write_text("include extra.mk\nbuild:\n\techo hi\n")
     assert main(["--target", str(repo), "detect"]) == 0

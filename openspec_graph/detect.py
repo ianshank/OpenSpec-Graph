@@ -33,6 +33,7 @@ INVARIANT_SOURCES: tuple[str, ...] = (
 )
 
 _MAKE_TARGET = re.compile(r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", re.MULTILINE)
+_DEFINE_BLOCK = re.compile(r"^define\b.*?^endef\b.*?$", re.MULTILINE | re.DOTALL)
 _INV_ID = re.compile(r"\bINV-\d+\b")
 _FAIL_UNDER = re.compile(r"^\s*fail_under\s*=\s*(\d+)", re.MULTILINE)
 
@@ -96,7 +97,15 @@ def _languages(root: Path) -> tuple[str, ...]:
 def _legacy_make_targets(text: str) -> tuple[str, ...]:
     """Pre-machinery.py regex extraction. Kept, not deleted: R-MP-3 mandates
     it as the fallback source when structural parsing can't fully resolve a
-    Makefile (see _make_target_facts)."""
+    Makefile (see _make_target_facts).
+
+    define...endef block bodies are stripped before scanning: their bodies
+    are opaque replacement text, and a body line containing a colon (e.g.
+    "Usage: ...") would otherwise regex-match as a fabricated target -- the
+    same class of bug fixed structurally in machinery.py, closed here too
+    since a low-confidence Makefile (a define block included) widens using
+    exactly this fallback."""
+    text = _DEFINE_BLOCK.sub("", text)
     skip = {".PHONY", ".DEFAULT_GOAL", ".SUFFIXES"}
     targets = [t for t in _MAKE_TARGET.findall(text) if t not in skip]
     return tuple(sorted(set(targets)))
