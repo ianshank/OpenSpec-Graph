@@ -18,3 +18,8 @@ include = ["openspec_graph*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.coverage.report]
+# The coverage floor for this repo. Specs must reference this locator,
+# never hard-code a number (specgraph rule G003).
+fail_under = 90

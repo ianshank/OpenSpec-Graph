@@ -1,0 +1,10 @@
+{
+  "dialect": "harness",
+  "threshold_locator": "pyproject.toml:[tool.coverage.report].fail_under",
+  "focused_stage": "validate",
+  "full_stage": "ci",
+  "invariant_source": null,
+  "languages": [
+    "python"
+  ]
+}

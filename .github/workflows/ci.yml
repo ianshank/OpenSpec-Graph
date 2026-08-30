@@ -30,6 +30,8 @@ jobs:
 
   self-validate:
     # specgraph must hold its own specs to the same rules it enforces.
+    # This is a hard gate: if any change package in openspec/ fails a rule,
+    # the build fails — no skip, no soft pass.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,13 +45,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
-      - name: Detect conventions
+      - name: Report detected conventions
         run: specgraph --target . detect
 
-      - name: Validate (if any specs exist)
-        run: |
-          if [ -d openspec ]; then
-            specgraph --target . validate --fail-on ERROR
-          else
-            echo "no openspec/ tree yet — skipping self-validation"
-          fi
+      - name: Validate every change package (hard gate)
+        run: specgraph --target . validate --fail-on ERROR
+
+      - name: Record warnings as an artifact
+        if: always()
+        run: specgraph --target . validate --fail-on WARN --json > spec-findings.json || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spec-findings
+          path: spec-findings.json

@@ -172,6 +172,16 @@ specs: ## Validate every OpenSpec change package
 	`specgraph validate` --fail-on ERROR
 ```
 
+## Dogfooding
+
+This repo validates its own specs. The `openspec/` tree holds change packages
+written in the `harness` dialect, and CI runs `specgraph --target . validate
+--fail-on ERROR` as a hard gate — if any spec in this repo violates a rule, the
+build fails. The first change package, [`add-graph-export`](openspec/changes/add-graph-export/specs/graph-export/spec.md),
+specs a `specgraph graph` verb that emits the dependency graph as JSON; it
+carries seven acceptance criteria, two of them non-success paths, and it
+validates clean against the rules it will one day implement.
+
 ## Design constraints
 
 - **Detection never writes.** `detect` is safe on any clone.
