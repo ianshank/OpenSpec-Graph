@@ -33,7 +33,7 @@ class NoOpenSpecTreeError(Exception):
 
 def _stages_cited(criterion_verified_by: str) -> list[str]:
     """The make stages a criterion's `_Verified by:` line names."""
-    return parse._MAKE_REF.findall(criterion_verified_by or "")
+    return parse.MAKE_REF.findall(criterion_verified_by or "")
 
 
 def _add_node(nodes: list[dict[str, object]], seen: set[str], node_id: str, **fields: object) -> None:
