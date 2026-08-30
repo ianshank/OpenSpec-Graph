@@ -100,6 +100,7 @@ class ParsedSpec:
 
     @property
     def orphan_requirements(self) -> tuple[str, ...]:
-        """Requirements no criterion references. Only meaningful for the harness dialect."""
+        """Requirements no criterion references. Shared by H003 (harness) and
+        U002 (upstream) -- both dialects need exactly this computation."""
         referenced = {ref for c in self.criteria for ref in c.requirement_refs}
         return tuple(r.ident for r in self.requirements if r.ident not in referenced)

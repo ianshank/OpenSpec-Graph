@@ -20,9 +20,9 @@ def _missing_delta_header(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
 
 
 def _requirement_without_scenario(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
-    covered = {ref for c in spec.criteria for ref in c.requirement_refs}
+    orphans = set(spec.orphan_requirements)
     for req in spec.requirements:
-        if req.ident not in covered:
+        if req.ident in orphans:
             yield f"requirement {req.ident!r} ({req.text[:60]}...) has no Scenario"
 
 
