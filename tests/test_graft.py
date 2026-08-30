@@ -189,6 +189,36 @@ def test_detect_finds_make_targets_and_ignores_phony(repo: Path) -> None:
     assert ".PHONY" not in prof.make_targets
 
 
+def test_make_targets_json_shape_is_a_list_of_strings(repo: Path) -> None:
+    # AC-MP-7: byte-identical shape (list[str], sorted), regardless of how
+    # machinery.py computes the underlying values.
+    payload = detect.profile(repo).as_dict()
+    assert isinstance(payload["make_targets"], list)
+    assert all(isinstance(t, str) for t in payload["make_targets"])
+    assert payload["make_targets"] == sorted(payload["make_targets"])
+
+
+def test_multi_target_makefile_line_resolves_both_targets_end_to_end(repo: Path) -> None:
+    (repo / "Makefile").write_text(MAKEFILE + "lint typecheck: test\n\techo ok\n")
+    prof = detect.profile(repo)
+    assert {"lint", "typecheck"} <= set(prof.make_targets)
+    assert prof.make_target_confidence == "high"
+
+
+def test_cli_detect_reports_low_confidence_makefile_parse(repo: Path, capsys) -> None:
+    (repo / "Makefile").write_text("include extra.mk\nbuild:\n\techo hi\n")
+    assert main(["--target", str(repo), "detect"]) == 0
+    assert "low confidence" in capsys.readouterr().out.lower()
+
+
+def test_g004_still_fires_on_a_genuinely_absent_target_at_low_confidence(repo: Path) -> None:
+    # AC-MP-4 (non-success): low confidence must never weaken the rule.
+    (repo / "Makefile").write_text(MAKEFILE + "include extra.mk\n")
+    body = GOOD_HARNESS.replace("make regression", "make totally-nonexistent")
+    found = findings_for(repo, body)
+    assert "G004" in rule_ids(found)
+
+
 def test_detect_collects_invariant_ids(repo: Path) -> None:
     prof = detect.profile(repo)
     assert prof.invariant_ids == ("INV-1", "INV-2")

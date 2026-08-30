@@ -1,9 +1,9 @@
 # Change: Parse Repo Machinery Structurally (CP-3)
 
-> **Status of this package: design only.** This proposal specifies what a
-> future implementation must do and must never do. It does not implement
-> `machinery.py`; that is separate, follow-up work once this design is
-> reviewed and separately approved. See Non-Goals.
+> **Status: implemented.** This proposal specified what the implementation
+> must do and must never do; `machinery.py` and its wiring into `detect.py`
+> now exist, landed across separate, focused PRs per milestone (see
+> `tasks.md`) rather than bundled with this design.
 
 ## Why
 
@@ -120,12 +120,13 @@ observed against real content.
 
 ## Non-Goals
 
-- **No implementation in this change package.** This proposal is the
-  design; building `machinery.py` is separate, follow-up work, to be scoped
-  as its own implementation effort once this design is reviewed. Untrusted
-  input handling is the highest-stakes code path in this repo and deserves
-  focused review time of its own, not a rushed bundling alongside cheap
-  fixes.
+- **No implementation bundled into this design's own review.** The design
+  and the implementation landed as separate, focused commits (one per
+  milestone in `tasks.md`), not one rushed change — untrusted input handling
+  (the `machinery.py` core parser, Milestone 1) is the highest-stakes code
+  path in this repo and got its own isolated review, distinct from the
+  cheap, separable G003/`MAKE_REF` precision fixes (Milestone 2a) and the
+  final wiring (Milestone 2b).
 - **No shelling out to `make`, in any form, at any confidence level.** Not as
   the primary path, not as a fallback. See Why.
   A `subprocess`/`shell=True` call anywhere in `openspec_graph/` for this

@@ -66,6 +66,12 @@ def cmd_detect(args: argparse.Namespace) -> int:
     print(f"focused stage     make {scaffold.pick_stage(prof)}")
     if prof.dialect == "mixed":
         print("\nWARN  repo contains both spec dialects; validate will resolve per file.")
+    if prof.make_target_confidence == "low":
+        print(
+            f"\nINFO  Makefile parsed with low confidence "
+            f"({prof.make_unresolved_count} target(s) could not be resolved "
+            "structurally); falling back to regex-based detection for those."
+        )
     return 0
 
 

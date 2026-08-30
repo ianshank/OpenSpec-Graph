@@ -66,30 +66,48 @@ untrusted-input handling) — landed independently, as anticipated.
   (including `test_decomposition.py`'s `_EXPECTED_HASHES`) unaffected — no
   re-pin needed.
 
-## Milestone 2b — Wire `machinery.py` into `detect.py`  [NOT STARTED]
+## Milestone 2b — Wire `machinery.py` into `detect.py`  [DONE]
 
-Depends on Milestone 1.
+- `detect._legacy_make_targets(text)` (renamed from `_make_targets(root)`,
+  now text-in rather than root-in) is kept, not deleted — it's the R-MP-3
+  fallback source. New `detect._make_target_facts(root)` calls
+  `machinery.parse_makefile()` and, only when confidence is `"low"`, widens
+  the result by unioning with the legacy regex output (never replaces —
+  AC-MP-4: a target structural parsing resolved correctly must not be lost
+  because something *else* in the file couldn't be resolved).
+- `StackProfile` gains additive, defaulted fields
+  (`make_target_confidence: str = "high"`, `make_unresolved_count: int =
+  0`); `as_dict()` gains the corresponding keys. `make_targets` itself keeps
+  its exact `tuple[str, ...]` → `list[str]` shape (AC-MP-7).
+- `rules_generic._unknown_make_target` (G004) needed **zero source
+  changes** — a one-line comment explains why: the widening happens
+  centrally in `detect.py`, so G004, `graph.py`, and `scaffold.pick_stage()`
+  all already see the same, already-resolved picture of "what targets
+  exist" (AC-MP-3, AC-MP-4).
+- `cli.py`'s `cmd_detect` gains an `INFO`-prefixed low-confidence notice,
+  matching the existing dialect-mismatch warning's precedent (a plain
+  `print()`, not a `Finding` — DEC-MP-003).
+- 4 new end-to-end tests in `tests/test_graft.py`; spot-checked
+  `planlint detect`/`graph --format json` against this repo's own Makefile
+  (high confidence, zero unresolved, `broken_links: 0` — no regression).
 
-- `detect._make_targets()` becomes a thin wrapper over
-  `machinery.parse_makefile()`; `StackProfile` gains additive-only fields
-  for unresolved-target count / confidence, preserving `make_targets`'s
-  existing shape (C-MP-1, AC-MP-7).
-- `rules_generic._unknown_make_target` (G004) gains the confidence-aware
-  fallback (AC-MP-3, AC-MP-4).
-- `tests/test_decomposition.py`: add `"machinery"` to the stdlib-only-import
-  guard so the existing AC-DG-4-style check picks up the new module
-  automatically (do this in Milestone 1's PR, not deferred here — no reason
-  to leave the guard blind to the module for an extra PR).
+- **Gate:** `make pre-pr` green; `planlint validate` clean (10 specs, 0
+  findings).
 
-- **Gate:** `make pre-pr` green; `planlint validate` on this repo's own
-  specs still clean.
+## Milestone 3 — Roadmap doc corrections  [DONE]
 
-## Milestone 3 — Roadmap doc corrections  [NOT STARTED]
-
-- `docs/differentiation-roadmap.md`: fix the "G002/G001 lesson generalized"
-  line (CP-3's actual acceptance criteria are about G003/G004, not
-  G001/G002 — a copy-paste-shaped inconsistency in the roadmap's own prose,
-  caught while researching this change) and replace the `make -p` cutline
-  with the corrected structural-parser-only approach.
+- `docs/differentiation-roadmap.md`: fixed the "G002/G001 lesson
+  generalized" line (CP-3's actual acceptance criteria are about G003/G004)
+  and replaced every `make -p`/`AC-PM-*` reference (the main CP-3 section,
+  the risk/cutline table, and the "First Three PRs" summary) with the
+  corrected structural-parser-only framing and the real `AC-MP-*` numbering,
+  with a banner noting the approved spec is authoritative over this
+  historical sketch.
 
 - **Gate:** `make docs-check` green.
+
+---
+
+All four milestones (0, 1, 2a, 2b, 3) are complete. `openspec_graph/machinery.py`
+is implemented and wired into `detect.py`; G003/G004/`MAKE_REF` precision
+fixes are live; the roadmap doc reflects reality.

@@ -52,6 +52,11 @@ def _hard_coded_threshold(spec: ParsedSpec, profile: StackProfile) -> Iterable[s
 
 
 def _unknown_make_target(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]:
+    # No confidence-level branching needed here: detect._make_target_facts
+    # already widens profile.make_targets with the regex fallback whenever
+    # structural parsing is low-confidence, so this rule, graph.py, and
+    # scaffold.pick_stage() all see the same, already-resolved picture of
+    # "what targets exist" (AC-MP-3/AC-MP-4).
     if not profile.make_targets:
         return
     known = set(profile.make_targets)

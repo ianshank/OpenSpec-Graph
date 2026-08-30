@@ -12,6 +12,8 @@ import json
 import re
 from pathlib import Path
 
+from . import machinery
+
 MANIFESTS: dict[str, tuple[str, ...]] = {
     "python": ("pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"),
     "node": ("package.json",),
@@ -58,6 +60,8 @@ class StackProfile:
     invariant_source: Path | None
     invariant_ids: tuple[str, ...]
     has_project_md: bool
+    make_target_confidence: str = "high"
+    make_unresolved_count: int = 0
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -75,6 +79,8 @@ class StackProfile:
             ),
             "invariant_ids": list(self.invariant_ids),
             "has_project_md": self.has_project_md,
+            "make_target_confidence": self.make_target_confidence,
+            "make_unresolved_count": self.make_unresolved_count,
         }
 
 
@@ -87,14 +93,30 @@ def _languages(root: Path) -> tuple[str, ...]:
     return tuple(sorted(found))
 
 
-def _make_targets(root: Path) -> tuple[str, ...]:
-    makefile = root / "Makefile"
-    if not makefile.exists():
-        return ()
-    text = makefile.read_text(encoding="utf-8", errors="replace")
+def _legacy_make_targets(text: str) -> tuple[str, ...]:
+    """Pre-machinery.py regex extraction. Kept, not deleted: R-MP-3 mandates
+    it as the fallback source when structural parsing can't fully resolve a
+    Makefile (see _make_target_facts)."""
     skip = {".PHONY", ".DEFAULT_GOAL", ".SUFFIXES"}
     targets = [t for t in _MAKE_TARGET.findall(text) if t not in skip]
     return tuple(sorted(set(targets)))
+
+
+def _make_target_facts(root: Path) -> machinery.MakefileFacts:
+    makefile = root / "Makefile"
+    if not makefile.exists():
+        return machinery.MakefileFacts((), False, False, 0)
+    text = makefile.read_text(encoding="utf-8", errors="replace")
+    facts = machinery.parse_makefile(text)
+    if facts.confidence == "low":
+        # Widen, never replace: structural parsing found real targets too,
+        # and a target it resolved correctly must not be lost because
+        # something *else* in the file (an include, a conditional) it
+        # couldn't fully resolve. AC-MP-4: never weaken G004, only remove
+        # false positives.
+        widened = tuple(sorted(set(facts.targets) | set(_legacy_make_targets(text))))
+        facts = dataclasses.replace(facts, targets=widened)
+    return facts
 
 
 def _read_ini_fail_under(path: Path, section: str) -> int | None:
@@ -217,10 +239,11 @@ def profile(root: Path) -> StackProfile:
         else ()
     )
     invariant_source, invariant_ids = _invariants(root)
+    make_facts = _make_target_facts(root)
     return StackProfile(
         root=root,
         languages=_languages(root),
-        make_targets=_make_targets(root),
+        make_targets=make_facts.targets,
         openspec_root=openspec_root if has_openspec else None,
         change_dirs=change_dirs,
         dialect=detect_dialect(spec_files),
@@ -228,4 +251,6 @@ def profile(root: Path) -> StackProfile:
         invariant_source=invariant_source,
         invariant_ids=invariant_ids,
         has_project_md=(openspec_root / "project.md").exists() if has_openspec else False,
+        make_target_confidence=make_facts.confidence,
+        make_unresolved_count=make_facts.unresolved_count,
     )

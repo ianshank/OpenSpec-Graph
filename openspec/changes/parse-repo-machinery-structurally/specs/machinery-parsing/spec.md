@@ -1,9 +1,9 @@
-# Spec: Machinery Parsing (CP-3, design)
+# Spec: Machinery Parsing (CP-3)
 
 > **Change:** `parse-repo-machinery-structurally`
-> **Version:** 0.1.0-draft
+> **Version:** 1.0.0
 > **Authors:** maintainer · reviewer
-> **Status:** DRAFT
+> **Status:** APPROVED
 
 ---
 
@@ -67,21 +67,17 @@ Makefile. See the parent proposal's Why section for full citations.
   claim. (R-MP-2)
   _Verified by:_ `pytest -k test_shell_expansion_in_target_position_never_executes` · stage: `make test`
 
-- [ ] **AC-MP-3:** A Makefile fixture containing an `include` directive or a
+- [x] **AC-MP-3:** A Makefile fixture containing an `include` directive or a
   target-position variable expansion (`$(BINARY): $(SRCS)`) is parsed with a
-  lowered confidence signal (verified: `machinery.parse_makefile` alone,
-  Milestone 1, DONE) and falls back to the existing regex path when wired
-  into `detect.py` (Milestone 2b, NOT STARTED), instead of raising or
-  silently guessing. (R-MP-3)
-  _Verified by:_ `pytest -k "test_include_directive_lowers_confidence or test_variable_expansion_in_target_position_is_unresolved_not_guessed"` (confidence signal only; full fallback pending Milestone 2b) · stage: `make test`
+  lowered confidence signal and falls back to the existing regex path,
+  instead of raising or silently guessing. (R-MP-3)
+  _Verified by:_ `pytest -k test_multi_target_makefile_line_resolves_both_targets_end_to_end` (wiring) and `pytest -k test_cli_detect_reports_low_confidence_makefile_parse` (signal) · stage: `make test`
 
-- [ ] **AC-MP-4 (non-success):** A spec citing a `make` target that is
+- [x] **AC-MP-4 (non-success):** A spec citing a `make` target that is
   genuinely absent from the target repo's Makefile still fails G004 at both
   high and low parser confidence — structural parsing must never weaken the
-  rule, only remove false positives. Depends on Milestone 2b's wiring into
-  `rules_generic._unknown_make_target`; not yet testable end-to-end.
-  (R-MP-1, R-MP-3)
-  _Verified by:_ pytest fixture, asserts G004 still fires · stage: `make test`
+  rule, only remove false positives. (R-MP-1, R-MP-3)
+  _Verified by:_ `pytest -k test_g004_still_fires_on_a_genuinely_absent_target_at_low_confidence` · stage: `make test`
 
 - [x] **AC-MP-5:** A spec line containing two threshold-shaped numbers, only
   one of which matches the real configured floor, still fails G003 for the
@@ -94,10 +90,10 @@ Makefile. See the parent proposal's Why section for full citations.
   (R-MP-5)
   _Verified by:_ `pytest -k test_g004_does_not_fire_on_a_bare_english_use_of_make` · stage: `make test`
 
-- [ ] **AC-MP-7:** `StackProfile.as_dict()`'s `make_targets` field is
+- [x] **AC-MP-7:** `StackProfile.as_dict()`'s `make_targets` field is
   byte-identical in shape before and after this change lands, for a fixed
   input Makefile. (C-MP-1)
-  _Verified by:_ pytest, extends the decomposition-guard pattern · stage: `make test`
+  _Verified by:_ `pytest -k test_make_targets_json_shape_is_a_list_of_strings` · stage: `make test`
 
 ---
 
@@ -122,11 +118,11 @@ Makefile. See the parent proposal's Why section for full citations.
   this change can start as an unnumbered diagnostic (precedent:
   `cmd_detect`'s existing dialect-mismatch warning) and only become a
   numbered rule if that turns out to be needed once built.
-- **DEC-MP-004 (open, non-blocking):** Whether `%`-pattern rules
-  (`%.o: %.c`) should be explicitly excluded from resolved targets (matching
-  today's incidental regex behavior, but as a documented, tested decision
-  rather than an accident) is left to the implementation to decide and test,
-  not fixed by this design.
+- **DEC-MP-004 (resolved):** `%`-pattern rules (`%.o: %.c`) are excluded from
+  resolved targets — matching the pre-existing regex's incidental behavior,
+  but now as a documented, tested decision (`test_pattern_rules_are_excluded_by_design`)
+  rather than an accident. No spec would ever cite one via a bare `make`
+  reference.
 
 ## Non-Success Criteria (what this change rejects)
 
