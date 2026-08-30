@@ -26,9 +26,12 @@ Zero runtime dependencies. Python 3.10+.
 ```bash
 pip install -e .                     # local dev install (no PyPI release yet)
 planlint --target /path/to/clone detect      # read-only: stack, dialect, threshold
-planlint --target /path/to/clone init        # pin detected conventions into openspec/
+planlint --target /path/to/clone detect --format json   # portable dialect card (schema-versioned)
+planlint --target /path/to/clone detect --diff prev.json  # exit 1 + list what drifted, else PASS
+planlint --target /path/to/clone init        # write a snapshot of detected conventions into openspec/
 planlint --target /path/to/clone new add-thing --capability thing-capability
 planlint --target /path/to/clone validate    # exit 1 on any ERROR — the gate
+planlint --version                           # print the installed version and exit
 ```
 
 > The package is not yet published to PyPI. Until it is, install from source
@@ -119,6 +122,8 @@ quality without making the document wrong.
 | G003 | ERROR | any | No hard-coded thresholds; read them from the detected locator |
 | G004 | ERROR | any | Every cited `make <target>` exists in the target's Makefile |
 | G005 | WARN | any | Every cited `INV-n` is declared in the invariant source |
+| G006 | WARN | any | Every declared invariant is cited by a living spec, or waived |
+| G007 | ERROR | any | Every waiver (`specgraph:allow`) states a reason |
 | H001 | ERROR | harness | Every AC has `_Verified by:_` naming a runnable stage |
 | H002 | WARN | harness | Every AC traces to an `R-`/`C-` requirement |
 | H003 | WARN | harness | No orphan requirements (every one is verified by some AC) |

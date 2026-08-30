@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from openspec_graph import detect, rules, scaffold
+from openspec_graph import detect, dialect_card, rules, scaffold
 from openspec_graph.cli import main
 from openspec_graph.parse import parse_spec
 
@@ -129,6 +129,12 @@ def rule_ids(found: list[rules.Finding]) -> set[str]:
     return {f.rule for f in found}
 
 
+def tree_findings_for(repo: Path, bodies: list[tuple[str, str, str]], dialect: str = "auto") -> list[rules.Finding]:
+    """bodies: (change, capability, body) tuples, each written as its own spec."""
+    specs = [parse_spec(write_spec(repo, change, capability, body), dialect) for change, capability, body in bodies]
+    return rules.evaluate_tree(specs, detect.profile(repo))
+
+
 # --- detection -------------------------------------------------------------
 
 
@@ -183,10 +189,38 @@ def test_detect_still_prefers_pyproject_over_coveragerc(repo: Path) -> None:
     assert prof.threshold.value == 90
 
 
+def test_detect_ignores_malformed_governance_policy_json(repo: Path) -> None:
+    (repo / "governance-policy.json").write_text("{not valid json")
+    prof = detect.profile(repo)
+    assert prof.threshold is not None
+    assert prof.threshold.value == 90
+    assert "pyproject.toml" in prof.threshold.locator
+
+
+def test_detect_ignores_malformed_coveragerc(repo: Path) -> None:
+    # No [section] header at all -- reliably raises configparser's
+    # MissingSectionHeaderError, unlike text that might parse leniently.
+    (repo / ".coveragerc").write_text("this is not valid ini content at all")
+    prof = detect.profile(repo)
+    assert prof.threshold is not None
+    assert prof.threshold.value == 90
+    assert "pyproject.toml" in prof.threshold.locator
+
+
 def test_detect_finds_make_targets_and_ignores_phony(repo: Path) -> None:
     prof = detect.profile(repo)
     assert {"test", "regression", "ci", "help"} <= set(prof.make_targets)
     assert ".PHONY" not in prof.make_targets
+
+
+def test_g004_stays_silent_when_the_target_repo_has_no_makefile_at_all(repo: Path) -> None:
+    (repo / "Makefile").unlink()
+    prof = detect.profile(repo)
+    assert prof.make_targets == ()
+    assert prof.make_target_confidence == "high"  # vacuous: nothing was seen to lower confidence
+    body = GOOD_HARNESS.replace("make regression", "make nope")
+    found = findings_for(repo, body)
+    assert "G004" not in rule_ids(found)
 
 
 def test_make_targets_json_shape_is_a_list_of_strings(repo: Path) -> None:
@@ -198,11 +232,174 @@ def test_make_targets_json_shape_is_a_list_of_strings(repo: Path) -> None:
     assert payload["make_targets"] == sorted(payload["make_targets"])
 
 
+def test_to_card_excludes_absolute_paths(repo: Path) -> None:
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    card = detect.profile(repo).to_card()
+    assert "root" not in card
+    assert "openspec_root" not in card
+    assert card["has_openspec_root"] is True
+    assert card["schema_version"] == dialect_card.SCHEMA_VERSION
+
+
+def test_to_card_reports_no_openspec_root_when_absent(repo: Path) -> None:
+    card = detect.profile(repo).to_card()
+    assert card["has_openspec_root"] is False
+
+
+def test_detect_format_json_emits_a_dialect_card_with_schema_version(
+    repo: Path, capsys
+) -> None:
+    assert main(["--target", str(repo), "detect", "--format", "json"]) == 0
+    card = json.loads(capsys.readouterr().out)
+    assert card["schema_version"] == dialect_card.SCHEMA_VERSION
+    assert "root" not in card
+
+
+def test_detect_format_json_is_byte_identical_across_runs(repo: Path, capsys) -> None:
+    main(["--target", str(repo), "detect", "--format", "json"])
+    first = capsys.readouterr().out
+    main(["--target", str(repo), "detect", "--format", "json"])
+    second = capsys.readouterr().out
+    assert first == second
+
+
+def test_detect_format_json_card_is_identical_across_different_checkout_paths(
+    tmp_path_factory, capsys
+) -> None:
+    # The strongest proof of the portability property AC-DC-1/2 need: the
+    # same logical repo at two different absolute paths must yield a
+    # byte-identical card end-to-end, not just at the to_card() unit level.
+    def _build(root: Path) -> None:
+        (root / "Makefile").write_text(MAKEFILE)
+        (root / "pyproject.toml").write_text(PYPROJECT)
+        write_spec(root, "c1", "cap1", GOOD_HARNESS)
+
+    root_a = tmp_path_factory.mktemp("checkout_a")
+    root_b = tmp_path_factory.mktemp("checkout_b_longer_name")
+    _build(root_a)
+    _build(root_b)
+
+    main(["--target", str(root_a), "detect", "--format", "json"])
+    card_a = capsys.readouterr().out
+    main(["--target", str(root_b), "detect", "--format", "json"])
+    card_b = capsys.readouterr().out
+    assert card_a == card_b
+
+
+def test_detect_json_flag_still_emits_full_profile_unchanged(repo: Path, capsys) -> None:
+    assert main(["--target", str(repo), "detect", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert "root" in payload
+    assert "schema_version" not in payload
+
+
+def test_detect_format_json_takes_precedence_over_legacy_json_flag(repo: Path, capsys) -> None:
+    # Passing both --json and --format json together is an edge case a
+    # user could plausibly hit (habitually adding --json alongside the
+    # newer --format flag). --format json wins: it's the more specific,
+    # explicitly-requested output mode. Documented here so the precedence
+    # is a tested contract, not an accident of check-ordering.
+    assert main(["--target", str(repo), "detect", "--json", "--format", "json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert "schema_version" in payload, "the card (--format json) must win over the legacy --json shape"
+    assert "root" not in payload
+
+
+def test_detect_diff_exits_nonzero_and_lists_changed_fields_on_drift(
+    repo: Path, tmp_path: Path, capsys
+) -> None:
+    main(["--target", str(repo), "detect", "--format", "json"])
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(capsys.readouterr().out)
+
+    (repo / "Makefile").write_text(MAKEFILE + "new-target:\n\techo hi\n")
+    result = main(["--target", str(repo), "detect", "--diff", str(baseline_path)])
+    out = capsys.readouterr().out
+    assert result == 1
+    assert "make_targets" in out
+
+
+def test_detect_diff_exits_zero_on_no_drift(repo: Path, tmp_path: Path, capsys) -> None:
+    main(["--target", str(repo), "detect", "--format", "json"])
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(capsys.readouterr().out)
+
+    result = main(["--target", str(repo), "detect", "--diff", str(baseline_path)])
+    out = capsys.readouterr().out
+    assert result == 0
+    assert "PASS" in out
+
+
+def test_detect_diff_with_missing_baseline_is_a_usage_error(repo: Path) -> None:
+    result = main(["--target", str(repo), "detect", "--diff", "/nonexistent/baseline.json"])
+    assert result == 2
+
+
+def test_detect_diff_with_valid_json_non_object_baseline_is_a_usage_error(
+    repo: Path, tmp_path: Path, capsys
+) -> None:
+    # A baseline file can be syntactically valid JSON (null, a list, a
+    # number) while still not being a card at all. json.loads() succeeds
+    # on all of these, so this must be checked explicitly -- without it,
+    # dialect_card.diff_cards()'s .get() calls raise AttributeError,
+    # which prints a traceback and exits 1, indistinguishable from "real
+    # drift found" and violating the documented 0/1/2 exit contract.
+    for bad_baseline in ("null", "[]", "42", '"just a string"'):
+        baseline_path = tmp_path / "baseline.json"
+        baseline_path.write_text(bad_baseline)
+        result = main(["--target", str(repo), "detect", "--diff", str(baseline_path)])
+        assert result == 2, f"baseline {bad_baseline!r} should be a usage error, got exit {result}"
+        assert "expected a JSON object" in capsys.readouterr().err
+
+
+def test_detect_never_writes_to_the_target_repo(repo: Path) -> None:
+    # AC-DC-3 (non-success): detect.py's own module docstring already
+    # promises read-only; this proves it holds across every detect output
+    # mode, not just the default text one.
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    before = {p: p.stat().st_mtime_ns for p in repo.rglob("*") if p.is_file()}
+
+    assert main(["--target", str(repo), "detect"]) == 0
+    assert main(["--target", str(repo), "detect", "--json"]) == 0
+    assert main(["--target", str(repo), "detect", "--format", "json"]) == 0
+
+    after = {p: p.stat().st_mtime_ns for p in repo.rglob("*") if p.is_file()}
+    assert set(before) == set(after), "detect must never create or delete a file in the target repo"
+    assert before == after, "detect must never modify a file in the target repo"
+
+
 def test_multi_target_makefile_line_resolves_both_targets_end_to_end(repo: Path) -> None:
     (repo / "Makefile").write_text(MAKEFILE + "lint typecheck: test\n\techo ok\n")
     prof = detect.profile(repo)
     assert {"lint", "typecheck"} <= set(prof.make_targets)
     assert prof.make_target_confidence == "high"
+
+
+def test_define_block_does_not_leak_a_bogus_target_through_the_legacy_widening_fallback(
+    repo: Path,
+) -> None:
+    # A define block lowers machinery.py's confidence, which triggers
+    # detect.py's legacy-regex widening fallback -- that fallback has the
+    # identical define/endef blindness machinery.py was fixed for, so
+    # fixing machinery.py alone is not sufficient end-to-end.
+    (repo / "Makefile").write_text(MAKEFILE + "\ndefine HELP_TEXT\nUsage: make test\nendef\n")
+    prof = detect.profile(repo)
+    assert "Usage" not in prof.make_targets
+    assert prof.make_target_confidence == "low"
+
+
+def test_unterminated_define_block_does_not_hang_detect_end_to_end(repo: Path) -> None:
+    # The shared O(n) strip_define_blocks implementation must keep
+    # detect.profile() fast even through the legacy-fallback path, not
+    # just when calling machinery.parse_makefile directly.
+    import time
+
+    (repo / "Makefile").write_text(MAKEFILE + "\ndefine X\n" + ("body line\n" * 20000))
+    start = time.monotonic()
+    prof = detect.profile(repo)
+    elapsed = time.monotonic() - start
+    assert elapsed < 5.0, f"detect.profile() took {elapsed:.2f}s on an unterminated define block"
+    assert prof.make_target_confidence == "low"
 
 
 def test_cli_detect_reports_low_confidence_makefile_parse(repo: Path, capsys) -> None:
@@ -255,6 +452,36 @@ def test_good_upstream_spec_has_no_errors(repo: Path) -> None:
 def test_g001_fires_when_no_criteria(repo: Path) -> None:
     body = "# Spec: Empty\n\n## Requirements\n\n- R-DMO-1: MUST do a thing.\n"
     assert "G001" in rule_ids(findings_for(repo, body, "harness"))
+
+
+def test_g001_fires_when_neither_requirements_nor_criteria_are_recognized(repo: Path) -> None:
+    # Distinct from test_g001_fires_when_no_criteria: that fixture has
+    # requirements but no criteria (rules_generic.py's `if` branch); this one
+    # has neither (the `else` branch), which was previously untested.
+    body = "# Spec: Empty\n\nJust prose; no requirements or acceptance criteria at all.\n"
+    found = findings_for(repo, body, "harness")
+    matching = [f for f in found if f.rule == "G001"]
+    assert matching, "G001 must fire when nothing is recognized"
+    assert any("no requirements and no verifiable criteria" in f.message for f in matching), (
+        "must hit the 'neither' branch's message, not the 'requirements but no criteria' branch"
+    )
+
+
+def test_harness_dialect_falls_back_to_upstream_when_the_text_is_actually_upstream(
+    repo: Path,
+) -> None:
+    # A repo classified "harness" but this one file is written in upstream
+    # form -- _parse_harness finds nothing, but the text matches the
+    # upstream REQUIREMENT pattern, so parse_spec must re-parse it as
+    # upstream rather than reporting a false G001 "no criteria" finding.
+    # This is the per-file misclassification safety net for mixed repos.
+    path = write_spec(repo, "demo-change", "demo-capability", GOOD_UPSTREAM)
+    parsed = parse_spec(path, "harness")
+    assert parsed.dialect == "upstream"
+    assert parsed.requirements and parsed.criteria
+
+    found = findings_for(repo, GOOD_UPSTREAM, "harness")
+    assert "G001" not in rule_ids(found), "the upstream-form criteria must be recognized, not missed"
 
 
 def test_g002_fires_when_every_criterion_is_a_happy_path(repo: Path) -> None:
@@ -337,6 +564,54 @@ def test_g005_fires_on_an_undeclared_invariant(repo: Path) -> None:
     found = findings_for(repo, body)
     assert "G005" in rule_ids(found)
     assert any("INV-99" in f.message for f in found)
+
+
+def test_g006_fires_for_a_declared_invariant_no_spec_cites(repo: Path) -> None:
+    # repo's own CONTRACT.md declares INV-1 and INV-2; GOOD_HARNESS only
+    # cites INV-1, so INV-2 is a real, pre-existing orphan in this fixture.
+    found = tree_findings_for(repo, [("demo-change", "demo-cap", GOOD_HARNESS)])
+    g006 = [f for f in found if f.rule == "G006"]
+    assert g006 and all(f.severity == "WARN" for f in g006)
+    assert any(f.subject == "INV-2" for f in g006)
+    assert any("INV-2" in f.message and "CONTRACT.md" in f.message for f in g006)
+
+
+def test_g006_does_not_fire_once_cited_anywhere_in_the_tree(repo: Path) -> None:
+    other = GOOD_HARNESS.replace("INV-1", "INV-2").replace("AC-DMO", "AC-DM2").replace("R-DMO", "R-DM2")
+    found = tree_findings_for(
+        repo,
+        [("c1", "cap1", GOOD_HARNESS), ("c2", "cap2", other)],
+    )
+    assert "G006" not in rule_ids(found)
+
+
+def test_g006_is_downgraded_to_info_when_waived_anywhere_in_the_tree(repo: Path) -> None:
+    # Reason text deliberately avoids the INV-n pattern itself -- invariant_refs
+    # scans the whole raw text unconditionally, so naming the invariant here
+    # would make the waiver comment itself count as a citation and resolve
+    # the orphan before the waiver-downgrade path is even exercised.
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement",
+        "<!-- specgraph:allow G006 the second contract invariant is a future "
+        "gate, not yet wired into any spec -->\n\n## Problem Statement",
+    )
+    found = tree_findings_for(repo, [("demo-change", "demo-cap", body)])
+    g006 = [f for f in found if f.rule == "G006"]
+    assert g006 and all(f.severity == "INFO" and "[waived]" in f.message for f in g006)
+
+
+def test_g006_is_skipped_under_change_scoping(repo: Path, capsys) -> None:
+    # other-change alone cites INV-2; a naive --change-filtered evaluate_tree()
+    # would falsely call INV-2 orphaned since that citation sits outside the
+    # filtered view. Confirms it's skipped outright instead (DEC-WL-003).
+    write_spec(repo, "demo-change", "demo-cap", GOOD_HARNESS)
+    other = GOOD_HARNESS.replace("INV-1", "INV-2").replace("AC-DMO", "AC-DM2").replace("R-DMO", "R-DM2")
+    write_spec(repo, "other-change", "other-cap", other)
+    exit_code = main(["--target", str(repo), "validate", "--change", "demo-change"])
+    out = capsys.readouterr()
+    assert exit_code == 0
+    assert "G006" not in out.out
+    assert "G006 skipped" in out.err
 
 
 def test_h001_fires_when_an_ac_has_no_verification(repo: Path) -> None:
@@ -627,8 +902,77 @@ def test_waiver_does_not_leak_to_other_rules(repo: Path) -> None:
 
 
 def test_cli_validate_passes_when_the_only_error_is_waived(repo: Path) -> None:
+    # Reason required (CP-4/G007): a reason-less waiver would now also trip
+    # G007, so this fixture must carry one to keep testing what it always
+    # meant to test -- a *justified* waiver passing.
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement",
+        "<!-- specgraph:allow G003 95% is this spec's own coverage floor -->\n\n## Problem Statement",
+    ).replace("An attested write records an evidence id.", "Coverage is at least 95%.")
+    write_spec(repo, "waived-change", "waived-cap", body)
+    assert main(["--target", str(repo), "validate"]) == 0
+
+
+def test_cli_validate_fails_when_a_waiver_has_no_reason(repo: Path) -> None:
     body = GOOD_HARNESS.replace(
         "## Problem Statement", "<!-- specgraph:allow G003 -->\n\n## Problem Statement"
     ).replace("An attested write records an evidence id.", "Coverage is at least 95%.")
     write_spec(repo, "waived-change", "waived-cap", body)
-    assert main(["--target", str(repo), "validate"]) == 0
+    assert main(["--target", str(repo), "validate"]) == 1
+
+
+def test_unreasoned_waiver_downgrades_the_named_rule_and_also_fires_g007(repo: Path) -> None:
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement", "<!-- specgraph:allow G003 -->\n\n## Problem Statement"
+    ).replace("An attested write records an evidence id.", "Coverage is at least 95%.")
+    found = findings_for(repo, body, "harness")
+    g003 = [f for f in found if f.rule == "G003"]
+    g007 = [f for f in found if f.rule == "G007"]
+    assert g003 and all(f.severity == "INFO" and "[waived]" in f.message for f in g003)
+    assert g007 and all(f.severity == "ERROR" for f in g007)
+    assert any("G003" in f.message for f in g007)
+
+
+def test_reasoned_waiver_does_not_trip_g007(repo: Path) -> None:
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement",
+        "<!-- specgraph:allow G003 this spec's subject IS the 95% coverage floor -->"
+        "\n\n## Problem Statement",
+    ).replace("An attested write records an evidence id.", "Coverage is at least 95%.")
+    assert "G007" not in rule_ids(findings_for(repo, body, "harness"))
+
+
+def test_g007_fires_regardless_of_dialect(repo: Path) -> None:
+    body = GOOD_UPSTREAM.replace(
+        "## ADDED Requirements", "<!-- specgraph:allow G002 -->\n\n## ADDED Requirements"
+    )
+    assert "G007" in rule_ids(findings_for(repo, body, "upstream"))
+
+
+def test_g007_is_not_suppressible_by_waiving_itself_without_a_reason(repo: Path) -> None:
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement", "<!-- specgraph:allow G007 -->\n\n## Problem Statement"
+    )
+    g007 = [f for f in findings_for(repo, body, "harness") if f.rule == "G007"]
+    assert g007 and all(f.severity == "ERROR" for f in g007)
+
+
+def test_multi_rule_waiver_with_no_reason_fires_one_g007_per_waived_rule(repo: Path) -> None:
+    # A single comment naming N rules expands to N Waiver records (one per
+    # rule, all sharing that comment's reason/line) -- so an unreasoned
+    # multi-rule waiver produces one independent G007 finding per name, not
+    # one finding for the whole comment.
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement", "<!-- specgraph:allow G003,G004 -->\n\n## Problem Statement"
+    ).replace("An attested write records an evidence id.", "Coverage is at least 95%.")
+    g007 = [f for f in findings_for(repo, body, "harness") if f.rule == "G007"]
+    assert len(g007) == 2
+    messages = " ".join(f.message for f in g007)
+    assert "G003" in messages and "G004" in messages
+
+
+def test_suppressions_unchanged_behavior_after_waiver_refactor() -> None:
+    from openspec_graph.parse_semantics import suppressions
+
+    text = "<!-- specgraph:allow G003, G004 because reasons -->"
+    assert suppressions(text) == {"G003", "G004"}

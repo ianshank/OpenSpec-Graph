@@ -97,7 +97,16 @@ def plan_change(
 
 
 def plan_init(profile: StackProfile) -> list[WritePlan]:
-    """Bootstrap `openspec/` and pin the detected conventions into specgraph.json."""
+    """Bootstrap `openspec/` and write a snapshot of detected conventions
+    into specgraph.json/project.md.
+
+    A snapshot, not a config: nothing reads either file back. `detect`
+    always re-derives these conventions fresh from the filesystem on every
+    run, by design -- a hand-editable file that can silently drift from
+    reality is exactly the class of stale-cached-belief bug this project
+    exists to catch in *target* repos, so it doesn't reintroduce the same
+    problem in its own.
+    """
     root = profile.openspec_root or (profile.root / "openspec")
     config = {
         "dialect": profile.dialect if profile.dialect != "unknown" else "harness",
@@ -113,7 +122,11 @@ def plan_init(profile: StackProfile) -> list[WritePlan]:
     }
     project_md = f"""# Project conventions
 
-Detected by `openspec-graph` — correct anything wrong, this file is authoritative.
+Detected by `openspec-graph` at `init` time — a snapshot for humans, not a
+live config. `planlint` always re-derives these conventions fresh from the
+repo on every `detect`/`validate` run rather than reading this file back,
+so edit it freely to correct a misdetection, but note that doing so does
+not change enforcement.
 
 - Spec dialect: `{config["dialect"]}`
 - Coverage floor source: `{config["threshold_locator"]}`

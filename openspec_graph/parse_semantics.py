@@ -8,6 +8,7 @@ it sits at the bottom of the parse layer.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 
 SECTION = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
@@ -137,8 +138,28 @@ def scenario_levels(text: str) -> tuple[int, ...]:
     return tuple(len(m.group(1)) for m in SCENARIO.finditer(text))
 
 
-def suppressions(text: str) -> frozenset[str]:
-    found: set[str] = set()
+@dataclasses.dataclass(frozen=True)
+class Waiver:
+    """One waived rule id from a single `<!-- specgraph:allow RULE[, RULE...]
+    reason --> ` comment. A comment naming N rules expands to N Waiver
+    records, all sharing that comment's reason and line."""
+
+    rule: str
+    reason: str
+    line: int
+
+
+def parse_waivers(text: str) -> tuple[Waiver, ...]:
+    found: list[Waiver] = []
     for match in SUPPRESS.finditer(text):
-        found.update(part.strip() for part in match.group(1).split(","))
-    return frozenset(found)
+        reason = match.group(2).strip()
+        line = line_of(text, match.start())
+        for part in match.group(1).split(","):
+            found.append(Waiver(rule=part.strip(), reason=reason, line=line))
+    return tuple(found)
+
+
+def suppressions(text: str) -> frozenset[str]:
+    """Unchanged signature/behavior; now derived from parse_waivers() so the
+    two can never drift apart."""
+    return frozenset(w.rule for w in parse_waivers(text))

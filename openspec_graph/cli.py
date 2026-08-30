@@ -8,7 +8,7 @@ spec to that, using the target's own vocabulary. It is a linter under
 
 Verbs:
   detect    read-only report of the target's stack, gates, threshold, dialect
-  init      write openspec/specgraph.json + project.md pinning detected conventions
+  init      write openspec/specgraph.json + project.md, a snapshot of detected conventions
   new       scaffold a change package in the target's own dialect
   validate  run the rule engine over every change package
   graph     emit the spec dependency graph as JSON (pure projection of validate)
@@ -20,19 +20,39 @@ Exit codes: 0 clean, 1 findings at or above the fail level, 2 usage error.
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
 import logging
 import sys
 from pathlib import Path
 
-from . import detect, rules, scaffold
+from . import detect, dialect_card, rules, scaffold
 from . import graph as graph_module
 from .log import configure as configure_logging
-from .parse import parse_spec
+from .parse import ParsedSpec, parse_spec
 
 SEVERITY_ORDER = {"INFO": 0, "WARN": 1, "ERROR": 2}
 
 logger = logging.getLogger("planlint")
+
+
+def _version_string() -> str:
+    # Resolve the distribution name from the importable package name
+    # ("openspec_graph") via packages_distributions(), rather than a second
+    # hardcoded copy of pyproject.toml's [project] name ("openspec-graph"
+    # -- spelled differently, hyphen vs. underscore, which is exactly why
+    # only this mapping, not a literal, can bridge the two correctly).
+    # NOT "planlint", which is only the console-script name.
+    top_level = (__package__ or __name__).split(".")[0]
+    try:
+        distributions = importlib.metadata.packages_distributions()[top_level]
+        version = importlib.metadata.version(distributions[0])
+    except (KeyError, IndexError, importlib.metadata.PackageNotFoundError):
+        # Uninstalled checkout (e.g. running from a source clone without
+        # `pip install -e .`): fall back to the package's own constant
+        # rather than a third hardcoded copy.
+        from . import __version__ as version
+    return f"%(prog)s {version}"
 
 
 def _profile(args: argparse.Namespace) -> detect.StackProfile:
@@ -52,6 +72,33 @@ def _profile(args: argparse.Namespace) -> detect.StackProfile:
 
 def cmd_detect(args: argparse.Namespace) -> int:
     prof = _profile(args)
+
+    if args.diff:
+        baseline_path = Path(args.diff)
+        try:
+            previous = json.loads(baseline_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"cannot read --diff baseline {baseline_path}: {exc}", file=sys.stderr)
+            return 2
+        if not isinstance(previous, dict):
+            print(
+                f"cannot read --diff baseline {baseline_path}: expected a JSON object, "
+                f"got {type(previous).__name__}",
+                file=sys.stderr,
+            )
+            return 2
+        changes = dialect_card.diff_cards(previous, prof.to_card())
+        if changes:
+            for change in changes:
+                print(f"FAIL: {change}")
+            return 1
+        print("PASS: no drift in detected conventions")
+        return 0
+
+    if args.format == "json":
+        print(json.dumps(prof.to_card(), indent=2))
+        return 0
+
     if args.json:
         print(json.dumps(prof.as_dict(), indent=2))
         return 0
@@ -119,10 +166,22 @@ def cmd_validate(args: argparse.Namespace) -> int:
             return 2
 
     findings: list[rules.Finding] = []
+    specs: list[ParsedSpec] = []
     for path in spec_files:
         logger.debug("evaluating %s", path)
         spec = parse_spec(path, args.dialect or prof.dialect)
+        specs.append(spec)
         findings.extend(rules.evaluate(spec, prof))
+
+    if args.change:
+        # G006 is a whole-tree property (DEC-WL-001); spec_files was just
+        # filtered by --change above, so evaluate_tree() over that filtered
+        # set would report every invariant outside the filtered view as
+        # falsely orphaned (DEC-WL-003). A --change-scoped run's contract
+        # is "does this one package pass" either way, so skip it outright.
+        print("INFO  G006 skipped (tree-wide check needs an unscoped run)", file=sys.stderr)
+    else:
+        findings.extend(rules.evaluate_tree(specs, prof))
 
     fail_at = SEVERITY_ORDER[args.fail_on]
     blocking = [f for f in findings if SEVERITY_ORDER[f.severity] >= fail_at]
@@ -203,13 +262,30 @@ def build_parser() -> argparse.ArgumentParser:
         "-v", "--verbose", action="store_true",
         help="emit debug diagnostics to stderr (does not affect stdout)",
     )
+    parser.add_argument(
+        "-V", "--version", action="version", version=_version_string(),
+        help="print the installed version and exit",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_detect = sub.add_parser("detect", help="read-only stack and dialect report")
-    p_detect.add_argument("--json", action="store_true")
+    p_detect.add_argument(
+        "--json", action="store_true",
+        help="print the full detected profile as JSON (legacy; unchanged shape)",
+    )
+    p_detect.add_argument(
+        "--format", choices=["text", "json"], default="text",
+        help="output format; 'json' emits a stable, schema-versioned dialect "
+        "card excluding machine-specific paths (portable; see --diff)",
+    )
+    p_detect.add_argument(
+        "--diff", metavar="PREV_CARD_JSON",
+        help="compare against a previous 'detect --format json' output; "
+        "exits non-zero and lists changed fields on drift",
+    )
     p_detect.set_defaults(func=cmd_detect)
 
-    p_init = sub.add_parser("init", help="pin detected conventions into openspec/")
+    p_init = sub.add_parser("init", help="write a snapshot of detected conventions into openspec/")
     p_init.add_argument("--dry-run", action="store_true")
     p_init.add_argument("--force", action="store_true")
     p_init.set_defaults(func=cmd_init)

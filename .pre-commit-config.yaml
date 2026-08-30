@@ -30,6 +30,6 @@ repos:
 
       - id: specgraph-validate
         name: specgraph validate (self-dogfooding)
-        entry: planlint --target . validate --fail-on ERROR
+        entry: make validate
         language: system
         pass_filenames: false

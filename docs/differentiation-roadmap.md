@@ -115,7 +115,18 @@ wedge; add the positioning table and explicit non-goals; add a deprecated
   `planlint` only after a free name is confirmed — do not ship a colliding
   name.
 
-### CP-2: `add-dialect-cards` (v1)
+### CP-2: `add-dialect-cards` (v1) — implemented
+
+> Status: implemented. See the approved spec at
+> `openspec/changes/add-dialect-cards/specs/dialect-cards/spec.md`
+> (`AC-DC-1..7`) — that spec is authoritative; this section is kept as the
+> original sketch. One deviation from the sketch below, decided during
+> implementation: the card excludes `StackProfile`'s `root` field (and
+> reduces `openspec_root` to a portable `has_openspec_root` boolean)
+> rather than including every detected field verbatim — both are absolute
+> paths that differ across every checkout/machine/CI run, and would make
+> `--diff` report constant false "drift" on nothing but where the repo
+> happens to be cloned.
 
 `detect` becomes a product. Emit a machine-readable **dialect card** (stages,
 threshold locator, INV source, heading depths, languages) as stable JSON; CI
@@ -137,15 +148,18 @@ diffs the card so house-style drift becomes a finding.
   3.10–3.13 (dict ordering / set iteration), freeze field order explicitly
   before shipping — do not ship a card that "usually" diffs clean.
 
-### CP-3: `parse-repo-machinery-structurally` (v1) — in progress
+### CP-3: `parse-repo-machinery-structurally` (v1) — implemented
 
 > The design below is superseded by the approved spec at
 > `openspec/changes/parse-repo-machinery-structurally/specs/machinery-parsing/spec.md`
 > (`AC-MP-1..7`, not `AC-PM-*`) — that spec is authoritative; this section is
 > kept as a historical sketch, corrected where it was factually wrong.
-> Status: G003/`MAKE_REF` precision (below) and the `machinery.py` core
-> parser are implemented; wiring `machinery.py` into `detect.py` and this
-> doc's own remaining stale references are the last piece.
+> Status: implemented — G003/`MAKE_REF` precision, the `machinery.py` core
+> parser, and its wiring into `detect.py` all shipped. A follow-up gap in
+> the wiring itself (a `define`/`endef` block misparsed as a target, in
+> both the structural parser and the legacy-regex fallback it widens with)
+> was found and fixed separately; see
+> `openspec/changes/fix-makefile-define-block-misparse/`.
 
 Stop regex-scanning prose for thresholds and make targets where the repo
 already has the truth as structure. Parse `fail_under`, `[tool.coverage.*]`,

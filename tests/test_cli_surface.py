@@ -10,11 +10,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from openspec_graph.cli import build_parser, main, main_deprecated
+from tests import support
 from tests.support import run_cli, write_spec
 
 # The closed set of verbs planlint exposes. Adding a verb here is a deliberate,
@@ -50,6 +52,103 @@ def test_cli_rejects_authoring_verbs() -> None:
     assert not leaked, (
         f"planlint must not author specs; leaked authoring verbs: {sorted(leaked)}"
     )
+
+
+# --- VER-1: --version/-V ----------------------------------------------------
+
+
+def test_version_flag_prints_version_and_exits_zero(repo: Path) -> None:
+    result = run_cli(repo, "--version")
+    assert result.returncode == 0
+    assert result.stdout.strip()
+
+
+def test_short_version_flag_matches_long_form(repo: Path) -> None:
+    assert run_cli(repo, "-V").stdout == run_cli(repo, "--version").stdout
+
+
+def test_version_flag_does_not_require_a_subcommand(repo: Path) -> None:
+    # --version must short-circuit before argparse's required-subcommand
+    # check, so it works with no verb at all.
+    result = run_cli(repo, "--version")
+    assert "usage" not in result.stderr.lower()
+
+
+def test_version_flag_is_not_a_registered_subcommand() -> None:
+    # A top-level optional flag like --target/--verbose, never a verb --
+    # must not appear in or expand the closed subcommand allow-list.
+    assert "version" not in _subcommand_names(build_parser())
+
+
+def test_version_string_falls_back_when_package_metadata_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # AC-VER-4 (non-success): an uninstalled checkout must not crash --
+    # falls back to the package's own __version__ constant.
+    import importlib.metadata
+
+    from openspec_graph import __version__
+    from openspec_graph.cli import _version_string
+
+    def _raise(_name: str) -> str:
+        raise importlib.metadata.PackageNotFoundError
+
+    monkeypatch.setattr(importlib.metadata, "version", _raise)
+    assert _version_string() == f"%(prog)s {__version__}"
+
+
+def test_version_string_falls_back_when_top_level_package_is_unmapped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A distinct failure mode from the PackageNotFoundError case above:
+    # packages_distributions() succeeding but simply not containing
+    # "openspec_graph" at all (KeyError), not finding it but failing to
+    # resolve its version.
+    import importlib.metadata
+
+    from openspec_graph import __version__
+    from openspec_graph.cli import _version_string
+
+    monkeypatch.setattr(importlib.metadata, "packages_distributions", dict)
+    assert _version_string() == f"%(prog)s {__version__}"
+
+
+# --- run_cli()'s COVERAGE_PROCESS_START env-override contract --------------
+#
+# Inspect the env dict run_cli() actually builds (by intercepting
+# subprocess.run) rather than relying on the subprocess's exit code:
+# coverage.process_startup() silently swallows a missing/bad config path
+# either way, so exit-code-only assertions couldn't actually distinguish
+# "the custom value was honored" from "it was silently overridden."
+
+
+def test_run_cli_injects_coverage_process_start_by_default(
+    monkeypatch: pytest.MonkeyPatch, repo: Path
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess:
+        captured.update(kwargs)
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(support.subprocess, "run", _fake_run)
+    support.run_cli(repo, "--version")
+    assert "COVERAGE_PROCESS_START" in captured["env"]
+
+
+def test_run_cli_never_overrides_a_caller_supplied_coverage_process_start(
+    monkeypatch: pytest.MonkeyPatch, repo: Path
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess:
+        captured.update(kwargs)
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(support.subprocess, "run", _fake_run)
+    custom_env = {**os.environ, "COVERAGE_PROCESS_START": "/custom/path/pyproject.toml"}
+    support.run_cli(repo, "--version", env=custom_env)
+    assert captured["env"]["COVERAGE_PROCESS_START"] == "/custom/path/pyproject.toml"
 
 
 # --- AC-RP-1: entry points wired + deprecation alias ------------------------

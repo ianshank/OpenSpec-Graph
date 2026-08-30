@@ -1,8 +1,13 @@
-"""Universal (dialect-agnostic) rules: G001-G005."""
+"""Universal (dialect-agnostic) rules: G001-G007.
+
+G006's real check is cross-tree (a declared invariant cited by no living
+spec anywhere), so it cannot be expressed as a per-spec ``Rule.check`` --
+see ``orphan_invariant_ids()`` below and ``rules.evaluate_tree()``.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
 from .detect import StackProfile
 from .parse import ParsedSpec, threshold_values
@@ -82,10 +87,47 @@ def _unknown_invariant(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]
             yield f"references {ref}, which is not declared in {src}"
 
 
+def _unjustified_waiver(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
+    for waiver in spec.waivers:
+        if not waiver.reason:
+            yield (
+                f"waiver of {waiver.rule} at line {waiver.line} has no reason; "
+                "a waiver is a claim that must justify itself"
+            )
+
+
+def orphan_invariant_ids(specs: Sequence[ParsedSpec], profile: StackProfile) -> tuple[str, ...]:
+    """Declared invariants cited by no spec in ``specs``.
+
+    A whole-tree question, not a per-spec one -- called once by
+    ``rules.evaluate_tree()``, never per-spec. See that function and
+    DEC-WL-001 for why no ``Rule.check`` signature can express this.
+    """
+    if not profile.invariant_ids:
+        return ()
+    cited = {ref for spec in specs for ref in spec.invariant_refs}
+    return tuple(inv for inv in profile.invariant_ids if inv not in cited)
+
+
+def _orphan_invariant_registry_stub(_s: ParsedSpec, _p: StackProfile) -> Iterable[str]:
+    # Inert: the real cross-tree check is orphan_invariant_ids(), run once
+    # per validate/graph pass by rules.evaluate_tree(), not per spec. This
+    # stub exists only so `planlint rules`/`rules --json` lists G006.
+    return ()
+
+
 GENERIC_RULES: tuple[Rule, ...] = (
     Rule("G001", ERROR, ("*",), "spec declares verifiable criteria", _no_criteria),
     Rule("G002", ERROR, ("*",), "at least one non-success criterion", _needs_negative),
     Rule("G003", ERROR, ("*",), "no hard-coded thresholds", _hard_coded_threshold),
     Rule("G004", ERROR, ("*",), "cited make targets exist", _unknown_make_target),
     Rule("G005", WARN, ("*",), "cited invariants are declared", _unknown_invariant),
+    Rule(
+        "G006",
+        WARN,
+        ("*",),
+        "declared invariants are cited by a living spec or waived",
+        _orphan_invariant_registry_stub,
+    ),
+    Rule("G007", ERROR, ("*",), "every waiver states a reason", _unjustified_waiver),
 )

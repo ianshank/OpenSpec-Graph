@@ -29,6 +29,7 @@ class Finding:
     message: str
     path: Path | None = None
     line: int = 0
+    subject: str = ""  # entity a tree-scoped finding is about, e.g. an invariant id (G006)
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -37,6 +38,7 @@ class Finding:
             "message": self.message,
             "path": str(self.path) if self.path else None,
             "line": self.line,
+            "subject": self.subject,
         }
 
     def render(self, root: Path | None = None) -> str:

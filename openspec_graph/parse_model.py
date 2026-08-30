@@ -16,6 +16,7 @@ from .parse_semantics import (
     MAKE_REF,
     NEGATIVE_PATTERNS,
     PYTEST_SEL,
+    Waiver,
 )
 
 __all__ = ["Criterion", "ParsedSpec", "Requirement"]
@@ -74,6 +75,7 @@ class ParsedSpec:
     delta_headers: tuple[str, ...]
     scenario_levels: tuple[int, ...] = ()
     suppressed: frozenset[str] = frozenset()
+    waivers: tuple[Waiver, ...] = ()
     raw: str = dataclasses.field(repr=False, default="")
 
     @property
@@ -100,6 +102,7 @@ class ParsedSpec:
 
     @property
     def orphan_requirements(self) -> tuple[str, ...]:
-        """Requirements no criterion references. Only meaningful for the harness dialect."""
+        """Requirements no criterion references. Shared by H003 (harness) and
+        U002 (upstream) -- both dialects need exactly this computation."""
         referenced = {ref for c in self.criteria for ref in c.requirement_refs}
         return tuple(r.ident for r in self.requirements if r.ident not in referenced)

@@ -36,5 +36,5 @@ docs-check: ## Confirm required docs exist and are linked from README
 
 clean: ## Remove build, cache, and coverage artifacts
 	rm -rf build dist *.egg-info .pytest_cache .ruff_cache .mypy_cache htmlcov
-	rm -f coverage.json coverage.xml .coverage spec-graph.json spec-findings.json head.json base.json
+	rm -f coverage.json coverage.xml .coverage .coverage.* spec-graph.json spec-findings.json head.json base.json
 	find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true

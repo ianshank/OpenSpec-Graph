@@ -5,6 +5,104 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — waiver reason enforcement / CP-4 slice (`add-waiver-ledger-and-inv-lints` change package, in progress)
+
+- **New rule `G007`** (ERROR): a waiver (`<!-- specgraph:allow RULE reason -->`)
+  with no reason text now fails the gate — previously waivers were silently
+  downgraded to INFO regardless of whether a reason was given. A comment
+  naming multiple rules fires one independent G007 finding per rule name.
+  G007 cannot be silenced by waiving itself with no reason.
+- **`parse_semantics.Waiver`/`parse_waivers`**: the waiver regex always
+  captured the reason text; `suppressions()` discarded it. `ParsedSpec`
+  gains an additive `waivers: tuple[Waiver, ...]` field (rule, reason,
+  line) alongside the existing `suppressed` set, which is now derived from
+  it rather than computed separately.
+- **New rule `G006`** (WARN): a declared invariant cited by no living spec,
+  and not waived, is now reported as an orphan — invariant citation was
+  previously checked in only one direction (G005: a cited invariant must be
+  declared). This is the first rule in the codebase that is a property of
+  the whole spec tree rather than one file; a new `rules.evaluate_tree()`
+  runs once per `validate`/`graph` call after every living spec is parsed.
+  Skipped (with an `INFO` note) under `validate --change`, since a
+  `--change`-filtered view would otherwise report invariants cited outside
+  that view as falsely orphaned. `Finding` gains an additive `subject`
+  field (the orphaned invariant id) and `graph`'s exported nodes now
+  include orphan invariants (`orphan: true`) that no spec cites.
+- 18 rules total (was 16).
+
+### Added — dialect cards / CP-2 (`add-dialect-cards` change package)
+
+- **`planlint detect --format json`**: emits a stable, schema-versioned
+  "dialect card" — a portable projection of the detected profile
+  (dialect, languages, make targets + confidence, coverage-floor locator,
+  invariant source/ids) that deliberately excludes every absolute-path
+  field (`root`, and `openspec_root` reduced to a portable
+  `has_openspec_root` boolean). Proven byte-identical not only across two
+  runs but across the same logical repo checked out at two different
+  absolute paths. The existing `--json` flag is unchanged — still the
+  full profile, `root` included, for backward compatibility.
+- **`planlint detect --diff <prev.json>`**: compares a previously-saved
+  card against the current one and exits non-zero listing exactly which
+  fields changed, or 0 with `PASS: no drift in detected conventions`.
+  Mirrors `tools/diff_spec_graph.py`'s existing `PASS`/`FAIL` vocabulary.
+  A missing or malformed baseline is a usage error (exit 2), never a crash.
+- **`openspec_graph/dialect_card.py`** (new): pure, stdlib-only,
+  zero-intra-package-import schema + diff module (`SCHEMA_VERSION`,
+  `diff_cards`), mirroring `machinery.py`'s isolation precedent.
+- Spot-checked against this repo's own Makefile: `planlint detect --format
+  json` then `--diff`-ing that same output reports "no drift," as expected.
+
+### Fixed — Makefile `define`/`endef` block misparse (`fix-makefile-define-block-misparse` change package)
+
+- **`machinery.py` and `detect.py`'s legacy-regex fallback**: a
+  `define...endef` block's body is commonly written at column 0 with no
+  leading tab, so a body line like `Usage: make test` matched the rule-line
+  pattern in both parsers, fabricating `"Usage"` as a target that doesn't
+  exist — which could cause G004 to silently pass a spec citing a target
+  that isn't real. Both the structural parser and the low-confidence
+  regex fallback it widens with had the identical blindness; fixing one
+  without the other left the end-to-end `detect.profile()` path broken.
+  A `define` block now lowers `MakefileFacts.confidence` to `"low"`,
+  matching the existing `include`/conditional precedent.
+
+### Fixed — subprocess coverage blind spot (`fix-subprocess-coverage-blind-spot` change package)
+
+- **Coverage measurement**: `tests/support.py`'s `run_cli()` tests the CLI
+  as a real subprocess; with no `COVERAGE_PROCESS_START`/`parallel`
+  configuration, pytest-cov was structurally blind to every line reachable
+  only through those calls — the previously-reported ~96%/~92%
+  line/branch coverage was a floor, not ground truth. `[tool.coverage.run]
+  parallel = true` fixes the gap by activating pytest-cov's own
+  auto-installed subprocess-coverage hook (a `.pth` file it drops into
+  site-packages; no project-specific hook file needed — an initial draft
+  added a `sitecustomize.py` believing it was necessary, but an
+  independent review found it non-functional and redundant, confirmed by
+  removing it and observing identical coverage). Total coverage rose to
+  96.95% purely from already-tested paths becoming visible. Surfaced (and
+  fixed) six real, previously-invisible gaps: a false-negative test that
+  passed for the wrong reason
+  (`test_cli_validate_change_not_found`), one line of dead code in
+  `parse.py`, and four genuinely correct but untested branches (a
+  harness-to-upstream per-file fallback, two malformed-config fallthrough
+  paths, the zero-Makefile end-to-end path, and G001's "neither" branch).
+
+### Changed — `init` snapshot wording (`fix-init-snapshot-wording` change package)
+
+- **`specgraph.json`/`project.md`**: generated content and CLI help text
+  described these files as something that "pins" or is "authoritative"
+  for detected conventions, but nothing ever reads either back — `detect`
+  always re-derives fresh from the filesystem, by design. Wording-only fix
+  (zero behavior change): both now describe themselves as a snapshot
+  recorded at `init` time, not a live config.
+
+### Added — `--version`/`-V` CLI flag (`add-cli-version-flag` change package)
+
+- **`planlint --version` / `-V`**: prints the installed version and exits
+  0. Resolved from installed package metadata
+  (`importlib.metadata.version("openspec-graph")`), falling back to the
+  package's own `__version__` constant only for an uninstalled checkout —
+  self-correcting against drift rather than a third hardcoded copy.
+
 ### Added — parse repo machinery structurally / CP-3 (`parse-repo-machinery-structurally` change package)
 
 - **`openspec_graph/machinery.py`**: new stdlib-only, zero-intra-package-import

@@ -12,7 +12,7 @@ import json
 import re
 from pathlib import Path
 
-from . import machinery
+from . import dialect_card, machinery
 
 MANIFESTS: dict[str, tuple[str, ...]] = {
     "python": ("pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"),
@@ -83,6 +83,34 @@ class StackProfile:
             "make_unresolved_count": self.make_unresolved_count,
         }
 
+    def to_card(self) -> dict[str, object]:
+        """A stable, portable snapshot for CP-2's `detect --format json`/`--diff`.
+
+        Deliberately narrower than as_dict(): excludes every absolute-path
+        field (`root`, and `openspec_root` -- always exactly `root /
+        "openspec"` when set, so its presence/absence survives as
+        `has_openspec_root` without losing information), since an absolute
+        path differs across every checkout/machine/CI run and would make a
+        `--diff` report constant false "drift" rather than real convention
+        drift. An explicit dict literal, not as_dict() with keys deleted,
+        so the exact field set is self-documenting here.
+        """
+        base = self.as_dict()
+        return {
+            "schema_version": dialect_card.SCHEMA_VERSION,
+            "languages": base["languages"],
+            "make_targets": base["make_targets"],
+            "has_openspec_root": base["openspec_root"] is not None,
+            "change_dirs": base["change_dirs"],
+            "dialect": base["dialect"],
+            "threshold": base["threshold"],
+            "invariant_source": base["invariant_source"],
+            "invariant_ids": base["invariant_ids"],
+            "has_project_md": base["has_project_md"],
+            "make_target_confidence": base["make_target_confidence"],
+            "make_unresolved_count": base["make_unresolved_count"],
+        }
+
 
 def _languages(root: Path) -> tuple[str, ...]:
     found = [
@@ -96,7 +124,16 @@ def _languages(root: Path) -> tuple[str, ...]:
 def _legacy_make_targets(text: str) -> tuple[str, ...]:
     """Pre-machinery.py regex extraction. Kept, not deleted: R-MP-3 mandates
     it as the fallback source when structural parsing can't fully resolve a
-    Makefile (see _make_target_facts)."""
+    Makefile (see _make_target_facts).
+
+    define...endef block bodies are stripped first via
+    machinery.strip_define_blocks -- the same O(n) line-scan
+    parse_makefile uses, not a second, separately-buggy implementation:
+    their bodies are opaque replacement text, and a body line containing a
+    colon (e.g. "Usage: ...") would otherwise regex-match as a fabricated
+    target, closed here too since a low-confidence Makefile (a define
+    block included) widens using exactly this fallback."""
+    text, _ = machinery.strip_define_blocks(text)
     skip = {".PHONY", ".DEFAULT_GOAL", ".SUFFIXES"}
     targets = [t for t in _MAKE_TARGET.findall(text) if t not in skip]
     return tuple(sorted(set(targets)))
@@ -190,7 +227,12 @@ def _invariants(root: Path) -> tuple[Path | None, tuple[str, ...]]:
             continue
         ids = sorted(
             set(_INV_ID.findall(path.read_text(encoding="utf-8", errors="replace"))),
-            key=lambda s: int(s.split("-")[1]),
+            # String tie-breaker: two ids that parse to the same integer
+            # (e.g. "INV-1" and "INV-01") would otherwise order by
+            # hash-seed-dependent set iteration -- unlikely, but the
+            # dialect card's byte-stability promise (AC-DC-1) shouldn't
+            # rest on an assumption that never holds.
+            key=lambda s: (int(s.split("-")[1]), s),
         )
         if ids:
             return path, tuple(ids)
