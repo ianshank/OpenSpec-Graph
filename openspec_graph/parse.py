@@ -65,9 +65,6 @@ def parse_spec(path: Path, dialect: str) -> ParsedSpec:
             else "harness"
         )
 
-    if resolved in {"mixed", "unknown", "auto"}:
-        resolved = "harness"
-
     if resolved == "upstream":
         reqs, criteria = _parse_upstream(text)
     else:
