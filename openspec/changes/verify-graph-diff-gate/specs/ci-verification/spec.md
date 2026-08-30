@@ -9,19 +9,27 @@
 ## Problem Statement
 
 **Evidence:** the `graph-diff` CI job is configured but not yet exercised on a
-real PR. This change package exists only to trigger that job end-to-end.
+real PR. This change package exists only to trigger that job end-to-end. It is
+intentionally a WARN-only regression (H002): self-validate (`--fail-on ERROR`)
+passes, but graph-diff must fail because the PR introduces a new broken edge.
 
 ## Requirements
 
-- R-VDG-1: The graph-diff gate MUST fail a PR that introduces an orphan requirement.
+- R-VDG-1: The graph-diff gate MUST fail a PR whose spec graph regresses.
 
 ## Acceptance Criteria
 
-- [ ] **AC-VDG-1:** A clean PR (no new orphans) passes the graph-diff job. (R-VDG-1)
+- [ ] **AC-VDG-1:** A clean PR (no new broken edges) passes the graph-diff job. (R-VDG-1)
   _Verified by:_ `pytest -k test_graph_diff_passes_when_clean` · stage: `make test`
+
+- [ ] **AC-VDG-2 (non-success):** A PR that introduces a broken edge fails the graph-diff job. (R-VDG-1)
+  _Verified by:_ `pytest -k test_graph_diff_fails_on_new_broken_edges` · stage: `make test`
+
+- [ ] **AC-VDG-3:** This criterion intentionally traces to no requirement (H002).
+  _Verified by:_ `pytest -k test_graph_diff` · stage: `make test`
 
 ## Validation Matrix
 
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
-| Focused | `make test` | AC-VDG-1 |
+| Focused | `make test` | AC-VDG-1..2 |
