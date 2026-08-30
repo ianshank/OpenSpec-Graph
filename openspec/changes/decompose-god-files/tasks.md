@@ -22,4 +22,4 @@
       rules --json ordering stable, new-modules stdlib-only, shared helper not
       redeclared inline, import boundaries (catches relative imports), and
       detect/cli remain unsplit.
-- [ ] `make pre-pr` green; push; open PR; confirm CI green.
+- [x] `make pre-pr` green; push; open PR; confirm CI green.
