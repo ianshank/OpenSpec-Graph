@@ -976,3 +976,59 @@ def test_suppressions_unchanged_behavior_after_waiver_refactor() -> None:
 
     text = "<!-- specgraph:allow G003, G004 because reasons -->"
     assert suppressions(text) == {"G003", "G004"}
+
+
+# --- waivers CLI verb (AC-WL-1) ---------------------------------------------
+
+
+def test_cli_waivers_json_lists_reason_file_line_and_change(repo: Path, capsys) -> None:
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement",
+        "<!-- specgraph:allow G003 95% is this spec's own coverage floor -->\n\n## Problem Statement",
+    ).replace("An attested write records an evidence id.", "Coverage is at least 95%.")
+    write_spec(repo, "waived-change", "waived-cap", body)
+    exit_code = main(["--target", str(repo), "waivers", "--format", "json"])
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert len(payload) == 1
+    entry = payload[0]
+    assert entry["rule"] == "G003"
+    assert entry["reason"] == "95% is this spec's own coverage floor"
+    assert entry["change"] == "waived-change"
+    assert "waived-change" in entry["path"]
+    assert entry["line"] > 0
+
+
+def test_cli_waivers_json_is_empty_list_with_no_waivers(repo: Path, capsys) -> None:
+    write_spec(repo, "clean-change", "clean-cap", GOOD_HARNESS)
+    exit_code = main(["--target", str(repo), "waivers", "--format", "json"])
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+
+def test_cli_waivers_exits_2_with_no_openspec_tree(repo: Path, capsys) -> None:
+    # repo fixture has Makefile/pyproject/CONTRACT.md but no openspec/ tree.
+    exit_code = main(["--target", str(repo), "waivers"])
+    assert exit_code == 2
+    assert "openspec/" in capsys.readouterr().err
+
+
+def test_cli_waivers_text_output_lists_a_waiver(repo: Path, capsys) -> None:
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement",
+        "<!-- specgraph:allow G003 95% is this spec's own coverage floor -->\n\n## Problem Statement",
+    ).replace("An attested write records an evidence id.", "Coverage is at least 95%.")
+    write_spec(repo, "waived-change", "waived-cap", body)
+    exit_code = main(["--target", str(repo), "waivers"])
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "G003" in out
+    assert "waived-change" in out
+    assert "95% is this spec's own coverage floor" in out
+
+
+def test_cli_waivers_text_output_says_none_found_when_empty(repo: Path, capsys) -> None:
+    write_spec(repo, "clean-change", "clean-cap", GOOD_HARNESS)
+    exit_code = main(["--target", str(repo), "waivers"])
+    assert exit_code == 0
+    assert "no waivers found" in capsys.readouterr().out

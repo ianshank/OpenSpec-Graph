@@ -5,7 +5,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-### Added — waiver reason enforcement / CP-4 slice (`add-waiver-ledger-and-inv-lints` change package, in progress)
+### Added — waiver ledger and invariant lints / CP-4 (`add-waiver-ledger-and-inv-lints` change package)
 
 - **New rule `G007`** (ERROR): a waiver (`<!-- specgraph:allow RULE reason -->`)
   with no reason text now fails the gate — previously waivers were silently
@@ -29,6 +29,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   field (the orphaned invariant id) and `graph`'s exported nodes now
   include orphan invariants (`orphan: true`) that no spec cites.
 - 18 rules total (was 16).
+- **New `planlint waivers --format json` verb** (AC-WL-1): a stable-ordered
+  ledger of every waived rule across the whole tree, with file, line,
+  reason, and the owning change package. New `openspec_graph/ledger.py`
+  (pure aggregation, no file I/O) does the work; the CLI layer reads
+  `openspec/`, parses every living spec, and prints text or JSON. Exits 2
+  with no `openspec/` tree, same as `validate`/`graph`. Pure reporting,
+  like `detect`/`graph`/`rules` — never fails on content, only on usage
+  errors; enforcement stays G007/`validate`'s job.
 
 ### Added — dialect cards / CP-2 (`add-dialect-cards` change package)
 

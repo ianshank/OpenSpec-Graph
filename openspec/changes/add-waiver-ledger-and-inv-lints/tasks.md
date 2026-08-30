@@ -51,7 +51,7 @@
 - Docs: README +G006 row; rule-count strings → "18 rules"; CHANGELOG bullet.
 - **Gate:** `make pre-pr` green; `planlint validate` clean.
 
-## Milestone 3 — `ledger.py` + `waivers` CLI verb (AC-WL-1)  [PENDING]
+## Milestone 3 — `ledger.py` + `waivers` CLI verb (AC-WL-1)  [DONE]
 
 - `openspec_graph/ledger.py` (new): `LedgerEntry`, `owning_change()`,
   `build_ledger()` — pure aggregation, no file I/O, mirrors `dialect_card.py`'s
