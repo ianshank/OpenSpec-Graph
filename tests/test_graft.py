@@ -183,10 +183,38 @@ def test_detect_still_prefers_pyproject_over_coveragerc(repo: Path) -> None:
     assert prof.threshold.value == 90
 
 
+def test_detect_ignores_malformed_governance_policy_json(repo: Path) -> None:
+    (repo / "governance-policy.json").write_text("{not valid json")
+    prof = detect.profile(repo)
+    assert prof.threshold is not None
+    assert prof.threshold.value == 90
+    assert "pyproject.toml" in prof.threshold.locator
+
+
+def test_detect_ignores_malformed_coveragerc(repo: Path) -> None:
+    # No [section] header at all -- reliably raises configparser's
+    # MissingSectionHeaderError, unlike text that might parse leniently.
+    (repo / ".coveragerc").write_text("this is not valid ini content at all")
+    prof = detect.profile(repo)
+    assert prof.threshold is not None
+    assert prof.threshold.value == 90
+    assert "pyproject.toml" in prof.threshold.locator
+
+
 def test_detect_finds_make_targets_and_ignores_phony(repo: Path) -> None:
     prof = detect.profile(repo)
     assert {"test", "regression", "ci", "help"} <= set(prof.make_targets)
     assert ".PHONY" not in prof.make_targets
+
+
+def test_g004_stays_silent_when_the_target_repo_has_no_makefile_at_all(repo: Path) -> None:
+    (repo / "Makefile").unlink()
+    prof = detect.profile(repo)
+    assert prof.make_targets == ()
+    assert prof.make_target_confidence == "high"  # vacuous: nothing was seen to lower confidence
+    body = GOOD_HARNESS.replace("make regression", "make nope")
+    found = findings_for(repo, body)
+    assert "G004" not in rule_ids(found)
 
 
 def test_make_targets_json_shape_is_a_list_of_strings(repo: Path) -> None:
@@ -255,6 +283,36 @@ def test_good_upstream_spec_has_no_errors(repo: Path) -> None:
 def test_g001_fires_when_no_criteria(repo: Path) -> None:
     body = "# Spec: Empty\n\n## Requirements\n\n- R-DMO-1: MUST do a thing.\n"
     assert "G001" in rule_ids(findings_for(repo, body, "harness"))
+
+
+def test_g001_fires_when_neither_requirements_nor_criteria_are_recognized(repo: Path) -> None:
+    # Distinct from test_g001_fires_when_no_criteria: that fixture has
+    # requirements but no criteria (rules_generic.py's `if` branch); this one
+    # has neither (the `else` branch), which was previously untested.
+    body = "# Spec: Empty\n\nJust prose; no requirements or acceptance criteria at all.\n"
+    found = findings_for(repo, body, "harness")
+    matching = [f for f in found if f.rule == "G001"]
+    assert matching, "G001 must fire when nothing is recognized"
+    assert any("no requirements and no verifiable criteria" in f.message for f in matching), (
+        "must hit the 'neither' branch's message, not the 'requirements but no criteria' branch"
+    )
+
+
+def test_harness_dialect_falls_back_to_upstream_when_the_text_is_actually_upstream(
+    repo: Path,
+) -> None:
+    # A repo classified "harness" but this one file is written in upstream
+    # form -- _parse_harness finds nothing, but the text matches the
+    # upstream REQUIREMENT pattern, so parse_spec must re-parse it as
+    # upstream rather than reporting a false G001 "no criteria" finding.
+    # This is the per-file misclassification safety net for mixed repos.
+    path = write_spec(repo, "demo-change", "demo-capability", GOOD_UPSTREAM)
+    parsed = parse_spec(path, "harness")
+    assert parsed.dialect == "upstream"
+    assert parsed.requirements and parsed.criteria
+
+    found = findings_for(repo, GOOD_UPSTREAM, "harness")
+    assert "G001" not in rule_ids(found), "the upstream-form criteria must be recognized, not missed"
 
 
 def test_g002_fires_when_every_criterion_is_a_happy_path(repo: Path) -> None:
