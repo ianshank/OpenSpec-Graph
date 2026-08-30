@@ -22,10 +22,10 @@ from pathlib import Path
 
 
 def _read_branch_floor(pyproject: Path) -> int | None:
-    """Read branch_fail_under from pyproject without a TOML dependency.
+    """Read branch_fail_under from [tool.specgraph] without a TOML dependency.
 
-    Works on Python 3.10 (no tomllib). The key lives under
-    ``[tool.coverage.report]``; the first match wins.
+    This is specgraph's own gate key, kept out of ``[tool.coverage.*]`` so
+    coverage.py doesn't warn about an unknown option.
     """
     if not pyproject.exists():
         return None
@@ -33,7 +33,7 @@ def _read_branch_floor(pyproject: Path) -> int | None:
     for line in pyproject.read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
         if stripped.startswith("[") and stripped.endswith("]"):
-            in_section = stripped == "[tool.coverage.report]"
+            in_section = stripped == "[tool.specgraph]"
             continue
         if not in_section:
             continue
@@ -54,12 +54,14 @@ def branch_coverage(cov_path: Path) -> tuple[float, int, int]:
 
 def main(argv: list[str]) -> int:
     cov_path = Path(argv[1]) if len(argv) > 1 else Path("coverage.json")
-    pyproject = Path("pyproject.toml")
-    floor = _read_branch_floor(pyproject)
+    floor = _read_branch_floor(Path("pyproject.toml"))
 
     if floor is None:
-        print("no branch_fail_under set in pyproject.toml; skipping branch gate")
-        return 0
+        # A repo that turns this gate on MUST configure branch_fail_under.
+        # Missing it is a misconfiguration, not a skip — fail loud so CI never
+        # passes silently on a gate it claims to enforce.
+        print("no branch_fail_under set in pyproject.toml [tool.specgraph]", file=sys.stderr)
+        return 2
 
     if not cov_path.exists():
         print(f"coverage file not found: {cov_path}; run coverage first", file=sys.stderr)
@@ -67,8 +69,13 @@ def main(argv: list[str]) -> int:
 
     pct, covered, num = branch_coverage(cov_path)
     if num == 0:
-        print("no branches measured; skipping branch gate")
-        return 0
+        # branch=true is set in pyproject; zero branches means coverage didn't
+        # instrument the source at all — a real misconfiguration, not a pass.
+        print(
+            "no branches measured; is branch=true set and source instrumented?",
+            file=sys.stderr,
+        )
+        return 2
 
     if pct < floor:
         print(

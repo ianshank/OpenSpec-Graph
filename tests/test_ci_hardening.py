@@ -42,7 +42,7 @@ def _write_pyproject(path: Path, floor: int | None) -> Path:
     else:
         path.write_text(
             "[tool.coverage.report]\nfail_under = 90\n"
-            f"branch_fail_under = {floor}\n"
+            f"[tool.specgraph]\nbranch_fail_under = {floor}\n"
         )
     return path
 
@@ -64,18 +64,20 @@ def test_branch_check_passes_at_or_above_floor(tmp_path: Path, capsys) -> None:
     assert "80.0%" in capsys.readouterr().out
 
 
-def test_branch_check_skips_when_no_branches(tmp_path: Path, capsys) -> None:
+def test_branch_check_fails_when_no_branches_measured(tmp_path: Path) -> None:
+    # branch=true is configured but zero branches were measured -> misconfiguration,
+    # not a silent pass. The gate fails loud (AC-CH-3: a missing gate is a bug).
     _write_coverage_json(tmp_path / "coverage.json", branches=0, covered=0)
     _write_pyproject(tmp_path / "pyproject.toml", floor=80)
-    assert _run_branch_check(tmp_path) == 0
-    assert "no branches" in capsys.readouterr().out.lower()
+    assert _run_branch_check(tmp_path) == 2
 
 
-def test_branch_check_skips_when_no_floor_configured(tmp_path: Path, capsys) -> None:
+def test_branch_check_fails_when_floor_not_configured(tmp_path: Path) -> None:
+    # A repo that turns this gate on MUST set branch_fail_under. Missing it is a
+    # misconfiguration, not a skip — CI must not pass silently.
     _write_coverage_json(tmp_path / "coverage.json", branches=10, covered=1)
     _write_pyproject(tmp_path / "pyproject.toml", floor=None)
-    assert _run_branch_check(tmp_path) == 0
-    assert "skipping" in capsys.readouterr().out.lower()
+    assert _run_branch_check(tmp_path) == 2
 
 
 def _run_branch_check(cwd: Path) -> int:
@@ -91,10 +93,56 @@ def _run_branch_check(cwd: Path) -> int:
     return result.returncode
 
 
-# --- AC-CH-1 / AC-CH-2: the line-coverage floor fails below threshold ---------
+# --- AC-CH-1 / AC-CH-2: the line-coverage floor (read from pyproject) ---------
 
 
-def test_coverage_floor_fails_below_threshold(tmp_path: Path) -> None:
+def _run_cov_floor_check(cwd: Path) -> int:
+    result = subprocess.run(
+        [sys.executable, str(TOOLS / "check_coverage_floor.py"), "coverage.json"],
+        cwd=cwd, capture_output=True, text=True, check=False,
+    )
+    sys.stdout.write(result.stdout)
+    sys.stderr.write(result.stderr)
+    return result.returncode
+
+
+def _write_cov_lines(path: Path, statements: int, covered: int) -> Path:
+    path.write_text(
+        json.dumps({"totals": {"num_statements": statements, "covered_lines": covered}})
+    )
+    return path
+
+
+def test_cov_floor_fails_below_threshold(tmp_path: Path) -> None:
+    # 50% line coverage against a floor of 90 read from pyproject.
+    _write_cov_lines(tmp_path / "coverage.json", statements=100, covered=50)
+    _write_pyproject(tmp_path / "pyproject.toml", floor=80)  # sets fail_under=90
+    assert _run_cov_floor_check(tmp_path) == 1
+
+
+def test_cov_floor_passes_at_or_above(tmp_path: Path) -> None:
+    _write_cov_lines(tmp_path / "coverage.json", statements=100, covered=92)
+    _write_pyproject(tmp_path / "pyproject.toml", floor=80)
+    assert _run_cov_floor_check(tmp_path) == 0
+
+
+def test_cov_floor_fails_loud_when_floor_not_configured(tmp_path: Path) -> None:
+    # fail_under missing from pyproject -> misconfiguration, not a skip.
+    _write_cov_lines(tmp_path / "coverage.json", statements=100, covered=50)
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\n')
+    assert _run_cov_floor_check(tmp_path) == 2
+
+
+def test_cov_floor_threshold_is_read_from_pyproject_not_hardcoded(tmp_path: Path) -> None:
+    # The floor is whatever pyproject declares — 95 here, not the repo's 90.
+    _write_cov_lines(tmp_path / "coverage.json", statements=100, covered=92)  # 92% < 95
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.coverage.report]\nfail_under = 95\n[tool.specgraph]\nbranch_fail_under = 80\n"
+    )
+    assert _run_cov_floor_check(tmp_path) == 1
+
+
+def test_coverage_floor_fails_below_threshold_pytest(tmp_path: Path) -> None:
     """A package with uncovered lines fails the --cov-fail-under gate."""
     pkg = tmp_path / "pkg"
     pkg.mkdir()

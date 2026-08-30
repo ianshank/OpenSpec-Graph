@@ -71,13 +71,17 @@ jobs:
   graph-diff:
     # Fail a PR whose spec graph regresses: more broken_links than the merge-base,
     # or a new orphan requirement (AC-CH-5, AC-CH-6). The base is the merge-base
-    # of the PR and its base branch (DEC-CH-001) — not origin/main — so the gate
-    # only flags drift THIS PR introduces, never drift from a rebase.
+    # of the PR head and its base branch (DEC-CH-001) — not origin/main — so the
+    # gate only flags drift THIS PR introduces, never drift from a rebase or a
+    # sibling PR merged after this one branched off.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
+      # Checkout the PR head SHA (NOT the default synthetic merge commit) so
+      # merge-base resolves to the true branch point (DEC-CH-001 resolution).
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - uses: actions/setup-python@v5

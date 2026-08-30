@@ -3,13 +3,14 @@
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-12s %s\n", $$1, $$2}'
 
-test: ## Run the test suite with the line + branch coverage gates
+test: ## Run the test suite; line + branch coverage floors read from pyproject.toml
 	python -m pytest tests/ --cov=openspec_graph --cov-branch \
-		--cov-report=term-missing --cov-report=json:coverage.json --cov-fail-under=90 -q
+		--cov-report=term-missing --cov-report=json:coverage.json -q
+	python tools/check_coverage_floor.py coverage.json
 	python tools/check_branch_coverage.py coverage.json
 
-lint: ## Ruff check — a hard gate (fails on violations, never silently skips)
-	ruff check openspec_graph tests
+lint: ## Ruff check across the package, tests, and tools — a hard gate
+	ruff check openspec_graph tests tools
 
 validate: ## Validate this repo's own OpenSpec change packages with specgraph
 	specgraph --target . validate --fail-on ERROR

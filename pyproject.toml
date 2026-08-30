@@ -27,7 +27,11 @@ branch = true
 # The line-coverage floor for this repo. Specs and CI config must reference
 # this locator, never hard-code a number (specgraph rule G003 / C-CH-2).
 fail_under = 90
+
+[tool.specgraph]
 # The branch-coverage floor, enforced by tools/check_branch_coverage.py.
+# Lives outside [tool.coverage.*] so coverage.py doesn't warn about an unknown
+# key — it's specgraph's own gate, read directly from this section.
 # Lower than the line floor: branches are harder to cover, but a module with
 # high line coverage and untested conditional branches must still fail.
 branch_fail_under = 80
