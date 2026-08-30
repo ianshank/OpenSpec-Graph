@@ -297,6 +297,20 @@ def test_u004_fires_on_a_non_normative_requirement(repo: Path) -> None:
     assert "U004" in rule_ids(findings_for(repo, body, "upstream"))
 
 
+def test_u004_does_not_fire_when_the_modal_verb_is_only_in_the_body(repo: Path) -> None:
+    # Regression: Requirement.text used to be populated from the heading match
+    # alone, so a heading with no SHALL/MUST but a normative body still
+    # false-fired U004 -- the common real-world authoring style.
+    body = GOOD_UPSTREAM.replace(
+        "### Requirement: the writer SHALL attest every write",
+        "### Requirement: the writer attests every write",
+    ).replace(
+        "Prose obligation.",
+        "The writer SHALL record an evidence id for every write.",
+    )
+    assert "U004" not in rule_ids(findings_for(repo, body, "upstream"))
+
+
 # --- scaffolding -----------------------------------------------------------
 
 

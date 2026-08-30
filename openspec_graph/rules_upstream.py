@@ -41,7 +41,7 @@ def _heading_drift(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
 
 def _requirement_without_modal(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
     for req in spec.requirements:
-        if not any(m in req.text.upper() for m in ("SHALL", "MUST")):
+        if not req.is_normative:
             yield f"requirement {req.text[:60]!r} uses no SHALL/MUST; it is not normative"
 
 
