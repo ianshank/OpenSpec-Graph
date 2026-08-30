@@ -19,7 +19,7 @@ emitted as an artifact but nothing fails if a PR introduces a broken edge.
 - `Makefile::test` was `pytest tests/ -q` with no `--cov`; the `fail_under` in
   `pyproject.toml:[tool.coverage.report]` was never enforced by `make ci`.
 - `Makefile::lint` exits 0 with "ruff not installed, skipping" when ruff is absent.
-- `specgraph graph` emits `spec-graph.json` to CI artifacts, but no job diffs it
+- `planlint graph` emits `spec-graph.json` to CI artifacts, but no job diffs it
   against `main`, so a newly-introduced orphan requirement ships unreviewed.
 
 ---
@@ -73,7 +73,7 @@ emitted as an artifact but nothing fails if a PR introduces a broken edge.
   _Verified by:_ `pytest -k test_graph_diff_artifact_uploaded` · stage: `make ci`
 
 - [ ] **AC-CH-8:** The rule set is unchanged: the rule IDs and severities reported
-  by `specgraph rules` match the base branch, confirming no rules were added or
+  by `planlint rules` match the base branch, confirming no rules were added or
   removed by this change. (C-CH-1)
   _Verified by:_ `pytest -k test_rule_set_unchanged` · stage: `make validate`
 

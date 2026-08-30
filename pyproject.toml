@@ -10,7 +10,12 @@ requires-python = ">=3.10"
 dependencies = []
 
 [project.scripts]
-specgraph = "openspec_graph.cli:main"
+# `planlint` is the primary command. `specgraph` is a backwards-compatible
+# deprecated alias: it prints a one-line warning to stderr, then delegates to
+# `main` and preserves the real exit code (so existing CI that runs
+# `specgraph validate` keeps failing on real errors, never silently passing).
+planlint = "openspec_graph.cli:main"
+specgraph = "openspec_graph.cli:main_deprecated"
 
 [tool.setuptools.packages.find]
 include = ["openspec_graph*"]

@@ -11,7 +11,7 @@ core `make ci` gate with the enterprise gates (typecheck, security, docs).
 | `make lint` | ruff across `openspec_graph`, `tests`, `tools` | any violation → exit 1 |
 | `make typecheck` | mypy (config in `pyproject.toml`) | type error → exit 1 |
 | `make security` | gitleaks (or deterministic fallback) | committed secret → exit 1 |
-| `make validate` | `specgraph validate --fail-on ERROR` | spec rule violation → exit 1 |
+| `make validate` | `planlint validate --fail-on ERROR` | spec rule violation → exit 1 |
 | `make docs-check` | required docs exist + linked from README | missing/unlinked → exit 1 |
 | `make pre-pr` | all of the above + no-hardcoded-thresholds | any → exit 1 |
 
@@ -49,7 +49,7 @@ introduces set-iteration or unordered dict building fails CI.
 
 ## No NumPy / no heavy runtime deps
 
-`specgraph` has **zero runtime dependencies**. Scientific-computing stacks
+`planlint` has **zero runtime dependencies**. Scientific-computing stacks
 (NumPy, pandas) are not used and not required. `pip install -e .` is sufficient;
 `pip install -e ".[dev]"` adds pytest, ruff, and mypy for contributors.
 
@@ -58,9 +58,9 @@ introduces set-iteration or unordered dict building fails CI.
 ```bash
 pip install -e ".[dev]"
 make pre-pr          # the exact bar CI enforces
-specgraph --target . validate --fail-on WARN   # warnings too, if desired
+planlint --target . validate --fail-on WARN   # warnings too, if desired
 ```
 
 CI runs the same gates across Python 3.10–3.13, plus a self-validation hard
-gate (`specgraph` validates its own `openspec/` tree) and a graph-diff
+gate (`planlint` validates its own `openspec/` tree) and a graph-diff
 regression gate on PRs.

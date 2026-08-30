@@ -51,17 +51,17 @@ jobs:
           pip install -e .
 
       - name: Report detected conventions
-        run: specgraph --target . detect
+        run: planlint --target . detect
 
       - name: Validate every change package (hard gate)
-        run: specgraph --target . validate --fail-on ERROR
+        run: planlint --target . validate --fail-on ERROR
 
       - name: Emit spec dependency graph
-        run: specgraph --target . graph --format json > spec-graph.json
+        run: planlint --target . graph --format json > spec-graph.json
 
       - name: Record warnings as an artifact
         if: always()
-        run: specgraph --target . validate --fail-on WARN --json > spec-findings.json || true
+        run: planlint --target . validate --fail-on WARN --json > spec-findings.json || true
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -97,14 +97,14 @@ jobs:
           pip install -e .
 
       - name: Build graph on PR head
-        run: specgraph --target . graph --format json > head.json
+        run: planlint --target . graph --format json > head.json
 
       - name: Build graph on merge-base
         run: |
           git fetch origin "${{ github.base_ref }}"
           BASE=$(git merge-base HEAD origin/"${{ github.base_ref }}")
           git worktree add /tmp/base "$BASE"
-          specgraph --target /tmp/base graph --format json > base.json
+          planlint --target /tmp/base graph --format json > base.json
           git worktree remove /tmp/base
 
       - name: Diff graphs (fail on new broken edges or orphans)

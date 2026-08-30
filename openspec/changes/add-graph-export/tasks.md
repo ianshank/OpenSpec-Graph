@@ -21,7 +21,7 @@
   agreement with `validate` (AC-GR-4).
 - Wired the coverage gate into `make ci` (`--cov --cov-fail-under=90`); total
   coverage is 95.81%, above the floor in `pyproject.toml`.
-- Wired `specgraph graph --format json` into the CI self-validation job, emitting
+- Wired `planlint graph --format json` into the CI self-validation job, emitting
   the repo's own spec graph as a build artifact.
 
 - **Gate:** `make ci` green on the full matrix; the graph artifact is non-empty

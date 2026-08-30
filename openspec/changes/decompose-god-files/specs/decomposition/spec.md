@@ -73,7 +73,7 @@ structural only — the public API, CLI output, and graph JSON stay byte-identic
   _Verified by:_ `pytest -k import_boundary_discipline` · stage: `make test`
 
 - [ ] **AC-DG-7:** `make pre-pr` is green (ruff, mypy, coverage floors, security,
-  docs, no-hardcoded-thresholds, specgraph validate) after decomposition
+  docs, no-hardcoded-thresholds, planlint validate) after decomposition
   (R-DG-1, R-DG-3, R-DG-5).
   _Verified by:_ `make pre-pr` · stage: `make pre-pr`
 

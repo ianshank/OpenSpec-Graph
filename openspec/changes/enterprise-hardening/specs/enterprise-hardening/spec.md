@@ -91,7 +91,7 @@ one command. None of that exists yet, and several repo-hygiene gaps remain
 
 > [!IMPORTANT]
 > **DEC-EH-001 (RESOLVED):** Should Docker be a first-class delivery path or
-> an optional reproducible runner? **Decision: optional.** `specgraph` is
+> an optional reproducible runner? **Decision: optional.** `planlint` is
 > `pip install`-able; Docker is a convenience image for CI sandboxes that want
 > a pinned Python. Not required for local dev; the Makefile never depends on
 > Docker.

@@ -21,7 +21,7 @@ def write_spec(repo: Path, change: str, capability: str, body: str) -> Path:
 
 
 def run_cli(repo: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
-    """Run the specgraph CLI against ``repo`` and return the completed process."""
+    """Run the planlint CLI against ``repo`` and return the completed process."""
     return subprocess.run(
         [sys.executable, "-m", "openspec_graph.cli", "--target", str(repo), *args],
         capture_output=True, text=True, check=False, env=env,

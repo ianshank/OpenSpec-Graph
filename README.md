@@ -1,30 +1,76 @@
-# OpenSpec-Graph
+# OpenSpec-Graph (`planlint`)
 
-Map and enforce an OpenSpec discipline on a **cloned** repository — mechanically,
-not by review prose.
+**The CI gate that fails when a spec cites a gate this repo does not have.**
+
+Point `planlint` at a cloned repository. It reads the target's *real* machinery —
+its make targets, where its coverage floor actually lives, its invariant
+source, which spec dialect it writes — then holds every spec to that, using the
+target's own vocabulary rather than an imported one. A spec that cites
+`make regression` in a repo with no `regression` target fails the build. A spec
+that hard-codes `85%` when `pyproject.toml` gates `90%` fails the build. A plan
+with no non-success criterion fails the build.
 
 A spec convention written as guidance decays. The same convention expressed as a
-linter with an exit code does not. `specgraph` reads what the target repo already
-does — its build stages, where its coverage floor actually lives, its invariant
-source, which spec dialect it writes — then holds every spec to that, using the
-target's own vocabulary rather than an imported one.
+linter with an exit code does not. `planlint` is a **linter under
+`openspec validate`**, not an authoring framework.
 
-It is a **dependency graph for specs**: requirements link to the criteria that
-verify them, criteria link to the make stage that runs them, invariants link to
-the contract that declares them, thresholds link to the config that gates them.
-`validate` fails when a link is broken — an orphan requirement, a criterion that
-cites a stage the repo doesn't have, an invariant cited but never declared, a
-threshold hard-coded instead of read from its source.
+It is also a **dependency graph for specs**: requirements link to the criteria
+that verify them, criteria link to the make stage that runs them, invariants
+link to the contract that declares them, thresholds link to the config that gates
+them. `validate` fails when a link is broken — an orphan requirement, a
+criterion that cites a stage the repo doesn't have, an invariant cited but never
+declared, a threshold hard-coded instead of read from its source.
 
 Zero runtime dependencies. Python 3.10+.
 
 ```bash
-pip install -e .
-specgraph --target /path/to/clone detect      # read-only
-specgraph --target /path/to/clone init        # pin detected conventions
-specgraph --target /path/to/clone new add-thing --capability thing-capability
-specgraph --target /path/to/clone validate    # exit 1 on any ERROR
+pip install -e .                     # local dev install (no PyPI release yet)
+planlint --target /path/to/clone detect      # read-only: stack, dialect, threshold
+planlint --target /path/to/clone init        # pin detected conventions into openspec/
+planlint --target /path/to/clone new add-thing --capability thing-capability
+planlint --target /path/to/clone validate    # exit 1 on any ERROR — the gate
 ```
+
+> The package is not yet published to PyPI. Until it is, install from source
+> (`pip install -e .`) or directly from GitHub
+> (`pip install git+https://github.com/ianshank/OpenSpec-Graph`).
+
+> The command was renamed from `specgraph` to `planlint`. `specgraph` remains a
+> backwards-compatible alias that prints a deprecation to stderr and delegates
+> (preserving the real exit code), so existing CI keeps working. The waiver
+> comment syntax (`<!-- specgraph:allow ... -->`), the config file
+> (`openspec/specgraph.json`), and the `[tool.specgraph]` pyproject section keep
+> the `specgraph` name as stable contract identifiers.
+
+## Why this and not Spec-Kit / GitHub Spec / Kiro / Cursor
+
+The category is crowded with authoring surfaces. `planlint` is deliberately not
+one. Rather than claim feature parity (or gaps) against tools we have not
+audited line-by-line, here is the positioning that is actually load-bearing:
+
+| Tool | Primary lane | Boundary |
+|---|---|---|
+| `planlint` | spec-as-lint in CI (under `openspec validate`) | CLI with an exit code; no UI, no MCP server |
+| Spec-Kit | spec storyboarding / validation | CI |
+| GitHub Spec | spec editing tied to GitHub | CI / IDE |
+| Kiro | spec-driven IDE workflow | IDE |
+| Cursor / Gemini CLI | AI coding agents | IDE / CLI |
+
+What `planlint` does that the authoring surfaces do not, by construction:
+
+- Reads the target repo's real machinery (Makefile, `pyproject.toml`, invariant
+  source) and holds specs to *that*, using the target's own vocabulary.
+- Reads thresholds from the detected locator instead of letting them be
+  hard-coded in spec prose (G003).
+- Fails closed when a spec cites a gate the repo does not have (G004).
+
+What `planlint` deliberately does **not** do (see Non-goals): author specs, own a
+UI, serve MCP, run tests, or carry dependencies.
+
+The wedge is narrow on purpose: **`planlint` is the thing you point at someone
+else's clone to prove its specs are executable in that repo.** The moment it
+becomes a place people write specs, it enters a feature race with 60k-star tools
+and loses.
 
 ## Why detection comes first
 
@@ -40,12 +86,26 @@ naive template would have hard-coded:
 | make targets | 29 | 18 |
 
 A template that emitted `_Verified by: make test-governance` into Mouse-Droid
-would produce a criterion nothing can run. `specgraph` picks the stage from the
+would produce a criterion nothing can run. `planlint` picks the stage from the
 target's actual Makefile and cites the target's actual threshold locator, so
 G003 and G004 below become enforceable rather than aspirational.
 
-Detection is read-only by contract — ``specgraph detect`` is always safe against an
+Detection is read-only by contract — `planlint detect` is always safe against an
 unfamiliar clone.
+
+## Non-goals (what this rejects)
+
+- **Not an authoring framework.** No `propose`, `apply`, `chat`, or `generate`
+  verb. The CLI surface is a closed set of read/lint verbs; a guard test
+  (`tests/test_cli_surface.py`) fails if an authoring verb is added.
+- **Not an IDE or a UI.** No editor integration, no dashboard. It is a CLI with
+  an exit code, designed to live behind `openspec validate` in CI.
+- **Not an MCP server.** It does not expose tools to other agents. It is the
+  gate those agents' output must pass.
+- **Not a coverage tool.** It reads the coverage floor the repo already
+  configures; it does not run tests or compute coverage.
+- **No dependencies.** Stdlib only, so grafting into an arbitrary repo adds no
+  supply-chain surface to the thing being governed.
 
 ## Rules
 
@@ -90,12 +150,13 @@ Judgement calls stay possible, but stay visible:
 
 The finding is downgraded to `INFO` and prefixed `[waived]` — it still appears
 in the report and in CI logs. It is not deleted. A waiver you cannot see is a
-rule you no longer have.
+rule you no longer have. The `specgraph:allow` comment syntax is a stable
+contract identifier kept under that name for backwards compatibility.
 
 ## What it found in a real repository
 
 Run against `ianshank/Mouse-Droid-AGI` (12 specs across 10 change packages),
-``specgraph validate` --fail-on WARN` returned exit 1 with these genuine defects:
+`planlint validate --fail-on WARN` returned exit 1 with these genuine defects:
 
 - `mouse-droid-nemoclaw-integration/specs/openclaw-integration/spec.md` states
   six requirements (`## REQ 1:` … `## REQ 6:`) and **zero** scenarios — nothing
@@ -146,7 +207,7 @@ Every rule has a fixture that violates it and an assertion that the rule fires
 on exactly that violation. Additionally: `test_scaffolded_spec_passes_its_own_validator`
 generates a package in both dialects and validates it, so the templates cannot
 drift from the rules; `test_apply_is_idempotent_and_refuses_to_clobber` proves a
-hand-edited spec survives re-running ``specgraph new``.
+hand-edited spec survives re-running `planlint new`.
 
 ## Enterprise AQA gate
 
@@ -159,18 +220,18 @@ enforces:
 | lint | `make lint` | ruff across package, tests, and tools |
 | typecheck | `make typecheck` | mypy (config in `pyproject.toml`) |
 | security | `make security` | gitleaks (or deterministic fallback) |
-| validate | `make validate` | `specgraph validate --fail-on ERROR` |
+| validate | `make validate` | `planlint validate --fail-on ERROR` |
 | docs | `make docs-check` | required docs present + linked from README |
 
 No numeric threshold lives in the Makefile or CI YAML — floors are read from
 `pyproject.toml` at run time, and `tools/check_no_hardcoded_thresholds.py`
 fails the gate if a number is re-introduced. Debug diagnostics go to stderr
-only via `--verbose` / `SPECGRAPH_LOG_LEVEL`; JSON stdout stays parseable. See
-[`docs/aqa.md`](docs/aqa.md).
+only via `--verbose` / `PLANLINT_LOG_LEVEL` (the legacy `SPECGRAPH_LOG_LEVEL` is
+still accepted); JSON stdout stays parseable. See [`docs/aqa.md`](docs/aqa.md).
 
 ## Wiring it into CI
 
-``specgraph validate`` is the gate. Add to `.github/workflows/`:
+`planlint validate` is the gate. Add to `.github/workflows/`:
 
 ```yaml
 name: spec-gate
@@ -182,25 +243,25 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install openspec-graph
-      - run: `specgraph detect`                       # surfaces drift in the log
-      - run: `specgraph validate` --fail-on ERROR     # exit 1 blocks the merge
+      - run: pip install git+https://github.com/ianshank/OpenSpec-Graph
+      - run: planlint --target . detect                       # surfaces drift in the log
+      - run: planlint --target . validate --fail-on ERROR     # exit 1 blocks the merge
 ```
 
 Or as a Make target, so it joins the existing gate ladder:
 
 ```make
 specs: ## Validate every OpenSpec change package
-	`specgraph validate` --fail-on ERROR
+	planlint --target . validate --fail-on ERROR
 ```
 
 ## Dogfooding
 
 This repo validates its own specs. The `openspec/` tree holds change packages
-written in the `harness` dialect, and CI runs `specgraph --target . validate
+written in the `harness` dialect, and CI runs `planlint --target . validate
 --fail-on ERROR` as a hard gate — if any spec in this repo violates a rule, the
 build fails. The first change package, [`add-graph-export`](openspec/changes/add-graph-export/specs/graph-export/spec.md),
-specs a `specgraph graph` verb that emits the dependency graph as JSON; it
+specs a `planlint graph` verb that emits the dependency graph as JSON; it
 carries seven acceptance criteria, two of them non-success paths, and it
 validates clean against the rules it will one day implement.
 
@@ -209,7 +270,7 @@ validates clean against the rules it will one day implement.
 - **Detection never writes.** `detect` is safe on any clone.
 - **Scaffolding never clobbers.** Existing files are skipped unless `--force`;
   `--dry-run` prints the plan and writes nothing.
-- **The target's vocabulary wins.** `specgraph` adapts to the repo's dialect,
+- **The target's vocabulary wins.** `planlint` adapts to the repo's dialect,
   stages, and threshold locator. It does not impose Mango's.
 - **No dependencies.** Stdlib only, so grafting into an arbitrary repo adds no
   supply-chain surface to the thing being governed.
@@ -223,5 +284,7 @@ validates clean against the rules it will one day implement.
 - [Agents, skills, and the harness](docs/agents-skills-harness.md) — why this is
   a deterministic governance harness, not an autonomous agent
 - [Next steps](docs/next-steps.md) — what is deliberately out of scope
+- [Differentiation roadmap](docs/differentiation-roadmap.md) — the wedge, the
+  comparison, and the candidate change packages
 
 Upstream OpenSpec conventions: [Fission-AI/OpenSpec concepts](https://github.com/Fission-AI/OpenSpec/blob/main/docs/concepts.md).

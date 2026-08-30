@@ -9,7 +9,7 @@
 
 ## Problem Statement
 
-`specgraph validate` reports broken links as text findings, but the dependency
+`planlint validate` reports broken links as text findings, but the dependency
 graph it walks — requirements linked to the criteria that verify them, criteria
 linked to the build stage that runs them, invariants linked to the contract that
 declares them — is never exposed in a machine-readable form.
@@ -36,13 +36,13 @@ No CLI verb produces structured output of the graph itself, only of violations.
 
 ## Acceptance Criteria
 
-- [ ] **AC-GR-1:** `specgraph graph --target <repo> --format json` emits a JSON
+- [ ] **AC-GR-1:** `planlint graph --target <repo> --format json` emits a JSON
   object with `nodes` and `edges` arrays covering every parsed spec in the
   target's `openspec/` tree. (R-GR-1)
   _Verified by:_ `pytest -k test_graph_emits_nodes_and_edges` · stage: `make validate`
 
 - [ ] **AC-GR-2 (non-success):** Given a repo with no `openspec/` tree,
-  `specgraph graph` exits non-zero and names the missing directory, rather than
+  `planlint graph` exits non-zero and names the missing directory, rather than
   emitting an empty graph and a zero exit. (R-GR-2)
   _Verified by:_ `pytest -k test_graph_rejects_missing_tree` · stage: `make validate`
 
