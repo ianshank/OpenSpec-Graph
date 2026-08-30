@@ -25,7 +25,7 @@ passes, but graph-diff must fail because the PR introduces a new broken edge.
 - [ ] **AC-VDG-2 (non-success):** A PR that introduces a broken edge fails the graph-diff job. (R-VDG-1)
   _Verified by:_ `pytest -k test_graph_diff_fails_on_new_broken_edges` · stage: `make test`
 
-- [ ] **AC-VDG-3:** This criterion intentionally traces to no requirement (H002).
+- [ ] **AC-VDG-3:** A regression-free spec graph passes the diff. (R-VDG-1)
   _Verified by:_ `pytest -k test_graph_diff` · stage: `make test`
 
 ## Validation Matrix
