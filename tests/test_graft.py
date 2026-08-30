@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from openspec_graph import detect, rules, scaffold
+from openspec_graph import detect, dialect_card, rules, scaffold
 from openspec_graph.cli import main
 from openspec_graph.parse import parse_spec
 
@@ -224,6 +224,20 @@ def test_make_targets_json_shape_is_a_list_of_strings(repo: Path) -> None:
     assert isinstance(payload["make_targets"], list)
     assert all(isinstance(t, str) for t in payload["make_targets"])
     assert payload["make_targets"] == sorted(payload["make_targets"])
+
+
+def test_to_card_excludes_absolute_paths(repo: Path) -> None:
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    card = detect.profile(repo).to_card()
+    assert "root" not in card
+    assert "openspec_root" not in card
+    assert card["has_openspec_root"] is True
+    assert card["schema_version"] == dialect_card.SCHEMA_VERSION
+
+
+def test_to_card_reports_no_openspec_root_when_absent(repo: Path) -> None:
+    card = detect.profile(repo).to_card()
+    assert card["has_openspec_root"] is False
 
 
 def test_multi_target_makefile_line_resolves_both_targets_end_to_end(repo: Path) -> None:
