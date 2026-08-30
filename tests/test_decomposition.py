@@ -32,6 +32,7 @@ _NEW_MODULES = [
     "rules_harness",
     "rules_upstream",
     "machinery",
+    "dialect_card",
 ]
 
 # Modules that must NOT import cli or graph (the orchestration/output layers).
