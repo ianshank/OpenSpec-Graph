@@ -83,10 +83,12 @@ wedge; add the positioning table and explicit non-goals; add a deprecated
   `osgraph` are free on PyPI, GitHub, and Homebrew, and absent from `PATH`.
   Chosen name: **`planlint`** (drops the "graph" language the strategy retires;
   conveys "lint your plans"; fits the wedge). `osgraph` is the recorded fallback.
-  Ecosystems checked: PyPI (HTTP 404 = free), GitHub repo search (0 matches),
-  `brew info` (not found), `command -v` on PATH (absent). npm/cargo/apt were not
-  checked — out of scope for a Python CLI; the claim is narrowed to the
-  ecosystems actually verified.
+  Ecosystems checked authoritatively: PyPI
+  (`https://pypi.org/pypi/<name>/json` → HTTP 404 = free), GitHub repo search
+  (0 matches), Homebrew (`https://formulae.brew.sh/api/formula/<name>.json` →
+  HTTP 404 = no formula), and `command -v` on `PATH` (absent). npm/cargo/apt
+  were not checked — out of scope for a Python CLI; the claim is narrowed to
+  the ecosystems actually verified.
 - **AC-RP-1:** `planlint detect|init|new|validate|graph|rules` works as a
   console-script entry point; the legacy `specgraph` command prints a one-line
   deprecation to **stderr** and delegates to `main`, preserving the real exit

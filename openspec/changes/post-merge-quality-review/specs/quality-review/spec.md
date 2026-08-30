@@ -78,7 +78,7 @@ contributor.
   (watch loop, scheduled self-validation cron, pre-push hook) and the
   skills/agents extension point (entry-point rule registration), each with the
   reason it is deferred (R-PR-5).
-  _Verified by:_ `specgraph validate` · stage: `make pre-pr`
+  _Verified by:_ `planlint validate` · stage: `make pre-pr`
 
 - [x] **AC-PR-8 (non-success):** The pre-push hook is documented as optional and
   not installed by default; a reference to `pre-push` in the Makefile or CI

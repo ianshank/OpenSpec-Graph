@@ -3,7 +3,7 @@
 > **Change:** `rename-cli-and-positioning`
 > **Version:** 1.0.0-draft
 > **Authors:** maintainer · reviewer
-> **Status:** DRAFT
+> **Status:** APPROVED
 
 ---
 
@@ -28,6 +28,11 @@ surface.
 - R-CP-2: The system MUST keep `specgraph` as a backwards-compatible alias that
   warns to stderr and delegates to `main`, preserving the real exit code so
   existing CI keeps failing on real errors.
+- R-CP-3: The README MUST lead with the wedge sentence, a positioning table,
+  and an explicit non-goals section — so the product is read as a CI gate, not
+  an authoring framework.
+- R-CP-4: The CLI surface MUST be a closed read/lint set; no authoring verb
+  (`propose`/`apply`/chat) may appear. The set is guarded by a test.
 - C-CP-1: The rename MUST NOT break existing user contracts — the waiver syntax
   `<!-- specgraph:allow ... -->`, the config file `openspec/specgraph.json`,
   and the `[tool.specgraph]` pyproject section MUST keep the `specgraph` name.
@@ -49,17 +54,16 @@ surface.
   _Verified by:_ `pytest -k test_deprecated_alias` · stage: `make test`
 
 - [ ] **AC-CP-3:** The CLI verb set is the closed read/lint surface
-  {detect, init, new, validate, graph, rules}; an authoring verb is rejected.
-  (R-CP-1)
+  {detect, init, new, validate, graph, rules}. (R-CP-4)
   _Verified by:_ `pytest -k test_cli_verbs` · stage: `make test`
 
 - [ ] **AC-CP-4:** README leads with the wedge, a positioning table, and an
-  explicit non-goals section. (R-CP-1)
+  explicit non-goals section. (R-CP-3)
   _Verified by:_ `make docs-check` · stage: `make docs-check`
 
 - [ ] **AC-CP-5 (non-success):** Adding a `propose`/`apply`/chat verb to
   `cli.build_parser` fails `make test`. The CLI must not become an authoring
-  framework. (C-CP-1)
+  framework. (R-CP-4)
   _Verified by:_ `pytest -k test_cli_rejects_authoring_verbs` · stage: `make test`
 
 - [ ] **AC-CP-6 (non-success):** The deprecation warning never leaks into stdout
@@ -71,6 +75,11 @@ surface.
   gate — no literal threshold is named in this spec or its tests. (C-CP-2)
   _Verified by:_ `make test` · stage: `make test`
 
+- [ ] **AC-CP-8:** The rename leaves user contracts intact — the waiver syntax
+  `<!-- specgraph:allow ... -->`, the config file `openspec/specgraph.json`,
+  and the `[tool.specgraph]` section are unchanged and still recognized. (C-CP-1)
+  _Verified by:_ `pytest -k test_waiver` · stage: `make test`
+
 ## Invariants Touched
 
 - INV-CLI-1: planlint is a linter under `openspec validate`, never an
@@ -80,5 +89,5 @@ surface.
 
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
-| Focused | `make test` | AC-CP-1..3, AC-CP-5..7 |
+| Focused | `make test` | AC-CP-1..3, AC-CP-5..8 |
 | Docs | `make docs-check` | AC-CP-4 |

@@ -15,7 +15,7 @@ introduces a broken edge or an orphan requirement.
   total coverage had drifted to 89.29% (`cli.py` at 67%).
 - `Makefile::lint` prints "ruff not installed, skipping" and exits 0 when ruff
   is absent — a soft pass, not a gate.
-- `specgraph graph` emits `spec-graph.json` to CI artifacts, but no job diffs it
+- `planlint graph` emits `spec-graph.json` to CI artifacts, but no job diffs it
   across a PR, so a newly-introduced orphan requirement or unknown make stage
   ships without review.
 
