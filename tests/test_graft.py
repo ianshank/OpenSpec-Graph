@@ -353,6 +353,20 @@ def test_define_block_does_not_leak_a_bogus_target_through_the_legacy_widening_f
     assert prof.make_target_confidence == "low"
 
 
+def test_unterminated_define_block_does_not_hang_detect_end_to_end(repo: Path) -> None:
+    # The shared O(n) strip_define_blocks implementation must keep
+    # detect.profile() fast even through the legacy-fallback path, not
+    # just when calling machinery.parse_makefile directly.
+    import time
+
+    (repo / "Makefile").write_text(MAKEFILE + "\ndefine X\n" + ("body line\n" * 20000))
+    start = time.monotonic()
+    prof = detect.profile(repo)
+    elapsed = time.monotonic() - start
+    assert elapsed < 5.0, f"detect.profile() took {elapsed:.2f}s on an unterminated define block"
+    assert prof.make_target_confidence == "low"
+
+
 def test_cli_detect_reports_low_confidence_makefile_parse(repo: Path, capsys) -> None:
     (repo / "Makefile").write_text("include extra.mk\nbuild:\n\techo hi\n")
     assert main(["--target", str(repo), "detect"]) == 0

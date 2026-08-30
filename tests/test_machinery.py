@@ -118,6 +118,79 @@ def test_define_block_suppresses_directive_and_conditional_detection_inside_it()
     assert facts.targets == ("build",)
 
 
+def test_nested_define_blocks_resolve_at_the_outer_endef_not_the_inner_one() -> None:
+    # Verified against real GNU Make: a `define` appearing inside another
+    # `define`'s body opens a second, inner block -- the whole nested
+    # structure only closes at the matching *outer* endef. A boolean
+    # in_define flag (rather than a depth counter) would incorrectly
+    # treat the first endef as closing everything, leaving "inner-body:"
+    # to be parsed as a real (fabricated) target.
+    text = (
+        "define OUTER\n"
+        "define INNER\n"
+        "inner-body: not-a-real-target\n"
+        "endef\n"
+        "outer-body: also-not-real\n"
+        "endef\n"
+        "build:\n"
+        "\techo hi\n"
+    )
+    facts = machinery.parse_makefile(text)
+    assert facts.targets == ("build",)
+    assert facts.has_define is True
+
+
+def test_space_indented_endef_still_closes_the_block() -> None:
+    # A leading-whitespace-indented `endef` is valid GNU Make syntax.
+    # Checking indentation before the in-block define/endef check would
+    # hide it, leaving the parser stuck "inside" a phantom unclosed block
+    # for the rest of the file -- silently losing every real target after it.
+    text = "define HELP_TEXT\nsome text\n   endef\nbuild:\n\techo hi\n"
+    facts = machinery.parse_makefile(text)
+    assert facts.targets == ("build",)
+
+
+def test_hyphenated_target_name_starting_with_define_is_not_a_directive() -> None:
+    # A \b word-boundary check (the original implementation) matches at a
+    # word-to-hyphen transition too, so a real target literally named
+    # "define-thing" would be misread as starting a define block. Requiring
+    # whitespace-or-end-of-line after the keyword avoids the false positive.
+    text = "define-thing:\n\techo hi\n"
+    facts = machinery.parse_makefile(text)
+    assert facts.targets == ("define-thing",)
+    assert facts.has_define is False
+
+
+def test_unterminated_define_block_does_not_scale_quadratically() -> None:
+    # DEC-DEF-002 (ReDoS hardening): an untrusted, unterminated define
+    # block must degrade to "rest of file is opaque" in linear time. This
+    # is a real, previously-exploitable regression class: a whole-text
+    # regex with unbounded lazy matching across an unterminated block was
+    # empirically O(n^2) (tens of seconds on a ~20K-line adversarial
+    # Makefile). Assert a generous, CI-safe wall-clock bound rather than
+    # asserting a specific complexity class directly.
+    import time
+
+    text = "define X\n" + ("body line\n" * 20000)  # no matching endef
+    start = time.monotonic()
+    facts = machinery.parse_makefile(text)
+    elapsed = time.monotonic() - start
+    assert elapsed < 5.0, f"parse_makefile took {elapsed:.2f}s on an unterminated define block"
+    assert facts.confidence == "low"
+
+
+def test_strip_define_blocks_is_directly_testable_and_reused_by_both_parsers() -> None:
+    # machinery.strip_define_blocks is the single shared implementation;
+    # confirm its own return contract directly, not just through
+    # parse_makefile's downstream behavior.
+    cleaned, had_define = machinery.strip_define_blocks(
+        "define X\nUsage: make test\nendef\nbuild:\n\techo hi\n"
+    )
+    assert had_define is True
+    assert "Usage" not in cleaned
+    assert "build:" in cleaned
+
+
 def test_target_specific_variable_assignment_still_resolves_the_target() -> None:
     text = "build: CFLAGS = -O2\n\techo hi\n"
     facts = machinery.parse_makefile(text)
