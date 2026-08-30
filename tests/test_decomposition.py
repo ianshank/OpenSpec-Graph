@@ -8,6 +8,7 @@ dirs.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import subprocess
 import sys
@@ -15,7 +16,26 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+PKG = REPO_ROOT / "openspec_graph"
 FX = REPO_ROOT / "tests" / "fixtures"
+
+# Modules created by this change package. Each must stay stdlib-only (R-DG-3) and
+# obey the import boundary: no importing cli or graph (R-DG-5).
+_NEW_MODULES = [
+    "scaffold_templates",
+    "parse_semantics",
+    "parse_model",
+    "parse_harness",
+    "parse_upstream",
+    "rule_types",
+    "rules_generic",
+    "rules_harness",
+    "rules_upstream",
+]
+
+# Modules that must NOT import cli or graph (the orchestration/output layers).
+# cli.py and __init__.py are the expected hubs and are exempt.
+_BOUNDARY_EXEMPT = {"cli", "__init__"}
 
 # Path-normalized SHA-256 of validate --json / graph --format json / rules --json
 # for the canonical fixture repo (tests/fixtures/). Captured before the split;
@@ -54,6 +74,20 @@ def _outputs(root: Path) -> dict[str, str]:
         "graph": _run_cli(root, "graph", "--format", "json"),
         "rules": _run_cli(root, "rules", "--json"),
     }
+
+
+def _imported_roots(path: Path) -> set[str]:
+    """Top-level module names imported by a .py file (relative + absolute)."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    roots: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                roots.add(alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            # relative imports are intra-package; not a stdlib concern
+            roots.add(node.module.split(".")[0])
+    return roots
 
 
 # --- AC-DG-1: public import surface unchanged -------------------------------
@@ -107,3 +141,53 @@ def test_rules_json_ordering_stable() -> None:
     assert first == second, "rules --json must be byte-identical across runs"
     # And it must match the canonical hash.
     assert hashlib.sha256(first.encode()).hexdigest() == _EXPECTED_HASHES["rules"]
+
+
+# --- AC-DG-4: new modules import only stdlib (no third-party deps) ----------
+
+
+def test_new_modules_stdlib_only() -> None:
+    stdlib = set(sys.stdlib_module_names)
+    for name in _NEW_MODULES:
+        roots = _imported_roots(PKG / f"{name}.py")
+        third_party = roots - stdlib
+        assert not third_party, (
+            f"{name}.py imports non-stdlib modules: {sorted(third_party)} (R-DG-3)"
+        )
+
+
+# --- AC-DG-5: shared helper is not duplicated inline ------------------------
+
+
+def test_helpers_not_duplicated_inline() -> None:
+    # _write_spec must be imported from tests.support, not redeclared.
+    for fname in ("test_enterprise.py", "test_ci_hardening.py"):
+        path = REPO_ROOT / "tests" / fname
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        redeclared = [
+            n.name for n in ast.walk(tree)
+            if isinstance(n, ast.FunctionDef) and n.name == "_write_spec"
+        ]
+        assert not redeclared, (
+            f"{fname} redeclares _write_spec inline; import it from tests.support "
+            "instead (R-DG-4)"
+        )
+
+
+# --- AC-DG-6 (non-success): parser/rule modules must not import cli or graph
+
+
+def test_import_boundary_discipline() -> None:
+    # No module except cli.py and __init__.py may import cli or graph.
+    offenders: dict[str, set[str]] = {}
+    for path in PKG.glob("*.py"):
+        stem = path.stem
+        if stem in _BOUNDARY_EXEMPT:
+            continue
+        roots = _imported_roots(path)
+        bad = roots & {"cli", "graph"}
+        if bad:
+            offenders[stem] = bad
+    assert not offenders, (
+        f"modules import cli/graph (forbidden below the hub layer): {offenders} (R-DG-5)"
+    )
