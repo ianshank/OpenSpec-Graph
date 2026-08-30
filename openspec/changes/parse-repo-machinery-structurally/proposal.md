@@ -59,6 +59,21 @@ prose, so the ordinary English verb "make" followed by a word like "sure" or
 "progress" false-cites a target that isn't in `GENERIC_STAGES` and isn't a
 real target, tripping G004 on ordinary prose.
 
+**Real-world calibration:** a separate external-validation pass re-ran
+`planlint` against two real, independently-evolving repos
+(`Mango_Code_Agent-Harness`, `Mouse-Droid-AGI`). Neither repo's current
+Makefile happens to contain a multi-target line, and neither repo's current
+spec prose happens to contain a bare, unfenced "make" citation — so both
+false-positive classes above are confirmed real (by direct execution against
+constructed fixtures) but narrower in day-to-day impact against these two
+specific repos *today* than two other gaps the same validation pass found
+independently (a body-blind bug in rule U004, and a `.coveragerc`/`setup.cfg`
+threshold-detection gap — both filed as separate follow-ups, out of scope
+for this change). Worth weighing when this design is prioritized against
+other work: it fixes a real and structurally-important class of false
+positive, but it is not currently the highest-frequency false positive
+observed against real content.
+
 ## What Changes (design scope for a future implementation)
 
 - A new module, `openspec_graph/machinery.py`, sitting below `detect.py`
