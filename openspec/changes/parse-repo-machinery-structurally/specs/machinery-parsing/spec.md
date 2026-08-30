@@ -79,16 +79,16 @@ Makefile. See the parent proposal's Why section for full citations.
   rule, only remove false positives. (R-MP-1, R-MP-3)
   _Verified by:_ pytest fixture, asserts G004 still fires · stage: `make test`
 
-- [ ] **AC-MP-5:** A spec line containing two threshold-shaped numbers, only
+- [x] **AC-MP-5:** A spec line containing two threshold-shaped numbers, only
   one of which matches the real configured floor, still fails G003 for the
   non-matching number — the same-line collision case. (R-MP-4)
-  _Verified by:_ pytest fixture · stage: `make test`
+  _Verified by:_ `pytest -k test_g003_still_fires_on_the_non_matching_number_in_a_same_line_collision` · stage: `make test`
 
-- [ ] **AC-MP-6 (non-success):** A spec using the ordinary English verb
+- [x] **AC-MP-6 (non-success):** A spec using the ordinary English verb
   "make" ahead of a plain word, with no backtick-fencing or `stage:`
   convention, does not trip G004 once the citation regex is tightened.
   (R-MP-5)
-  _Verified by:_ pytest fixture · stage: `make test`
+  _Verified by:_ `pytest -k test_g004_does_not_fire_on_a_bare_english_use_of_make` · stage: `make test`
 
 - [ ] **AC-MP-7:** `StackProfile.as_dict()`'s `make_targets` field is
   byte-identical in shape before and after this change lands, for a fixed

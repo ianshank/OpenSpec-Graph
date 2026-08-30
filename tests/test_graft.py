@@ -237,9 +237,32 @@ def test_g002_fires_when_every_criterion_is_a_happy_path(repo: Path) -> None:
 
 
 def test_g003_fires_on_hard_coded_threshold(repo: Path) -> None:
+    # 95%, not the repo fixture's real floor of 90 -- this line has exactly
+    # one threshold-shaped number, and it does NOT match, so it stays a
+    # genuine violation after the value-comparison suppression lands.
+    body = GOOD_HARNESS.replace(
+        "An attested write records an evidence id.",
+        "Line coverage is at least 95% for the new module.",
+    )
+    assert "G003" in rule_ids(findings_for(repo, body))
+
+
+def test_g003_suppresses_a_bare_number_that_matches_the_real_threshold(repo: Path) -> None:
+    # The repo fixture's real floor is 90 -- a single, unambiguous, matching
+    # number needs no locator name to be excused.
     body = GOOD_HARNESS.replace(
         "An attested write records an evidence id.",
         "Line coverage is at least 90% for the new module.",
+    )
+    assert "G003" not in rule_ids(findings_for(repo, body))
+
+
+def test_g003_still_fires_on_the_non_matching_number_in_a_same_line_collision(repo: Path) -> None:
+    # Two threshold-shaped numbers on one line, only one matching the real
+    # floor -- must never suppress on a coincidental match to unrelated text.
+    body = GOOD_HARNESS.replace(
+        "An attested write records an evidence id.",
+        "Coverage moved from 80% to 90% after the refactor.",
     )
     assert "G003" in rule_ids(findings_for(repo, body))
 
@@ -267,6 +290,16 @@ def test_g004_fires_on_a_make_target_the_target_repo_lacks(repo: Path) -> None:
     found = findings_for(repo, body)
     assert "G004" in rule_ids(found)
     assert any("test-governance" in f.message for f in found)
+
+
+def test_g004_does_not_fire_on_a_bare_english_use_of_make(repo: Path) -> None:
+    # Lowercase "make sure"/"make progress" in ordinary prose, with no
+    # backtick-fencing, must not be treated as a stage citation.
+    body = GOOD_HARNESS.replace(
+        "An attested write records an evidence id.",
+        "Reviewers make sure every write is attested, so the team can make progress.",
+    )
+    assert "G004" not in rule_ids(findings_for(repo, body))
 
 
 def test_g005_fires_on_an_undeclared_invariant(repo: Path) -> None:

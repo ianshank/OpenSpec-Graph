@@ -31,7 +31,36 @@
 - **Gate:** `make test` green, including the new safety test; `make pre-pr`
   green.
 
-## Milestone 2 — Wire into `detect.py` and `rules_generic.py`  [NOT STARTED]
+## Milestone 2a — G003 value-comparison + `MAKE_REF` tightening  [DONE]
+
+Separable from the Makefile-parser work (no `machinery.py` dependency, no
+untrusted-input handling) — landed independently, as anticipated.
+
+- `parse_semantics.MAKE_REF` tightened to require backtick-fencing (was
+  optional both sides — the exact bug that let bare "make sure"/"make
+  progress" false-cite a target); every real citation in this repo's own
+  fixtures was already backtick-fenced, so this is call-site-preserving
+  (AC-MP-6).
+- New `parse_semantics.threshold_values(line)` helper, re-exported via
+  `parse.py`; `rules_generic._hard_coded_threshold` (G003) now suppresses a
+  finding only when exactly one threshold-shaped number is on the line and
+  it matches the real configured value — never "value present anywhere,"
+  which would wrongly excuse a genuine violation sitting next to an
+  unrelated, coincidentally-matching number (AC-MP-5).
+- Updated `tests/test_graft.py`'s pre-existing
+  `test_g003_fires_on_hard_coded_threshold` (its fixture text coincidentally
+  matched this repo's own real coverage floor, so it would have silently
+  flipped once the value-comparison landed) and added 3 new tests for the
+  suppression, same-line-collision, and bare-"make"-no-longer-trips-G004
+  cases.
+
+- **Gate:** `make pre-pr` green; `planlint validate` clean; full suite
+  (including `test_decomposition.py`'s `_EXPECTED_HASHES`) unaffected — no
+  re-pin needed.
+
+## Milestone 2b — Wire `machinery.py` into `detect.py`  [NOT STARTED]
+
+Depends on Milestone 1.
 
 - `detect._make_targets()` becomes a thin wrapper over
   `machinery.parse_makefile()`; `StackProfile` gains additive-only fields
@@ -39,15 +68,10 @@
   existing shape (C-MP-1, AC-MP-7).
 - `rules_generic._unknown_make_target` (G004) gains the confidence-aware
   fallback (AC-MP-3, AC-MP-4).
-- `rules_generic._hard_coded_threshold` (G003) gains the
-  single-unambiguous-match value comparison (AC-MP-5);
-  `parse_semantics.MAKE_REF` tightened to
-  require backtick-fencing or `stage:` (AC-MP-6). These two are separable
-  from the Makefile-parser work and do not touch untrusted input — safe to
-  land independently once approved.
 - `tests/test_decomposition.py`: add `"machinery"` to the stdlib-only-import
   guard so the existing AC-DG-4-style check picks up the new module
-  automatically.
+  automatically (do this in Milestone 1's PR, not deferred here — no reason
+  to leave the guard blind to the module for an extra PR).
 
 - **Gate:** `make pre-pr` green; `planlint validate` on this repo's own
   specs still clean.

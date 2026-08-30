@@ -37,7 +37,12 @@ CANONICAL_SCEN_LEVEL = 4
 SUPPRESS = re.compile(r"<!--\s*specgraph:allow\s+([A-Z]\d{3}(?:\s*,\s*[A-Z]\d{3})*)\s*(.*?)-->")
 
 # --- shared references -----------------------------------------------------
-MAKE_REF = re.compile(r"`?\bmake\s+([a-z][a-z0-9_-]*)\b`?")
+# Backtick-fencing is required: a bare "make sure"/"make progress" in
+# ordinary English prose is not a stage citation. Every real citation in
+# this repo's own fixtures already uses backticks (often via the
+# `stage:` convention), so this is a precision fix, not a breaking one.
+# The \b anchors are redundant once a literal backtick forces the boundary.
+MAKE_REF = re.compile(r"`make\s+([a-z][a-z0-9_-]*)`")
 INV_REF = re.compile(r"\bINV-\d+\b")
 PYTEST_SEL = re.compile(r"pytest\s+-k\s+(\S+)")
 
@@ -116,6 +121,16 @@ def hard_coded(text: str) -> tuple[str, ...]:
             continue
         offenders.append(line[:120])
     return tuple(offenders)
+
+
+def threshold_values(line: str) -> tuple[int, ...]:
+    """Every threshold-shaped number on a line (each HARD_THRESHOLD span), as ints."""
+    values: list[int] = []
+    for match in HARD_THRESHOLD.finditer(line):
+        digits = re.search(r"\d{2,3}", match.group())
+        if digits:
+            values.append(int(digits.group()))
+    return tuple(values)
 
 
 def scenario_levels(text: str) -> tuple[int, ...]:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from .detect import StackProfile
-from .parse import ParsedSpec
+from .parse import ParsedSpec, threshold_values
 from .rule_types import ERROR, GENERIC_STAGES, WARN, Rule
 
 __all__ = ["GENERIC_RULES"]
@@ -37,7 +37,17 @@ def _needs_negative(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
 
 def _hard_coded_threshold(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]:
     locator = profile.threshold.locator if profile.threshold else "the governance policy"
+    real_value = profile.threshold.value if profile.threshold else None
     for offender in spec.hard_coded_thresholds:
+        if real_value is not None:
+            values = threshold_values(offender)
+            # Suppress only on a single, unambiguous match -- never on "the
+            # real value merely appears somewhere in the line," which would
+            # wrongly excuse a genuine violation sitting next to a
+            # coincidentally-matching, unrelated number (e.g. a delta
+            # description: "raised from 80% to 90%").
+            if len(values) == 1 and values[0] == real_value:
+                continue
         yield f"hard-coded threshold; read it from {locator} instead -- {offender!r}"
 
 
