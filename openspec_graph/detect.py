@@ -6,6 +6,7 @@ is always safe to run against an unfamiliar clone.
 
 from __future__ import annotations
 
+import configparser
 import dataclasses
 import json
 import re
@@ -96,6 +97,27 @@ def _make_targets(root: Path) -> tuple[str, ...]:
     return tuple(sorted(set(targets)))
 
 
+def _read_ini_fail_under(path: Path, section: str) -> int | None:
+    """Read an integer fail_under from an INI-style coverage config section.
+
+    None if the file is absent, unparsable, or lacks the key -- never raises,
+    matching this module's fail-quiet-and-move-on style for optional config.
+    """
+    if not path.exists():
+        return None
+    parser = configparser.ConfigParser(interpolation=None)
+    try:
+        parser.read(path, encoding="utf-8")
+    except configparser.Error:
+        return None
+    if not parser.has_option(section, "fail_under"):
+        return None
+    try:
+        return parser.getint(section, "fail_under")
+    except ValueError:
+        return None
+
+
 def _threshold(root: Path) -> ThresholdSource | None:
     """Find the coverage floor. Order matters: an explicit governance policy wins."""
     policy_candidates = [
@@ -122,6 +144,20 @@ def _threshold(root: Path) -> ThresholdSource | None:
             return ThresholdSource(
                 "pyproject.toml:[tool.coverage.report].fail_under", int(match.group(1))
             )
+
+    # coverage.py's own convention: bare [report] in .coveragerc, but
+    # namespaced [coverage:report] in setup.cfg (to avoid colliding with
+    # other tools' sections there) -- different section names, not the same.
+    coveragerc = root / ".coveragerc"
+    value = _read_ini_fail_under(coveragerc, "report")
+    if value is not None:
+        return ThresholdSource(f"{coveragerc.relative_to(root)}:[report].fail_under", value)
+
+    setup_cfg = root / "setup.cfg"
+    value = _read_ini_fail_under(setup_cfg, "coverage:report")
+    if value is not None:
+        return ThresholdSource(f"{setup_cfg.relative_to(root)}:[coverage:report].fail_under", value)
+
     return None
 
 

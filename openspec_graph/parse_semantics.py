@@ -46,6 +46,8 @@ HARD_THRESHOLD = re.compile(r"(?:≥|>=|>)\s*\d{2,3}\s*%?|\b\d{2,3}\s*%")
 THRESHOLD_ALLOWLIST = (
     "governance-policy.json",
     "pyproject.toml",
+    ".coveragerc",
+    "setup.cfg",
     "coverage.lines",
     "coverage.branches",
     "fail_under",

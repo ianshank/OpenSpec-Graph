@@ -147,6 +147,42 @@ def test_detect_prefers_governance_policy_over_pyproject(repo: Path) -> None:
     assert "governance-policy.json" in prof.threshold.locator
 
 
+def test_detect_reads_threshold_from_coveragerc(repo: Path) -> None:
+    (repo / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    (repo / ".coveragerc").write_text("[report]\nfail_under = 88\n")
+    prof = detect.profile(repo)
+    assert prof.threshold is not None
+    assert prof.threshold.value == 88
+    assert ".coveragerc" in prof.threshold.locator
+
+
+def test_detect_reads_threshold_from_setup_cfg(repo: Path) -> None:
+    (repo / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    (repo / "setup.cfg").write_text("[coverage:report]\nfail_under = 82\n")
+    prof = detect.profile(repo)
+    assert prof.threshold is not None
+    assert prof.threshold.value == 82
+    assert "setup.cfg" in prof.threshold.locator
+
+
+def test_detect_prefers_coveragerc_over_setup_cfg(repo: Path) -> None:
+    (repo / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    (repo / ".coveragerc").write_text("[report]\nfail_under = 88\n")
+    (repo / "setup.cfg").write_text("[coverage:report]\nfail_under = 70\n")
+    prof = detect.profile(repo)
+    assert prof.threshold is not None
+    assert prof.threshold.value == 88
+
+
+def test_detect_still_prefers_pyproject_over_coveragerc(repo: Path) -> None:
+    # repo fixture's pyproject.toml already sets fail_under = 90 -- confirms
+    # the additive-only precedence: pyproject.toml keeps winning.
+    (repo / ".coveragerc").write_text("[report]\nfail_under = 70\n")
+    prof = detect.profile(repo)
+    assert prof.threshold is not None
+    assert prof.threshold.value == 90
+
+
 def test_detect_finds_make_targets_and_ignores_phony(repo: Path) -> None:
     prof = detect.profile(repo)
     assert {"test", "regression", "ci", "help"} <= set(prof.make_targets)
@@ -212,6 +248,16 @@ def test_g003_allows_a_threshold_read_from_the_policy_locator(repo: Path) -> Non
     body = GOOD_HARNESS.replace(
         "An attested write records an evidence id.",
         "Coverage meets the floor in `pyproject.toml` (currently 90%).",
+    )
+    assert "G003" not in rule_ids(findings_for(repo, body))
+
+
+def test_g003_allows_a_threshold_read_from_coveragerc(repo: Path) -> None:
+    (repo / "pyproject.toml").write_text('[project]\nname = "demo"\n')
+    (repo / ".coveragerc").write_text("[report]\nfail_under = 90\n")
+    body = GOOD_HARNESS.replace(
+        "An attested write records an evidence id.",
+        "Coverage meets the floor in `.coveragerc` (currently 90%).",
     )
     assert "G003" not in rule_ids(findings_for(repo, body))
 
