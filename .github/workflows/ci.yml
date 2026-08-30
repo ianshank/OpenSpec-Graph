@@ -23,10 +23,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-          pip install pytest
+          pip install pytest pytest-cov
 
-      - name: Run tests
-        run: python -m pytest tests/ -q
+      - name: Run tests with the coverage gate
+        run: python -m pytest tests/ --cov=openspec_graph --cov-report=term-missing --cov-fail-under=90 -q
 
   self-validate:
     # specgraph must hold its own specs to the same rules it enforces.
@@ -51,6 +51,12 @@ jobs:
       - name: Validate every change package (hard gate)
         run: specgraph --target . validate --fail-on ERROR
 
+      # Emit the repo's own spec dependency graph as a build artifact, so a PR
+      # that changes the spec graph leaves a reviewable trace (add-graph-export
+      # Milestone 2).
+      - name: Emit spec dependency graph
+        run: specgraph --target . graph --format json > spec-graph.json
+
       - name: Record warnings as an artifact
         if: always()
         run: specgraph --target . validate --fail-on WARN --json > spec-findings.json || true
@@ -58,5 +64,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: spec-findings
-          path: spec-findings.json
+          name: spec-artifacts
+          path: |
+            spec-graph.json
+            spec-findings.json

@@ -19,6 +19,9 @@ include = ["openspec_graph*"]
 testpaths = ["tests"]
 addopts = "-q"
 
+[tool.coverage.run]
+source = ["openspec_graph"]
+
 [tool.coverage.report]
 # The coverage floor for this repo. Specs must reference this locator,
 # never hard-code a number (specgraph rule G003).

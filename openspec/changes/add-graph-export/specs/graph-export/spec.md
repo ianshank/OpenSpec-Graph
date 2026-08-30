@@ -3,7 +3,7 @@
 > **Change:** `add-graph-export`
 > **Version:** 1.0.0-draft
 > **Authors:** maintainer · reviewer
-> **Status:** DRAFT
+> **Status:** APPROVED
 
 ---
 
@@ -91,7 +91,9 @@ No CLI verb produces structured output of the graph itself, only of violations.
 ## Open Questions
 
 > [!IMPORTANT]
-> **DEC-GR-001 (BLOCKING):** Should the graph include criteria from specs at
-> `Status: DRAFT`, or only accepted ones? Including drafts surfaces unverified
-> links earlier; excluding them hides drift a reviewer has not yet signed off
-> on. This must be decided before Milestone 1's gate.
+> **DEC-GR-001 (RESOLVED):** Should the graph include criteria from specs at
+> `Status: DRAFT`, or only accepted ones? **Decision: include drafts.** The
+> graph is a pure projection of what `validate` computes (R-GR-1), and
+> `validate` does not filter by status. Excluding drafts would hide exactly the
+> unverified links and broken edges a reviewer has not yet signed off on — the
+> drift the graph exists to surface. No longer blocking.

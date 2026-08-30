@@ -5,6 +5,7 @@ Verbs:
   init      write openspec/specgraph.json + project.md pinning detected conventions
   new       scaffold a change package in the target's own dialect
   validate  run the rule engine over every change package
+  graph     emit the spec dependency graph as JSON (pure projection of validate)
   rules     print the rule table
 
 Exit codes: 0 clean, 1 findings at or above the fail level, 2 usage error.
@@ -17,7 +18,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import detect, rules, scaffold
+from . import detect, graph as graph_module, rules, scaffold
 from .parse import parse_spec
 
 SEVERITY_ORDER = {"INFO": 0, "WARN": 1, "ERROR": 2}
@@ -140,6 +141,30 @@ def cmd_rules(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_graph(args: argparse.Namespace) -> int:
+    # Rendering is a downstream concern; reject it before doing any work so
+    # the message is explicit rather than a generic argparse complaint (AC-GR-6).
+    if args.format == "dot":
+        print(
+            "error: --format dot is not supported; graph rendering is a "
+            "downstream, out-of-scope concern. Use --format json.",
+            file=sys.stderr,
+        )
+        return 2
+
+    prof = _profile(args)
+    try:
+        graph = graph_module.build_graph(prof)
+    except graph_module.NoOpenSpecTreeError as exc:
+        # Name the missing directory and exit non-zero rather than emitting an
+        # empty graph (AC-GR-2).
+        print(str(exc), file=sys.stderr)
+        return 2
+
+    print(json.dumps(graph, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="specgraph", description="Apply an OpenSpec discipline to a cloned repository."
@@ -174,6 +199,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_rules = sub.add_parser("rules", help="print the rule table")
     p_rules.add_argument("--json", action="store_true")
     p_rules.set_defaults(func=cmd_rules)
+
+    p_graph = sub.add_parser("graph", help="emit the spec dependency graph as JSON")
+    p_graph.add_argument(
+        "--format", choices=["json", "dot"], default="json",
+        help="output format; 'dot' is rejected (rendering is out of scope)",
+    )
+    p_graph.set_defaults(func=cmd_graph)
 
     return parser
 
