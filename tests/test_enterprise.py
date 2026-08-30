@@ -16,6 +16,9 @@ from pathlib import Path
 
 import pytest
 
+from tests.support import run_cli as _run_cli
+from tests.support import write_spec as _write_spec
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TOOLS = REPO_ROOT / "tools"
 
@@ -69,18 +72,6 @@ def repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _write_spec(repo: Path, change: str, capability: str, body: str) -> Path:
-    path = repo / "openspec" / "changes" / change / "specs" / capability / "spec.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(body)
-    return path
-
-
-def _run_cli(repo: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        [sys.executable, "-m", "openspec_graph.cli", "--target", str(repo), *args],
-        capture_output=True, text=True, check=False, env=env,
-    )
 
 
 # --- AC-EH-4: deterministic JSON output (byte-identical re-evaluation) -------

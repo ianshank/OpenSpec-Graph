@@ -21,6 +21,7 @@ import pytest
 from openspec_graph import detect
 from openspec_graph import graph as graph_module
 from openspec_graph.rules import RULES, rule_table
+from tests.support import write_spec as _write_spec
 
 TOOLS = Path(__file__).resolve().parent.parent / "tools"
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -226,13 +227,6 @@ def repo(tmp_path: Path) -> Path:
     (tmp_path / "Makefile").write_text(MAKEFILE)
     (tmp_path / "pyproject.toml").write_text(PYPROJECT)
     return tmp_path
-
-
-def _write_spec(repo: Path, change: str, capability: str, body: str) -> Path:
-    path = repo / "openspec" / "changes" / change / "specs" / capability / "spec.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(body)
-    return path
 
 
 def _graph_json(repo: Path) -> dict:

@@ -17,6 +17,7 @@ from pathlib import Path
 
 from . import detect, parse, rules
 from .detect import StackProfile
+from .parse import ParsedSpec
 
 __all__ = ["NoOpenSpecTreeError", "build_graph"]
 
@@ -32,7 +33,117 @@ class NoOpenSpecTreeError(Exception):
 
 def _stages_cited(criterion_verified_by: str) -> list[str]:
     """The make stages a criterion's `_Verified by:` line names."""
-    return parse._MAKE_REF.findall(criterion_verified_by or "")
+    return parse.MAKE_REF.findall(criterion_verified_by or "")
+
+
+def _add_node(nodes: list[dict[str, object]], seen: set[str], node_id: str, **fields: object) -> None:
+    if node_id in seen:
+        return
+    seen.add(node_id)
+    nodes.append({"id": node_id, **fields})
+
+
+def _add_spec_node(nodes: list[dict[str, object]], seen: set[str], spec: ParsedSpec, rel: str) -> str:
+    spec_node = f"spec:{rel}"
+    _add_node(
+        nodes, seen, spec_node,
+        type="spec",
+        path=rel,
+        dialect=spec.dialect,
+        status=spec.status,
+        has_negative=spec.has_negative_criterion,
+    )
+    return spec_node
+
+
+def _add_requirement_nodes(
+    nodes: list[dict[str, object]], seen: set[str], spec: ParsedSpec, spec_node: str
+) -> None:
+    for req in spec.requirements:
+        _add_node(
+            nodes, seen, req.ident,
+            type="requirement",
+            text=req.text[:NODE_TEXT_LIMIT],
+            kind=req.kind,
+            spec=spec_node,
+        )
+
+
+def _add_criterion_nodes(
+    nodes: list[dict[str, object]],
+    edges: list[dict[str, object]],
+    seen: set[str],
+    spec: ParsedSpec,
+    spec_node: str,
+    known_stages: set[str],
+) -> None:
+    for crit in spec.criteria:
+        _add_node(
+            nodes, seen, crit.ident,
+            type="criterion",
+            text=crit.text[:NODE_TEXT_LIMIT],
+            is_negative=crit.is_negative,
+            has_stage=crit.has_stage,
+            spec=spec_node,
+        )
+        # criterion -> requirement
+        for ref in crit.requirement_refs:
+            edges.append({"source": crit.ident, "target": ref, "type": "traces-to"})
+        # criterion -> stage (verified-by). A stage the repo lacks is an
+        # edge to a node marked exists=False (AC-GR-5).
+        for stage in _stages_cited(crit.verified_by):
+            exists = stage in known_stages
+            stage_node = f"stage:{stage}"
+            _add_node(nodes, seen, stage_node, type="stage", name=stage, exists=exists)
+            edges.append(
+                {"source": crit.ident, "target": stage_node, "type": "verified-by", "exists": exists}
+            )
+
+
+def _add_invariant_edges(
+    nodes: list[dict[str, object]],
+    edges: list[dict[str, object]],
+    seen: set[str],
+    spec: ParsedSpec,
+    spec_node: str,
+    known_invariants: set[str],
+) -> None:
+    # spec -> invariant (declares). Undeclared invariants are edges to
+    # nodes marked exists=False.
+    for inv in spec.invariant_refs:
+        exists = inv in known_invariants
+        inv_node = f"invariant:{inv}"
+        _add_node(nodes, seen, inv_node, type="invariant", name=inv, exists=exists)
+        edges.append(
+            {"source": spec_node, "target": inv_node, "type": "declares", "exists": exists}
+        )
+
+
+def _add_finding_edges(edges: list[dict[str, object]], spec_node: str, findings: list[rules.Finding]) -> int:
+    # Broken links: the findings `validate` reports for this spec. Counting
+    # them here guarantees the graph's broken-link total equals validate's
+    # finding total (AC-GR-4).
+    for finding in findings:
+        edges.append(
+            {
+                "source": spec_node,
+                "target": finding.rule,
+                "type": "finding",
+                "broken": True,
+                "severity": finding.severity,
+                "message": finding.message,
+            }
+        )
+    return len(findings)
+
+
+def _mark_orphan_requirements(nodes: list[dict[str, object]], edges: list[dict[str, object]]) -> None:
+    # Orphan requirements: requirement nodes with no incoming traces-to edge
+    # (AC-GR-3).
+    incoming_traces = {e["target"] for e in edges if e["type"] == "traces-to"}
+    for node in nodes:
+        if node.get("type") == "requirement" and node["id"] not in incoming_traces:
+            node["orphan"] = True
 
 
 def build_graph(profile: StackProfile) -> dict[str, object]:
@@ -56,92 +167,18 @@ def build_graph(profile: StackProfile) -> dict[str, object]:
     nodes: list[dict[str, object]] = []
     edges: list[dict[str, object]] = []
     seen_nodes: set[str] = set()
-
-    def add_node(node_id: str, **fields: object) -> None:
-        if node_id in seen_nodes:
-            return
-        seen_nodes.add(node_id)
-        nodes.append({"id": node_id, **fields})
-
     broken_links = 0
 
     for path in spec_files:
         spec = parse.parse_spec(path, dialect)
         rel = _relative_to(path, profile.root)
-        spec_node = f"spec:{rel}"
-        add_node(
-            spec_node,
-            type="spec",
-            path=rel,
-            dialect=spec.dialect,
-            status=spec.status,
-            has_negative=spec.has_negative_criterion,
-        )
+        spec_node = _add_spec_node(nodes, seen_nodes, spec, rel)
+        _add_requirement_nodes(nodes, seen_nodes, spec, spec_node)
+        _add_criterion_nodes(nodes, edges, seen_nodes, spec, spec_node, known_stages)
+        _add_invariant_edges(nodes, edges, seen_nodes, spec, spec_node, known_invariants)
+        broken_links += _add_finding_edges(edges, spec_node, rules.evaluate(spec, profile))
 
-        for req in spec.requirements:
-            add_node(
-                req.ident,
-                type="requirement",
-                text=req.text[:NODE_TEXT_LIMIT],
-                kind=req.kind,
-                spec=spec_node,
-            )
-
-        for crit in spec.criteria:
-            add_node(
-                crit.ident,
-                type="criterion",
-                text=crit.text[:NODE_TEXT_LIMIT],
-                is_negative=crit.is_negative,
-                has_stage=crit.has_stage,
-                spec=spec_node,
-            )
-            # criterion -> requirement
-            for ref in crit.requirement_refs:
-                edges.append({"source": crit.ident, "target": ref, "type": "traces-to"})
-            # criterion -> stage (verified-by). A stage the repo lacks is an
-            # edge to a node marked exists=False (AC-GR-5).
-            for stage in _stages_cited(crit.verified_by):
-                exists = stage in known_stages
-                stage_node = f"stage:{stage}"
-                add_node(stage_node, type="stage", name=stage, exists=exists)
-                edges.append(
-                    {"source": crit.ident, "target": stage_node, "type": "verified-by", "exists": exists}
-                )
-
-        # spec -> invariant (declares). Undeclared invariants are edges to
-        # nodes marked exists=False.
-        for inv in spec.invariant_refs:
-            exists = inv in known_invariants
-            inv_node = f"invariant:{inv}"
-            add_node(inv_node, type="invariant", name=inv, exists=exists)
-            edges.append(
-                {"source": spec_node, "target": inv_node, "type": "declares", "exists": exists}
-            )
-
-        # Broken links: the findings `validate` reports for this spec. Counting
-        # them here guarantees the graph's broken-link total equals validate's
-        # finding total (AC-GR-4).
-        findings = rules.evaluate(spec, profile)
-        broken_links += len(findings)
-        for finding in findings:
-            edges.append(
-                {
-                    "source": spec_node,
-                    "target": finding.rule,
-                    "type": "finding",
-                    "broken": True,
-                    "severity": finding.severity,
-                    "message": finding.message,
-                }
-            )
-
-    # Orphan requirements: requirement nodes with no incoming traces-to edge
-    # (AC-GR-3).
-    incoming_traces = {e["target"] for e in edges if e["type"] == "traces-to"}
-    for node in nodes:
-        if node.get("type") == "requirement" and node["id"] not in incoming_traces:
-            node["orphan"] = True
+    _mark_orphan_requirements(nodes, edges)
 
     return {
         "root": str(profile.root),
