@@ -26,7 +26,7 @@ import logging
 import sys
 from pathlib import Path
 
-from . import detect, rules, scaffold
+from . import detect, dialect_card, rules, scaffold
 from . import graph as graph_module
 from .log import configure as configure_logging
 from .parse import parse_spec
@@ -66,6 +66,26 @@ def _profile(args: argparse.Namespace) -> detect.StackProfile:
 
 def cmd_detect(args: argparse.Namespace) -> int:
     prof = _profile(args)
+
+    if args.diff:
+        baseline_path = Path(args.diff)
+        try:
+            previous = json.loads(baseline_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"cannot read --diff baseline {baseline_path}: {exc}", file=sys.stderr)
+            return 2
+        changes = dialect_card.diff_cards(previous, prof.to_card())
+        if changes:
+            for change in changes:
+                print(f"FAIL: {change}")
+            return 1
+        print("PASS: no drift in detected conventions")
+        return 0
+
+    if args.format == "json":
+        print(json.dumps(prof.to_card(), indent=2))
+        return 0
+
     if args.json:
         print(json.dumps(prof.as_dict(), indent=2))
         return 0
@@ -224,7 +244,20 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_detect = sub.add_parser("detect", help="read-only stack and dialect report")
-    p_detect.add_argument("--json", action="store_true")
+    p_detect.add_argument(
+        "--json", action="store_true",
+        help="print the full detected profile as JSON (legacy; unchanged shape)",
+    )
+    p_detect.add_argument(
+        "--format", choices=["text", "json"], default="text",
+        help="output format; 'json' emits a stable, schema-versioned dialect "
+        "card excluding machine-specific paths (portable; see --diff)",
+    )
+    p_detect.add_argument(
+        "--diff", metavar="PREV_CARD_JSON",
+        help="compare against a previous 'detect --format json' output; "
+        "exits non-zero and lists changed fields on drift",
+    )
     p_detect.set_defaults(func=cmd_detect)
 
     p_init = sub.add_parser("init", help="write a snapshot of detected conventions into openspec/")

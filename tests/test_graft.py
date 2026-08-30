@@ -240,6 +240,83 @@ def test_to_card_reports_no_openspec_root_when_absent(repo: Path) -> None:
     assert card["has_openspec_root"] is False
 
 
+def test_detect_format_json_emits_a_dialect_card_with_schema_version(
+    repo: Path, capsys
+) -> None:
+    assert main(["--target", str(repo), "detect", "--format", "json"]) == 0
+    card = json.loads(capsys.readouterr().out)
+    assert card["schema_version"] == dialect_card.SCHEMA_VERSION
+    assert "root" not in card
+
+
+def test_detect_format_json_is_byte_identical_across_runs(repo: Path, capsys) -> None:
+    main(["--target", str(repo), "detect", "--format", "json"])
+    first = capsys.readouterr().out
+    main(["--target", str(repo), "detect", "--format", "json"])
+    second = capsys.readouterr().out
+    assert first == second
+
+
+def test_detect_format_json_card_is_identical_across_different_checkout_paths(
+    tmp_path_factory, capsys
+) -> None:
+    # The strongest proof of the portability property AC-DC-1/2 need: the
+    # same logical repo at two different absolute paths must yield a
+    # byte-identical card end-to-end, not just at the to_card() unit level.
+    def _build(root: Path) -> None:
+        (root / "Makefile").write_text(MAKEFILE)
+        (root / "pyproject.toml").write_text(PYPROJECT)
+        write_spec(root, "c1", "cap1", GOOD_HARNESS)
+
+    root_a = tmp_path_factory.mktemp("checkout_a")
+    root_b = tmp_path_factory.mktemp("checkout_b_longer_name")
+    _build(root_a)
+    _build(root_b)
+
+    main(["--target", str(root_a), "detect", "--format", "json"])
+    card_a = capsys.readouterr().out
+    main(["--target", str(root_b), "detect", "--format", "json"])
+    card_b = capsys.readouterr().out
+    assert card_a == card_b
+
+
+def test_detect_json_flag_still_emits_full_profile_unchanged(repo: Path, capsys) -> None:
+    assert main(["--target", str(repo), "detect", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert "root" in payload
+    assert "schema_version" not in payload
+
+
+def test_detect_diff_exits_nonzero_and_lists_changed_fields_on_drift(
+    repo: Path, tmp_path: Path, capsys
+) -> None:
+    main(["--target", str(repo), "detect", "--format", "json"])
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(capsys.readouterr().out)
+
+    (repo / "Makefile").write_text(MAKEFILE + "new-target:\n\techo hi\n")
+    result = main(["--target", str(repo), "detect", "--diff", str(baseline_path)])
+    out = capsys.readouterr().out
+    assert result == 1
+    assert "make_targets" in out
+
+
+def test_detect_diff_exits_zero_on_no_drift(repo: Path, tmp_path: Path, capsys) -> None:
+    main(["--target", str(repo), "detect", "--format", "json"])
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(capsys.readouterr().out)
+
+    result = main(["--target", str(repo), "detect", "--diff", str(baseline_path)])
+    out = capsys.readouterr().out
+    assert result == 0
+    assert "PASS" in out
+
+
+def test_detect_diff_with_missing_baseline_is_a_usage_error(repo: Path) -> None:
+    result = main(["--target", str(repo), "detect", "--diff", "/nonexistent/baseline.json"])
+    assert result == 2
+
+
 def test_multi_target_makefile_line_resolves_both_targets_end_to_end(repo: Path) -> None:
     (repo / "Makefile").write_text(MAKEFILE + "lint typecheck: test\n\techo ok\n")
     prof = detect.profile(repo)
