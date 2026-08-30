@@ -42,8 +42,10 @@ def _profile(args: argparse.Namespace) -> detect.StackProfile:
         raise SystemExit(f"target is not a directory: {root}")
     prof = detect.profile(root)
     logger.debug(
-        "profile: dialect=%s change_packages=%d openspec=%s",
+        "profile: dialect=%s change_packages=%d openspec=%s "
+        "make_targets=%d make_confidence=%s make_unresolved=%d",
         prof.dialect, len(prof.change_dirs), bool(prof.openspec_root),
+        len(prof.make_targets), prof.make_target_confidence, prof.make_unresolved_count,
     )
     return prof
 
