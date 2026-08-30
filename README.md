@@ -137,7 +137,9 @@ Both directions are tested.
 ## Tests
 
 ```bash
-python -m pytest tests/ -q     # 42 passed
+python -m pytest tests/ -q     # full suite
+make ci                         # test + lint + validate (core gate)
+make pre-pr                     # full enterprise AQA gate
 ```
 
 Every rule has a fixture that violates it and an assertion that the rule fires
@@ -145,6 +147,26 @@ on exactly that violation. Additionally: `test_scaffolded_spec_passes_its_own_va
 generates a package in both dialects and validates it, so the templates cannot
 drift from the rules; `test_apply_is_idempotent_and_refuses_to_clobber` proves a
 hand-edited spec survives re-running ``specgraph new``.
+
+## Enterprise AQA gate
+
+`make pre-pr` runs the full quality bar in one command — the same bar CI
+enforces:
+
+| Gate | Command | Checks |
+|---|---|---|
+| test | `make test` | pytest + line & branch coverage (floors in `pyproject.toml`) |
+| lint | `make lint` | ruff across package, tests, and tools |
+| typecheck | `make typecheck` | mypy (config in `pyproject.toml`) |
+| security | `make security` | gitleaks (or deterministic fallback) |
+| validate | `make validate` | `specgraph validate --fail-on ERROR` |
+| docs | `make docs-check` | required docs present + linked from README |
+
+No numeric threshold lives in the Makefile or CI YAML — floors are read from
+`pyproject.toml` at run time, and `tools/check_no_hardcoded_thresholds.py`
+fails the gate if a number is re-introduced. Debug diagnostics go to stderr
+only via `--verbose` / `SPECGRAPH_LOG_LEVEL`; JSON stdout stays parseable. See
+[`docs/aqa.md`](docs/aqa.md).
 
 ## Wiring it into CI
 
@@ -191,5 +213,15 @@ validates clean against the rules it will one day implement.
   stages, and threshold locator. It does not impose Mango's.
 - **No dependencies.** Stdlib only, so grafting into an arbitrary repo adds no
   supply-chain surface to the thing being governed.
+
+## Documentation
+
+- [CHANGELOG](CHANGELOG.md) — releases and notable changes
+- [Architecture (C4)](docs/architecture/c4.md) — context, container, component, code
+- [AQA guide](docs/aqa.md) — the full quality bar and how to reproduce it
+- [Hooks](docs/hooks.md) — pre-commit + CI gates, and how to add a rule
+- [Agents, skills, and the harness](docs/agents-skills-harness.md) — why this is
+  a deterministic governance harness, not an autonomous agent
+- [Next steps](docs/next-steps.md) — what is deliberately out of scope
 
 Upstream OpenSpec conventions: [Fission-AI/OpenSpec concepts](https://github.com/Fission-AI/OpenSpec/blob/main/docs/concepts.md).

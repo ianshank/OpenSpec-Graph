@@ -36,3 +36,14 @@ dmypy.json
 .vscode/
 *.swp
 .DS_Store
+
+# Logs and local CI artifacts
+*.log
+coverage.json
+spec-graph.json
+spec-findings.json
+head.json
+base.json
+
+# Docker / local builds
+# (Dockerfile and .dockerignore are tracked; build context artifacts are not)

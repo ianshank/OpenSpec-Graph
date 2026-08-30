@@ -1,0 +1,35 @@
+# Pre-commit hooks for OpenSpec-Graph.
+# Install once:  pip install pre-commit && pre-commit install
+#
+# Local hooks call the same `make` targets CI uses, so a commit never bypasses
+# CI and there is no second set of tool-version pins to drift from the dev
+# extras. Requires `pip install -e ".[dev]"` (ruff, mypy, pytest, pytest-cov).
+
+repos:
+  - repo: local
+    hooks:
+      - id: specgraph-lint
+        name: make lint (ruff)
+        entry: make lint
+        language: system
+        pass_filenames: false
+        types: [python]
+
+      - id: specgraph-typecheck
+        name: make typecheck (mypy)
+        entry: make typecheck
+        language: system
+        pass_filenames: false
+        types: [python]
+
+      - id: specgraph-security
+        name: make security (gitleaks / fallback)
+        entry: make security
+        language: system
+        pass_filenames: false
+
+      - id: specgraph-validate
+        name: specgraph validate (self-dogfooding)
+        entry: specgraph --target . validate --fail-on ERROR
+        language: system
+        pass_filenames: false

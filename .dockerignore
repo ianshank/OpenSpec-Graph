@@ -1,0 +1,25 @@
+# Keep the Docker image small — only ship what the CLI needs to run.
+.git
+.github
+.venv
+venv
+__pycache__
+*.pyc
+.ruff_cache
+.mypy_cache
+.pytest_cache
+htmlcov
+.coverage
+coverage.json
+coverage.xml
+*.egg-info
+build
+dist
+tests
+tools
+openspec
+docs
+*.md
+!README.md
+Dockerfile
+.dockerignore

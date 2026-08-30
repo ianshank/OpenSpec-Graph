@@ -27,6 +27,9 @@ jobs:
       - name: Lint (hard gate — ruff, never silently skipped)
         run: make lint
 
+      - name: Type check (hard gate — mypy, config in pyproject.toml)
+        run: make typecheck
+
       - name: Run tests with line + branch coverage gates
         run: make test
 
@@ -114,3 +117,41 @@ jobs:
           path: |
             base.json
             head.json
+
+  security:
+    # Secret scan + no-hardcoded-threshold guard (AC-EH-3, AC-EH-6). gitleaks
+    # is the real scanner; the no-hardcoded check is a Python script that reads
+    # the Makefile and this workflow and fails on a pinned number or tool version.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # gitleaks scans history
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: No hard-coded thresholds in Makefile / workflow (hard gate)
+        run: python tools/check_no_hardcoded_thresholds.py
+
+      - name: gitleaks (hard gate — committed secrets fail the build)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docs:
+    # The documentation set must exist and be linked from README (AC-EH-8).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: make docs-check
