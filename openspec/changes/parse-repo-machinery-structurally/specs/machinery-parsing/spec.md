@@ -56,27 +56,31 @@ Makefile. See the parent proposal's Why section for full citations.
 
 ## Acceptance Criteria
 
-- [ ] **AC-MP-1:** A Makefile fixture with a shared multi-target line
+- [x] **AC-MP-1:** A Makefile fixture with a shared multi-target line
   (`lint typecheck: build`) resolves both `lint` and `typecheck` as real
   targets under structural parsing. (R-MP-1)
-  _Verified by:_ pytest fixture, new test module · stage: `make test`
+  _Verified by:_ `pytest -k test_multi_target_line_resolves_both_names` · stage: `make test`
 
-- [ ] **AC-MP-2:** A Makefile fixture whose target-position text contains a
+- [x] **AC-MP-2:** A Makefile fixture whose target-position text contains a
   `$(shell touch <marker>)`-style payload never causes the marker to be
   created when parsed — proven by an executable test, not a code-review
   claim. (R-MP-2)
-  _Verified by:_ pytest, patches subprocess to raise if called · stage: `make test`
+  _Verified by:_ `pytest -k test_shell_expansion_in_target_position_never_executes` · stage: `make test`
 
 - [ ] **AC-MP-3:** A Makefile fixture containing an `include` directive or a
   target-position variable expansion (`$(BINARY): $(SRCS)`) is parsed with a
-  lowered confidence signal and falls back to the existing regex path,
-  instead of raising or silently guessing. (R-MP-3)
-  _Verified by:_ pytest fixture · stage: `make test`
+  lowered confidence signal (verified: `machinery.parse_makefile` alone,
+  Milestone 1, DONE) and falls back to the existing regex path when wired
+  into `detect.py` (Milestone 2b, NOT STARTED), instead of raising or
+  silently guessing. (R-MP-3)
+  _Verified by:_ `pytest -k "test_include_directive_lowers_confidence or test_variable_expansion_in_target_position_is_unresolved_not_guessed"` (confidence signal only; full fallback pending Milestone 2b) · stage: `make test`
 
 - [ ] **AC-MP-4 (non-success):** A spec citing a `make` target that is
   genuinely absent from the target repo's Makefile still fails G004 at both
   high and low parser confidence — structural parsing must never weaken the
-  rule, only remove false positives. (R-MP-1, R-MP-3)
+  rule, only remove false positives. Depends on Milestone 2b's wiring into
+  `rules_generic._unknown_make_target`; not yet testable end-to-end.
+  (R-MP-1, R-MP-3)
   _Verified by:_ pytest fixture, asserts G004 still fires · stage: `make test`
 
 - [x] **AC-MP-5:** A spec line containing two threshold-shaped numbers, only

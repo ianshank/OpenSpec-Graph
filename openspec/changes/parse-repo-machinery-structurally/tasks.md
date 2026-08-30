@@ -16,20 +16,28 @@
 - **Gate:** this proposal + spec pass `planlint validate` against the
   repo's own rules.
 
-## Milestone 1 — `machinery.py` core parser  [NOT STARTED]
+## Milestone 1 — `machinery.py` core parser  [DONE]
 
-- Implement `MakefileFacts` + `parse_makefile(text) -> MakefileFacts` per the
-  spec's Requirements. Stdlib-only; no I/O of its own.
-- `tests/test_machinery.py`: fixture per behavior (multi-target, `.PHONY`,
-  pattern rules, `$(VAR)`-expanded target, `ifeq`-guarded target, `include`
-  directive, target-specific variable-assignment line), matching this
-  project's existing per-rule-fixture testing style.
-- The non-execution safety test (AC-MP-2) is the most important test in this
-  milestone and has no direct precedent elsewhere in the suite — do not
-  treat it as boilerplate.
+- `openspec_graph/machinery.py` (new): `MakefileFacts` + `parse_makefile(text)
+  -> MakefileFacts`, stdlib-only, no I/O of its own, zero intra-package
+  imports.
+- `tests/test_machinery.py`: 12 tests, one fixture per behavior (multi-target,
+  `.PHONY`/full special-target set, pattern rules excluded per DEC-MP-004,
+  `$(VAR)`-expanded target, `ifeq`-guarded conditional union per DEC-MP-002,
+  `include` directive, target-specific variable-assignment line, double-colon
+  rule, `VAR :=` is not a target, sorted/deduplicated output).
+- The non-execution safety test (AC-MP-2) — patches `subprocess.run`/`Popen`
+  to raise if called, parses a `$(shell touch <marker>)`-in-target-position
+  fixture, asserts no marker file appears — passed on the first run; the
+  design's structural-safety reasoning (no exec surface exists to guard)
+  held up under an actual executable test.
+- `tests/test_decomposition.py`: added `"machinery"` to the stdlib-only-import
+  guard, and a new static `test_machinery_never_imports_subprocess` guard
+  (belt-and-suspenders — the stdlib-only guard alone would not catch a
+  `subprocess` import, since `subprocess` is itself stdlib).
 
-- **Gate:** `make test` green, including the new safety test; `make pre-pr`
-  green.
+- **Gate:** `make test` green (12/12 new tests, full suite unaffected);
+  `make pre-pr` green.
 
 ## Milestone 2a — G003 value-comparison + `MAKE_REF` tightening  [DONE]
 
