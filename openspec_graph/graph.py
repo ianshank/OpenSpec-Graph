@@ -137,6 +137,35 @@ def _add_finding_edges(edges: list[dict[str, object]], spec_node: str, findings:
     return len(findings)
 
 
+def _add_tree_finding_edges(
+    nodes: list[dict[str, object]],
+    edges: list[dict[str, object]],
+    seen: set[str],
+    findings: list[rules.Finding],
+) -> int:
+    # Tree-level findings (currently just G006) are about an entity in the
+    # tree -- an invariant, named by finding.subject -- not one spec, so
+    # there is no spec_node to hang the edge off of like _add_finding_edges
+    # does. _add_invariant_edges only ever creates invariant:{id} nodes for
+    # invariants some spec actually cites; an orphan by definition never
+    # gets one there, so this must create the node explicitly or the edge
+    # below would point at a node that was never added (AC-GR-4).
+    for finding in findings:
+        inv_node = f"invariant:{finding.subject}"
+        _add_node(nodes, seen, inv_node, type="invariant", name=finding.subject, exists=True, orphan=True)
+        edges.append(
+            {
+                "source": inv_node,
+                "target": finding.rule,
+                "type": "finding",
+                "broken": True,
+                "severity": finding.severity,
+                "message": finding.message,
+            }
+        )
+    return len(findings)
+
+
 def _mark_orphan_requirements(nodes: list[dict[str, object]], edges: list[dict[str, object]]) -> None:
     # Orphan requirements: requirement nodes with no incoming traces-to edge
     # (AC-GR-3).
@@ -168,15 +197,21 @@ def build_graph(profile: StackProfile) -> dict[str, object]:
     edges: list[dict[str, object]] = []
     seen_nodes: set[str] = set()
     broken_links = 0
+    specs: list[ParsedSpec] = []
 
     for path in spec_files:
         spec = parse.parse_spec(path, dialect)
+        specs.append(spec)
         rel = _relative_to(path, profile.root)
         spec_node = _add_spec_node(nodes, seen_nodes, spec, rel)
         _add_requirement_nodes(nodes, seen_nodes, spec, spec_node)
         _add_criterion_nodes(nodes, edges, seen_nodes, spec, spec_node, known_stages)
         _add_invariant_edges(nodes, edges, seen_nodes, spec, spec_node, known_invariants)
         broken_links += _add_finding_edges(edges, spec_node, rules.evaluate(spec, profile))
+
+    # No --change filtering here (unlike cmd_validate), so this always runs
+    # unscoped -- the one case evaluate_tree()'s orphan check is valid for.
+    broken_links += _add_tree_finding_edges(nodes, edges, seen_nodes, rules.evaluate_tree(specs, profile))
 
     _mark_orphan_requirements(nodes, edges)
 

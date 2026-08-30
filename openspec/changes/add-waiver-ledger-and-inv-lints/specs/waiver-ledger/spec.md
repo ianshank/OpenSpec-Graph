@@ -61,19 +61,19 @@ Waivers are silently downgraded to INFO today with no record of what was waived,
 - [x] **AC-WL-9 (non-success):** `suppressions()`'s signature/behavior is unchanged after being refactored to derive from `parse_waivers()`. (C-WL-1)
   _Verified by:_ `pytest -k test_suppressions_unchanged_behavior_after_waiver_refactor` · stage: `make test`
 
-- [ ] **AC-WL-2:** New rule G006 (WARN): a declared invariant cited by no living spec and not waived is reported as an orphan invariant. (R-WL-4)
+- [x] **AC-WL-2:** New rule G006 (WARN): a declared invariant cited by no living spec and not waived is reported as an orphan invariant. (R-WL-4)
   _Verified by:_ `pytest -k test_g006_fires_for_a_declared_invariant_no_spec_cites` · stage: `make test`
 
-- [ ] **AC-WL-10 (non-success):** G006 does not fire once an invariant is cited anywhere in the tree. (R-WL-4)
+- [x] **AC-WL-10 (non-success):** G006 does not fire once an invariant is cited anywhere in the tree. (R-WL-4)
   _Verified by:_ `pytest -k test_g006_does_not_fire_once_cited_anywhere_in_the_tree` · stage: `make test`
 
-- [ ] **AC-WL-11:** G006 downgrades to INFO when waived anywhere in the tree. (R-WL-4)
+- [x] **AC-WL-11:** G006 downgrades to INFO when waived anywhere in the tree. (R-WL-4)
   _Verified by:_ `pytest -k test_g006_is_downgraded_to_info_when_waived_anywhere_in_the_tree` · stage: `make test`
 
-- [ ] **AC-WL-12 (non-success):** G006 is skipped (with an INFO note) when `--change` narrows a `validate` run, rather than producing false positives. (R-WL-5, DEC-WL-003)
+- [x] **AC-WL-12 (non-success):** G006 is skipped (with an INFO note) when `--change` narrows a `validate` run, rather than producing false positives. (R-WL-5, DEC-WL-003)
   _Verified by:_ `pytest -k test_g006_is_skipped_under_change_scoping` · stage: `make test`
 
-- [ ] **AC-WL-13:** `graph --format json`'s `broken_links` count still equals the total finding count (including tree-level findings) with G006 present — the AC-GR-4 invariant holds. (C-WL-1)
+- [x] **AC-WL-13:** `graph --format json`'s `broken_links` count still equals the total finding count (including tree-level findings) with G006 present — the AC-GR-4 invariant holds. (C-WL-1)
   _Verified by:_ `pytest -k test_graph_matches_validate_findings_with_an_orphan_invariant` · stage: `make test`
 
 - [ ] **AC-WL-1:** `planlint waivers --format json` emits a ledger of every waived rule with file, line, reason, and the owning change package, in stable order. (R-WL-6)

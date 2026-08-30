@@ -32,7 +32,7 @@
   "16 rules" → "17 rules"; CHANGELOG bullet.
 - **Gate:** `make pre-pr` green; `planlint validate` clean (15 specs, 0 findings).
 
-## Milestone 2 — G006 orphan invariant  [PENDING]
+## Milestone 2 — G006 orphan invariant  [DONE]
 
 - `openspec_graph/rules_generic.py`: `orphan_invariant_ids()` (real cross-tree
   logic) + `_orphan_invariant_registry_stub` (inert, for `planlint rules`

@@ -29,7 +29,7 @@ from pathlib import Path
 from . import detect, dialect_card, rules, scaffold
 from . import graph as graph_module
 from .log import configure as configure_logging
-from .parse import parse_spec
+from .parse import ParsedSpec, parse_spec
 
 SEVERITY_ORDER = {"INFO": 0, "WARN": 1, "ERROR": 2}
 
@@ -166,10 +166,22 @@ def cmd_validate(args: argparse.Namespace) -> int:
             return 2
 
     findings: list[rules.Finding] = []
+    specs: list[ParsedSpec] = []
     for path in spec_files:
         logger.debug("evaluating %s", path)
         spec = parse_spec(path, args.dialect or prof.dialect)
+        specs.append(spec)
         findings.extend(rules.evaluate(spec, prof))
+
+    if args.change:
+        # G006 is a whole-tree property (DEC-WL-001); spec_files was just
+        # filtered by --change above, so evaluate_tree() over that filtered
+        # set would report every invariant outside the filtered view as
+        # falsely orphaned (DEC-WL-003). A --change-scoped run's contract
+        # is "does this one package pass" either way, so skip it outright.
+        print("INFO  G006 skipped (tree-wide check needs an unscoped run)", file=sys.stderr)
+    else:
+        findings.extend(rules.evaluate_tree(specs, prof))
 
     fail_at = SEVERITY_ORDER[args.fail_on]
     blocking = [f for f in findings if SEVERITY_ORDER[f.severity] >= fail_at]

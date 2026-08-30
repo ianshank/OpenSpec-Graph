@@ -129,6 +129,12 @@ def rule_ids(found: list[rules.Finding]) -> set[str]:
     return {f.rule for f in found}
 
 
+def tree_findings_for(repo: Path, bodies: list[tuple[str, str, str]], dialect: str = "auto") -> list[rules.Finding]:
+    """bodies: (change, capability, body) tuples, each written as its own spec."""
+    specs = [parse_spec(write_spec(repo, change, capability, body), dialect) for change, capability, body in bodies]
+    return rules.evaluate_tree(specs, detect.profile(repo))
+
+
 # --- detection -------------------------------------------------------------
 
 
@@ -558,6 +564,54 @@ def test_g005_fires_on_an_undeclared_invariant(repo: Path) -> None:
     found = findings_for(repo, body)
     assert "G005" in rule_ids(found)
     assert any("INV-99" in f.message for f in found)
+
+
+def test_g006_fires_for_a_declared_invariant_no_spec_cites(repo: Path) -> None:
+    # repo's own CONTRACT.md declares INV-1 and INV-2; GOOD_HARNESS only
+    # cites INV-1, so INV-2 is a real, pre-existing orphan in this fixture.
+    found = tree_findings_for(repo, [("demo-change", "demo-cap", GOOD_HARNESS)])
+    g006 = [f for f in found if f.rule == "G006"]
+    assert g006 and all(f.severity == "WARN" for f in g006)
+    assert any(f.subject == "INV-2" for f in g006)
+    assert any("INV-2" in f.message and "CONTRACT.md" in f.message for f in g006)
+
+
+def test_g006_does_not_fire_once_cited_anywhere_in_the_tree(repo: Path) -> None:
+    other = GOOD_HARNESS.replace("INV-1", "INV-2").replace("AC-DMO", "AC-DM2").replace("R-DMO", "R-DM2")
+    found = tree_findings_for(
+        repo,
+        [("c1", "cap1", GOOD_HARNESS), ("c2", "cap2", other)],
+    )
+    assert "G006" not in rule_ids(found)
+
+
+def test_g006_is_downgraded_to_info_when_waived_anywhere_in_the_tree(repo: Path) -> None:
+    # Reason text deliberately avoids the INV-n pattern itself -- invariant_refs
+    # scans the whole raw text unconditionally, so naming the invariant here
+    # would make the waiver comment itself count as a citation and resolve
+    # the orphan before the waiver-downgrade path is even exercised.
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement",
+        "<!-- specgraph:allow G006 the second contract invariant is a future "
+        "gate, not yet wired into any spec -->\n\n## Problem Statement",
+    )
+    found = tree_findings_for(repo, [("demo-change", "demo-cap", body)])
+    g006 = [f for f in found if f.rule == "G006"]
+    assert g006 and all(f.severity == "INFO" and "[waived]" in f.message for f in g006)
+
+
+def test_g006_is_skipped_under_change_scoping(repo: Path, capsys) -> None:
+    # other-change alone cites INV-2; a naive --change-filtered evaluate_tree()
+    # would falsely call INV-2 orphaned since that citation sits outside the
+    # filtered view. Confirms it's skipped outright instead (DEC-WL-003).
+    write_spec(repo, "demo-change", "demo-cap", GOOD_HARNESS)
+    other = GOOD_HARNESS.replace("INV-1", "INV-2").replace("AC-DMO", "AC-DM2").replace("R-DMO", "R-DM2")
+    write_spec(repo, "other-change", "other-cap", other)
+    exit_code = main(["--target", str(repo), "validate", "--change", "demo-change"])
+    out = capsys.readouterr()
+    assert exit_code == 0
+    assert "G006" not in out.out
+    assert "G006 skipped" in out.err
 
 
 def test_h001_fires_when_an_ac_has_no_verification(repo: Path) -> None:

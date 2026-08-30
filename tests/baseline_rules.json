@@ -30,6 +30,12 @@
     "summary": "cited invariants are declared"
   },
   {
+    "id": "G006",
+    "severity": "WARN",
+    "dialects": "*",
+    "summary": "declared invariants are cited by a living spec or waived"
+  },
+  {
     "id": "G007",
     "severity": "ERROR",
     "dialects": "*",

@@ -190,6 +190,36 @@ def test_graph_matches_validate_findings_on_clean_spec(repo: Path) -> None:
     assert graph["broken_links"] == 0
 
 
+def test_graph_matches_validate_findings_with_an_orphan_invariant(repo: Path) -> None:
+    # A second declared invariant no spec cites -- forces a real G006
+    # (tree-level) finding, proving AC-GR-4 still holds once evaluate_tree()
+    # findings, not just evaluate()'s, are counted into broken_links.
+    (repo / "CONTRACT.md").write_text("# Contract\n\n- INV-1 no unattested writes\n- INV-2 gates are ordered\n")
+    write_spec(repo, "demo-change", "demo-cap", GOOD_HARNESS)
+    prof = detect.profile(repo)
+
+    specs = [parse_spec(p, "auto") for p in detect.find_spec_files(prof.openspec_root)]
+    tree_findings = rules.evaluate_tree(specs, prof)
+    assert any(f.rule == "G006" for f in tree_findings), "fixture must produce a real orphan"
+    validate_findings = sum(len(rules.evaluate(s, prof)) for s in specs) + len(tree_findings)
+
+    graph = graph_module.build_graph(prof)
+    assert graph["broken_links"] == validate_findings
+
+
+def test_graph_marks_an_orphan_invariant_node(repo: Path) -> None:
+    (repo / "CONTRACT.md").write_text("# Contract\n\n- INV-1 no unattested writes\n- INV-2 gates are ordered\n")
+    graph = graph_for(repo, GOOD_HARNESS)
+    inv2_nodes = [n for n in graph["nodes"] if n["id"] == "invariant:INV-2"]
+    assert inv2_nodes, "an orphan invariant must still get a graph node"
+    assert inv2_nodes[0]["type"] == "invariant"
+    assert inv2_nodes[0]["orphan"] is True
+    assert any(
+        e["source"] == "invariant:INV-2" and e["type"] == "finding" and e["target"] == "G006"
+        for e in graph["edges"]
+    )
+
+
 # --- AC-GR-5: unknown make stage -> edge to a stage node not in make_targets -
 
 

@@ -17,7 +17,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   gains an additive `waivers: tuple[Waiver, ...]` field (rule, reason,
   line) alongside the existing `suppressed` set, which is now derived from
   it rather than computed separately.
-- 17 rules total (was 16).
+- **New rule `G006`** (WARN): a declared invariant cited by no living spec,
+  and not waived, is now reported as an orphan — invariant citation was
+  previously checked in only one direction (G005: a cited invariant must be
+  declared). This is the first rule in the codebase that is a property of
+  the whole spec tree rather than one file; a new `rules.evaluate_tree()`
+  runs once per `validate`/`graph` call after every living spec is parsed.
+  Skipped (with an `INFO` note) under `validate --change`, since a
+  `--change`-filtered view would otherwise report invariants cited outside
+  that view as falsely orphaned. `Finding` gains an additive `subject`
+  field (the orphaned invariant id) and `graph`'s exported nodes now
+  include orphan invariants (`orphan: true`) that no spec cites.
+- 18 rules total (was 16).
 
 ### Added — dialect cards / CP-2 (`add-dialect-cards` change package)
 
