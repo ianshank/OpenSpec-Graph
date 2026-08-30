@@ -26,9 +26,12 @@ Zero runtime dependencies. Python 3.10+.
 ```bash
 pip install -e .                     # local dev install (no PyPI release yet)
 planlint --target /path/to/clone detect      # read-only: stack, dialect, threshold
+planlint --target /path/to/clone detect --format json   # portable dialect card (schema-versioned)
+planlint --target /path/to/clone detect --diff prev.json  # exit 1 + list what drifted, else PASS
 planlint --target /path/to/clone init        # write a snapshot of detected conventions into openspec/
 planlint --target /path/to/clone new add-thing --capability thing-capability
 planlint --target /path/to/clone validate    # exit 1 on any ERROR — the gate
+planlint --version                           # print the installed version and exit
 ```
 
 > The package is not yet published to PyPI. Until it is, install from source

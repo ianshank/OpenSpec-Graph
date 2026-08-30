@@ -58,6 +58,20 @@ component that can't be relied on to behave the same way twice, or that can
 execute untrusted input, is not enterprise-gradeable no matter how clean its
 output looks on one run.
 
+`detect --format json`'s dialect card (`dialect_card.py`, CP-2) holds to a
+stricter version of the same contract: byte-identical not only across two
+runs, but across the *same logical repo checked out at two different
+absolute paths* — proven directly, not assumed, by
+`test_detect_format_json_card_is_identical_across_different_checkout_paths`.
+`StackProfile.to_card()` achieves this by excluding every absolute-path
+field (`root`, and `openspec_root` reduced to a portable
+`has_openspec_root` boolean) that `as_dict()` still carries for backward
+compatibility. `detect --diff <prev.json>` diffs two cards field-by-field
+(`dialect_card.diff_cards`) and exits non-zero listing exactly what
+changed — the same `PASS`/`FAIL` vocabulary as `tools/diff_spec_graph.py`'s
+existing graph-diff gate, applied to detected conventions instead of the
+spec graph.
+
 ## No NumPy / no heavy runtime deps
 
 `planlint` has **zero runtime dependencies**. Scientific-computing stacks
