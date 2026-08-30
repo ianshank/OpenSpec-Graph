@@ -37,7 +37,8 @@ repository, `docs/architecture/c4.md`'s module map predates the
 - `README.md` and `docs/differentiation-roadmap.md`: reword the dangling
   `docs/specs/SPEC_TEMPLATE.md` references in place to cite the two existing,
   live demonstrations of the G002 non-success-criterion pattern
-  (`tests/fixtures/good_harness.md` and `good_upstream.md`) instead of a
+  (`tests/fixtures/good_harness.md` and `tests/fixtures/good_upstream.md`)
+  instead of a
   nonexistent file.
 - `docs/architecture/c4.md`: rewrite the module map to show the facade
   pattern the `decompose-god-files` refactor actually produced.

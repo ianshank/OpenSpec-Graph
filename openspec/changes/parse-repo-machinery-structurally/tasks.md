@@ -39,8 +39,9 @@
   existing shape (C-MP-1, AC-MP-7).
 - `rules_generic._unknown_make_target` (G004) gains the confidence-aware
   fallback (AC-MP-3, AC-MP-4).
-- `rules_generic._hard_coded_threshold` (G003) gains the single-unambiguous
-  -match value comparison (AC-MP-5); `parse_semantics.MAKE_REF` tightened to
+- `rules_generic._hard_coded_threshold` (G003) gains the
+  single-unambiguous-match value comparison (AC-MP-5);
+  `parse_semantics.MAKE_REF` tightened to
   require backtick-fencing or `stage:` (AC-MP-6). These two are separable
   from the Makefile-parser work and do not touch untrusted input — safe to
   land independently once approved.

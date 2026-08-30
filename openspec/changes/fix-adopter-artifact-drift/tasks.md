@@ -23,7 +23,8 @@
 
 - `README.md:135` and `docs/differentiation-roadmap.md:73`: reworded the
   dangling `docs/specs/SPEC_TEMPLATE.md` reference in place to cite
-  `tests/fixtures/good_harness.md` and `good_upstream.md` — both dialects,
+  `tests/fixtures/good_harness.md` and `tests/fixtures/good_upstream.md` —
+  both dialects,
   since a real template would need to cover both.
 - `docs/architecture/c4.md`: rewrote the module map to show the facade
   pattern `decompose-god-files` actually produced (17 files, not 8).
