@@ -6,9 +6,8 @@
 title = "OpenSpec-Graph secret scan"
 
 [allowlist]
-description = "test fixtures and generated/vendored paths that may contain fake secrets"
+description = "vendored and generated paths that may contain fake secrets; test sources are scanned (a real secret in a test must fail)"
 paths = [
-  '''tests/.*''',
   '''.git/.*''',
   '''.venv/.*''',
   '''node_modules/.*''',

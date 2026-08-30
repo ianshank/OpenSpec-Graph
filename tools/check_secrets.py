@@ -48,7 +48,9 @@ def _tracked_files() -> list[Path]:
 
 def _is_allowlisted(path: Path) -> bool:
     rel = path.relative_to(REPO_ROOT)
-    return any(part in _SKIP_DIRS for part in rel.parts) or "tests" in rel.parts
+    # Test sources are scanned on purpose: a real secret committed in a test
+    # must fail the gate. Only vendored/generated dirs are skipped.
+    return any(part in _SKIP_DIRS for part in rel.parts)
 
 
 def fallback_scan() -> list[str]:

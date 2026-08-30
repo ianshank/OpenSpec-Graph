@@ -28,9 +28,10 @@ one command. None of that exists yet, and several repo-hygiene gaps remain
   tree evaluated twice yields byte-identical, stably-sorted JSON.
 - R-EH-5: A `--verbose` / `SPECGRAPH_LOG_LEVEL` debug mode MUST emit diagnostics
   to stderr only; JSON output on stdout MUST remain pure and parseable.
-- R-EH-6: No numeric threshold, tool version, or path may be hard-coded in the
-  Makefile or CI workflow YAML. Floors live in `pyproject.toml`; the Makefile
-  and workflow only name scripts that read them.
+- R-EH-6: No quality-gate threshold (coverage floor) or tool-version pin may be
+  hard-coded in the Makefile or CI workflow YAML. Floors live in `pyproject.toml`;
+  the Makefile and workflow only name scripts that read them. CI/infrastructure
+  pins (action versions, Python matrix, Docker base image) are out of scope.
 - R-EH-7: All public CLI verbs and options from v0.1.0 MUST keep working
   (backward compatibility); existing default stdout contracts MUST NOT change.
 - R-EH-8: Documentation MUST let a contributor reproduce the full gate: C4
@@ -56,13 +57,15 @@ one command. None of that exists yet, and several repo-hygiene gaps remain
   diff bytes; ordering is stable (sorted by a deterministic key). (R-EH-4)
   _Verified by:_ `pytest -k deterministic` · stage: `make test`
 
-- [ ] **AC-EH-5 (non-success):** A malformed spec fails `validate` closed
-  (non-zero) rather than emitting a partial graph; `--verbose` logs the parse
-  path to stderr while stdout stays parseable JSON. (R-EH-5)
+- [ ] **AC-EH-5 (non-success):** An invalid spec convention (e.g. a criterion
+  citing a stage the repo lacks) fails `validate` closed (non-zero) rather than
+  emitting a partial graph; `--verbose` logs the parse path to stderr while
+  stdout stays parseable JSON. (R-EH-5)
   _Verified by:_ `pytest -k verbose_or_closed` · stage: `make test`
 
-- [ ] **AC-EH-6 (non-success):** A numeric threshold found in the Makefile or
-  `.github/workflows/ci.yml` fails the no-hardcoded-values check. (R-EH-6)
+- [ ] **AC-EH-6 (non-success):** A coverage floor or tool-version pin found in
+  the Makefile or `.github/workflows/ci.yml` fails the no-hardcoded-thresholds
+  check. (R-EH-6)
   _Verified by:_ `tools/check_no_hardcoded_thresholds.py` · stage: `make pre-pr`
 
 - [ ] **AC-EH-7:** Every CLI verb and option documented in v0.1.0 still accepts

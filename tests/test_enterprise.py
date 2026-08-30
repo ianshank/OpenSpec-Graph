@@ -111,7 +111,7 @@ def test_rules_json_is_deterministic(repo: Path) -> None:
 
 
 def test_findings_order_is_stable_across_specs(repo: Path) -> None:
-    # Two change packages with violations; order must be stable (rule, then file).
+    # Two change packages with violations; ordering must be stable (rule, then file).
     _write_spec(repo, "c1", "cap", GOOD_HARNESS.replace("make test", "make nope"))
     _write_spec(repo, "c2", "cap2", GOOD_HARNESS.replace("make test", "make nope"))
     out1 = _run_cli(repo, "validate", "--json").stdout
@@ -119,8 +119,9 @@ def test_findings_order_is_stable_across_specs(repo: Path) -> None:
     assert out1 == out2
     findings = json.loads(out1)["findings"]
     assert len(findings) >= 2
-    # Findings are ordered by (path, rule) — same spec set -> same order.
-    assert [f["rule"] for f in findings] == sorted(f["rule"] for f in findings) or len(findings) > 1
+    # Findings are ordered by (path, rule); assert that invariant directly.
+    keys = [(f["path"], f["rule"]) for f in findings]
+    assert keys == sorted(keys), "findings must be stably ordered by (path, rule)"
 
 
 # --- AC-EH-5: --verbose logs to stderr; JSON stdout stays parseable; fail closed
@@ -161,6 +162,18 @@ def test_graph_fails_closed_when_no_openspec_tree(tmp_path: Path) -> None:
     assert result.stdout.strip() == "", "no partial graph on stdout"
 
 
+def test_verbose_or_closed(repo: Path) -> None:
+    # AC-EH-5, verified by `pytest -k verbose_or_closed`: an invalid convention
+    # (a stage the repo lacks) fails closed, AND --verbose puts diagnostics on
+    # stderr while stdout carries the FAIL line — the two guarantees together.
+    _write_spec(repo, "c1", "cap", GOOD_HARNESS.replace("make test", "make nope"))
+    result = _run_cli(repo, "--verbose", "validate")
+    assert result.returncode == 1, "invalid convention must fail closed"
+    assert "FAIL" in result.stdout, "stdout must carry the failure"
+    assert "specgraph" in result.stderr.lower(), "--verbose must log to stderr"
+    assert "specgraph" not in result.stdout, "no log records on stdout"
+
+
 # --- AC-EH-6: no hard-coded thresholds in Makefile / workflow -----------------
 
 
@@ -186,15 +199,43 @@ def test_no_hardcoded_fails_on_pinned_threshold(tmp_path: Path) -> None:
     assert any("90" in f for f in findings)
 
 
+# --- AC-EH-2 (non-success): a type error fails make typecheck ----------
+
+
+def test_mypy_fails_on_a_type_error(tmp_path: Path) -> None:
+    # A deliberately-broken module must fail mypy non-zero and name the file.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "broken.py").write_text("def f() -> int:\n    return 'x'\n")
+    result = subprocess.run(
+        [sys.executable, "-m", "mypy", str(pkg / "broken.py")],
+        capture_output=True, text=True, check=False,
+        env={**os.environ, "PYTHONPATH": str(pkg)},
+    )
+    assert result.returncode != 0, "a type error must fail mypy"
+    assert "broken.py" in result.stdout, "mypy must name the offending file"
+
+
+def test_typecheck_passes_on_clean_repo() -> None:
+    result = subprocess.run(
+        ["make", "typecheck"], capture_output=True, text=True, check=False,
+        cwd=REPO_ROOT,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 # --- AC-EH-3: secret scan catches a committed key ---------------------------
 
 
 def test_secret_scan_fallback_catches_fake_key(tmp_path: Path, monkeypatch) -> None:
-    # Build a fake repo with a tracked file containing an AWS-style key.
+    # Build a fake repo with a tracked file containing an AWS-style key. The
+    # token is assembled at runtime so the *test source* itself contains no
+    # literal high-entropy string (which would trip the scanner on this file).
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "Makefile").write_text(MAKEFILE)
-    (repo / "leaked.py").write_text('TOKEN = "AKIAIOSFODNN7EXAMPLE"\n')
+    token = "AKIA" + "IOSFODNN7EXAMPLE"  # canonical AWS example key
+    (repo / "leaked.py").write_text(f'TOKEN = "{token}"\n')
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
     git_env = {
@@ -204,17 +245,15 @@ def test_secret_scan_fallback_catches_fake_key(tmp_path: Path, monkeypatch) -> N
     }
     subprocess.run(["git", "commit", "-qm", "leak"], cwd=repo, env=git_env, check=True)
 
-    # Point the checker at the fake repo.
     import importlib.util
     mod_path = TOOLS / "check_secrets.py"
     spec = importlib.util.spec_from_file_location("secrets", mod_path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     monkeypatch.setattr(mod, "REPO_ROOT", repo)
-    # Force the fallback path (gitleaks likely absent in the sandbox).
     monkeypatch.setattr(mod, "run_gitleaks", lambda: (-1, "gitleaks not installed"))
     findings = mod.fallback_scan()
-    assert any("AKIA" in f or "potential secret" in f for f in findings), findings
+    assert any(token in f or "potential secret" in f for f in findings), findings
 
 
 def test_secret_scan_clean_repo_passes(repo: Path) -> None:

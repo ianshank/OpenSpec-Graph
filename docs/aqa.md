@@ -15,14 +15,21 @@ core `make ci` gate with the enterprise gates (typecheck, security, docs).
 | `make docs-check` | required docs exist + linked from README | missing/unlinked → exit 1 |
 | `make pre-pr` | all of the above + no-hardcoded-thresholds | any → exit 1 |
 
-## Thresholds live in config, not in CI
+## Quality-gate thresholds live in config, not in CI
 
 Coverage floors are read from `pyproject.toml` at run time by
 `tools/check_coverage_floor.py` (line, `fail_under`) and
 `tools/check_branch_coverage.py` (branch, `branch_fail_under`). The Makefile
-and workflow YAML contain **no** numeric thresholds. `tools/check_no_hardcoded_
-thresholds.py` fails the gate if a number or tool version is re-introduced into
-the Makefile or workflow (rule G003 / AC-EH-6).
+and workflow YAML contain **no** quality-gate thresholds (coverage floors) and
+no tool-version pins (`ruff==`, `mypy==`, `pytest==`) — tools come from the
+`[dev]` extras. `tools/check_no_hardcoded_thresholds.py` fails the gate if a
+coverage floor or tool-version pin is re-introduced into the Makefile or
+workflow (rule G003 / AC-EH-6).
+
+What is *not* externalized and is intentional: GitHub Action versions
+(`actions/checkout@v4`), the Python version matrix, and the Docker base image
+(`python:3.12-slim`) are CI/infrastructure pins, not quality thresholds — they
+are not in scope of the no-hardcoded-thresholds gate.
 
 A missing floor or uninstrumented source is a **misconfiguration**, not a skip:
 the coverage floor scripts exit 2 with a clear message. A missing gate is a bug.
