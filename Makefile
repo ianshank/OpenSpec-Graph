@@ -9,8 +9,8 @@ test: ## Run the test suite; line + branch coverage floors read from pyproject.t
 	python tools/check_coverage_floor.py coverage.json
 	python tools/check_branch_coverage.py coverage.json
 
-lint: ## Ruff check across the package, tests, and tools — a hard gate
-	ruff check openspec_graph tests tools
+lint: ## Ruff check across the package, tests, tools, and the coverage subprocess hook — a hard gate
+	ruff check openspec_graph tests tools sitecustomize.py
 
 typecheck: ## mypy with config from pyproject.toml — a hard gate
 	mypy openspec_graph tools
@@ -36,5 +36,5 @@ docs-check: ## Confirm required docs exist and are linked from README
 
 clean: ## Remove build, cache, and coverage artifacts
 	rm -rf build dist *.egg-info .pytest_cache .ruff_cache .mypy_cache htmlcov
-	rm -f coverage.json coverage.xml .coverage spec-graph.json spec-findings.json head.json base.json
+	rm -f coverage.json coverage.xml .coverage .coverage.* spec-graph.json spec-findings.json head.json base.json
 	find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true

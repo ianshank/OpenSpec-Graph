@@ -27,6 +27,11 @@ addopts = "-q"
 [tool.coverage.run]
 source = ["openspec_graph"]
 branch = true
+# Enables coverage.process_startup() (see sitecustomize.py) to track the
+# real CLI subprocesses tests/support.py's run_cli() launches -- without
+# this, every line reachable only through a subprocess invocation is
+# structurally invisible to the coverage report, no matter how well tested.
+parallel = true
 
 [tool.coverage.report]
 # The line-coverage floor for this repo. Specs and CI config must reference
@@ -42,7 +47,10 @@ fail_under = 90
 branch_fail_under = 80
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "ruff", "mypy"]
+# tomli backports stdlib tomllib (3.11+) for coverage.process_startup()'s
+# config-file parsing on the 3.10 leg of the CI matrix; coverage itself
+# declares zero dependencies, so this is required, not merely convenient.
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "tomli; python_version < \"3.11\""]
 
 [tool.ruff]
 line-length = 100
