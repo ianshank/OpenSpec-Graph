@@ -317,6 +317,22 @@ def test_detect_diff_with_missing_baseline_is_a_usage_error(repo: Path) -> None:
     assert result == 2
 
 
+def test_detect_never_writes_to_the_target_repo(repo: Path) -> None:
+    # AC-DC-3 (non-success): detect.py's own module docstring already
+    # promises read-only; this proves it holds across every detect output
+    # mode, not just the default text one.
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    before = {p: p.stat().st_mtime_ns for p in repo.rglob("*") if p.is_file()}
+
+    assert main(["--target", str(repo), "detect"]) == 0
+    assert main(["--target", str(repo), "detect", "--json"]) == 0
+    assert main(["--target", str(repo), "detect", "--format", "json"]) == 0
+
+    after = {p: p.stat().st_mtime_ns for p in repo.rglob("*") if p.is_file()}
+    assert set(before) == set(after), "detect must never create or delete a file in the target repo"
+    assert before == after, "detect must never modify a file in the target repo"
+
+
 def test_multi_target_makefile_line_resolves_both_targets_end_to_end(repo: Path) -> None:
     (repo / "Makefile").write_text(MAKEFILE + "lint typecheck: test\n\techo ok\n")
     prof = detect.profile(repo)
