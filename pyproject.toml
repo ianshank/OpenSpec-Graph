@@ -21,8 +21,24 @@ addopts = "-q"
 
 [tool.coverage.run]
 source = ["openspec_graph"]
+branch = true
 
 [tool.coverage.report]
-# The coverage floor for this repo. Specs must reference this locator,
-# never hard-code a number (specgraph rule G003).
+# The line-coverage floor for this repo. Specs and CI config must reference
+# this locator, never hard-code a number (specgraph rule G003 / C-CH-2).
 fail_under = 90
+# The branch-coverage floor, enforced by tools/check_branch_coverage.py.
+# Lower than the line floor: branches are harder to cover, but a module with
+# high line coverage and untested conditional branches must still fail.
+branch_fail_under = 80
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint.per-file-ignores]
+# tests use assert and subprocess intentionally; tools are scripts, not a package.
+"tests/*" = ["S101", "S603", "S607"]
+"tools/*" = ["S603", "S607", "INP001"]

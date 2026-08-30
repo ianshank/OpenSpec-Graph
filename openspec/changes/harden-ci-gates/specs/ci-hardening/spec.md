@@ -3,7 +3,7 @@
 > **Change:** `harden-ci-gates`
 > **Version:** 1.0.0-draft
 > **Authors:** maintainer · reviewer
-> **Status:** DRAFT
+> **Status:** APPROVED
 
 ---
 
@@ -100,8 +100,9 @@ emitted as an artifact but nothing fails if a PR introduces a broken edge.
 ## Open Questions
 
 > [!IMPORTANT]
-> **DEC-CH-001 (BLOCKING):** Should the graph-diff gate compare against
-> `origin/main`, or against the PR's merge-base (the point the PR branched from)?
-> Comparing against `main` catches drift introduced by a rebase; comparing
-> against the merge-base isolates the PR's own changes. This must be decided
-> before Milestone 3's gate.
+> **DEC-CH-001 (RESOLVED):** Should the graph-diff gate compare against
+> `origin/main`, or against the PR's merge-base? **Decision: the merge-base.** A
+> graph-diff gate's job is to catch drift THIS PR introduces. Comparing against
+> `origin/main` would flag drift from rebases or other merged PRs that aren't
+> this PR's responsibility — false positives that block PRs for changes they
+> did not make. The merge-base isolates the PR's own effect. No longer blocking.

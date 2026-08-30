@@ -11,25 +11,25 @@ import dataclasses
 import re
 from pathlib import Path
 
-_SECTION = re.compile(r"^##\s+(.+?)\s*$", re.M)
+_SECTION = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 _STATUS = re.compile(r"\*\*Status:\*\*\s*([A-Za-z-]+)")
 
 # --- harness dialect -------------------------------------------------------
 _AC = re.compile(
-    r"^-\s*\[( |x|X)\]\s*\*\*(AC-[A-Z]{2,}-\d+)([^:*]*?):\*\*\s*(.+?)\s*$", re.M
+    r"^-\s*\[( |x|X)\]\s*\*\*(AC-[A-Z]{2,}-\d+)([^:*]*?):\*\*\s*(.+?)\s*$", re.MULTILINE
 )
-_VERIFIED_BY = re.compile(r"_Verified by:_\s*(.+?)\s*$", re.M)
-_REQ_DECL = re.compile(r"^-\s*((?:R|C)-[A-Z]{2,}-\d+)\s*:\s*(.+?)\s*$", re.M)
+_VERIFIED_BY = re.compile(r"_Verified by:_\s*(.+?)\s*$", re.MULTILINE)
+_REQ_DECL = re.compile(r"^-\s*((?:R|C)-[A-Z]{2,}-\d+)\s*:\s*(.+?)\s*$", re.MULTILINE)
 _REQ_REF = re.compile(r"\b((?:R|C)-[A-Z]{2,}-\d+)\b")
 
 # --- upstream dialect ------------------------------------------------------
 # Heading levels are captured rather than fixed: real repos drift, and the
 # drift is worth reporting as drift instead of as "nothing found".
-_DELTA_HEADER = re.compile(r"^##\s+(ADDED|MODIFIED|REMOVED|RENAMED)\s+Requirements", re.M)
+_DELTA_HEADER = re.compile(r"^##\s+(ADDED|MODIFIED|REMOVED|RENAMED)\s+Requirements", re.MULTILINE)
 _REQUIREMENT = re.compile(
-    r"^(#{2,4})\s+(?:Requirement|REQ\s*\d+)\s*[:\u2014-]\s*(.+?)\s*$", re.M | re.I
+    r"^(#{2,4})\s+(?:Requirement|REQ\s*\d+)\s*[:\u2014-]\s*(.+?)\s*$", re.MULTILINE | re.IGNORECASE
 )
-_SCENARIO = re.compile(r"^(#{3,5})\s+Scenario\s*[:\u2014-]\s*(.+?)\s*$", re.M | re.I)
+_SCENARIO = re.compile(r"^(#{3,5})\s+Scenario\s*[:\u2014-]\s*(.+?)\s*$", re.MULTILINE | re.IGNORECASE)
 
 # Canonical levels per the upstream OpenSpec convention.
 CANONICAL_REQ_LEVEL = 3
@@ -59,7 +59,7 @@ _THRESHOLD_ALLOWLIST = (
 # egress channel" and "mutates neither the remote nor the local tag list" both
 # describe failure paths and neither is a fixed idiom.
 NEGATIVE_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
-    re.compile(p, re.I)
+    re.compile(p, re.IGNORECASE)
     for p in (
         r"\bnon-success\b",
         r"\bnegative\b",

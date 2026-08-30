@@ -19,19 +19,21 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install
+      - name: Install (with dev extras)
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
-          pip install pytest pytest-cov
+          pip install -e ".[dev]"
 
-      - name: Run tests with the coverage gate
-        run: python -m pytest tests/ --cov=openspec_graph --cov-report=term-missing --cov-fail-under=90 -q
+      - name: Lint (hard gate — ruff, never silently skipped)
+        run: make lint
+
+      - name: Run tests with line + branch coverage gates
+        run: make test
 
   self-validate:
     # specgraph must hold its own specs to the same rules it enforces.
-    # This is a hard gate: if any change package in openspec/ fails a rule,
-    # the build fails — no skip, no soft pass.
+    # Hard gate: if any change package in openspec/ fails a rule, the build
+    # fails — no skip, no soft pass.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,9 +53,6 @@ jobs:
       - name: Validate every change package (hard gate)
         run: specgraph --target . validate --fail-on ERROR
 
-      # Emit the repo's own spec dependency graph as a build artifact, so a PR
-      # that changes the spec graph leaves a reviewable trace (add-graph-export
-      # Milestone 2).
       - name: Emit spec dependency graph
         run: specgraph --target . graph --format json > spec-graph.json
 
@@ -68,3 +67,46 @@ jobs:
           path: |
             spec-graph.json
             spec-findings.json
+
+  graph-diff:
+    # Fail a PR whose spec graph regresses: more broken_links than the merge-base,
+    # or a new orphan requirement (AC-CH-5, AC-CH-6). The base is the merge-base
+    # of the PR and its base branch (DEC-CH-001) — not origin/main — so the gate
+    # only flags drift THIS PR introduces, never drift from a rebase.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Build graph on PR head
+        run: specgraph --target . graph --format json > head.json
+
+      - name: Build graph on merge-base
+        run: |
+          git fetch origin "${{ github.base_ref }}"
+          BASE=$(git merge-base HEAD origin/"${{ github.base_ref }}")
+          git worktree add /tmp/base "$BASE"
+          specgraph --target /tmp/base graph --format json > base.json
+          git worktree remove /tmp/base
+
+      - name: Diff graphs (fail on new broken edges or orphans)
+        run: python tools/diff_spec_graph.py base.json head.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spec-graph-diff
+          path: |
+            base.json
+            head.json

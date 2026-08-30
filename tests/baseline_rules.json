@@ -1,0 +1,98 @@
+[
+  {
+    "id": "G001",
+    "severity": "ERROR",
+    "dialects": "*",
+    "summary": "spec declares verifiable criteria"
+  },
+  {
+    "id": "G002",
+    "severity": "ERROR",
+    "dialects": "*",
+    "summary": "at least one non-success criterion"
+  },
+  {
+    "id": "G003",
+    "severity": "ERROR",
+    "dialects": "*",
+    "summary": "no hard-coded thresholds"
+  },
+  {
+    "id": "G004",
+    "severity": "ERROR",
+    "dialects": "*",
+    "summary": "cited make targets exist"
+  },
+  {
+    "id": "G005",
+    "severity": "WARN",
+    "dialects": "*",
+    "summary": "cited invariants are declared"
+  },
+  {
+    "id": "H001",
+    "severity": "ERROR",
+    "dialects": "harness",
+    "summary": "every AC is verifiable"
+  },
+  {
+    "id": "H002",
+    "severity": "WARN",
+    "dialects": "harness",
+    "summary": "every AC traces to a requirement"
+  },
+  {
+    "id": "H003",
+    "severity": "WARN",
+    "dialects": "harness",
+    "summary": "no orphan requirements"
+  },
+  {
+    "id": "H004",
+    "severity": "ERROR",
+    "dialects": "harness",
+    "summary": "criterion ids are unique"
+  },
+  {
+    "id": "H005",
+    "severity": "WARN",
+    "dialects": "harness",
+    "summary": "blocking questions keep status DRAFT"
+  },
+  {
+    "id": "H006",
+    "severity": "WARN",
+    "dialects": "harness",
+    "summary": "required sections present"
+  },
+  {
+    "id": "U001",
+    "severity": "ERROR",
+    "dialects": "upstream",
+    "summary": "delta header present"
+  },
+  {
+    "id": "U002",
+    "severity": "ERROR",
+    "dialects": "upstream",
+    "summary": "every requirement has a scenario"
+  },
+  {
+    "id": "U003",
+    "severity": "ERROR",
+    "dialects": "upstream",
+    "summary": "scenarios are GIVEN/WHEN/THEN"
+  },
+  {
+    "id": "U004",
+    "severity": "WARN",
+    "dialects": "upstream",
+    "summary": "requirements are normative"
+  },
+  {
+    "id": "U005",
+    "severity": "WARN",
+    "dialects": "upstream",
+    "summary": "heading levels match convention"
+  }
+]

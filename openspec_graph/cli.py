@@ -18,7 +18,8 @@ import json
 import sys
 from pathlib import Path
 
-from . import detect, graph as graph_module, rules, scaffold
+from . import detect, rules, scaffold
+from . import graph as graph_module
 from .parse import parse_spec
 
 SEVERITY_ORDER = {"INFO": 0, "WARN": 1, "ERROR": 2}

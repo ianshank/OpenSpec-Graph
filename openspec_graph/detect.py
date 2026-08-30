@@ -29,9 +29,9 @@ INVARIANT_SOURCES: tuple[str, ...] = (
     "AGENTS.md",
 )
 
-_MAKE_TARGET = re.compile(r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", re.M)
+_MAKE_TARGET = re.compile(r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", re.MULTILINE)
 _INV_ID = re.compile(r"\bINV-\d+\b")
-_FAIL_UNDER = re.compile(r"^\s*fail_under\s*=\s*(\d+)", re.M)
+_FAIL_UNDER = re.compile(r"^\s*fail_under\s*=\s*(\d+)", re.MULTILINE)
 
 
 @dataclasses.dataclass(frozen=True)

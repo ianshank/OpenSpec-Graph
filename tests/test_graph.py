@@ -13,7 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from openspec_graph import detect, graph as graph_module, rules, scaffold
+from openspec_graph import detect, rules
+from openspec_graph import graph as graph_module
 from openspec_graph.cli import main
 from openspec_graph.parse import parse_spec
 
