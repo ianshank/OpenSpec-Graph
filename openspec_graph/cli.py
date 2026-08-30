@@ -1,4 +1,10 @@
-"""`specgraph` — apply an OpenSpec discipline to a cloned repository.
+"""`planlint` — the CI gate that fails when a spec cites a gate this repo does
+not have.
+
+Pointed at a cloned repository, `planlint` reads the target's real machinery
+(make targets, coverage floor, invariant source, spec dialect) and holds every
+spec to that, using the target's own vocabulary. It is a linter under
+`openspec validate`, not an authoring framework.
 
 Verbs:
   detect    read-only report of the target's stack, gates, threshold, dialect
@@ -26,7 +32,7 @@ from .parse import parse_spec
 
 SEVERITY_ORDER = {"INFO": 0, "WARN": 1, "ERROR": 2}
 
-logger = logging.getLogger("specgraph")
+logger = logging.getLogger("planlint")
 
 
 def _profile(args: argparse.Namespace) -> detect.StackProfile:
@@ -51,7 +57,7 @@ def cmd_detect(args: argparse.Namespace) -> int:
     print(f"target            {prof.root}")
     print(f"languages         {', '.join(prof.languages) or '(none detected)'}")
     print(f"make targets      {len(prof.make_targets)} found")
-    print(f"openspec/         {'present' if prof.openspec_root else 'ABSENT — run ``specgraph init``'}")
+    print(f"openspec/         {'present' if prof.openspec_root else 'ABSENT — run ``planlint init``'}")
     print(f"spec dialect      {prof.dialect}")
     print(f"change packages   {len(prof.change_dirs)}")
     print(f"coverage floor    {thr.value if thr else '(none)'}  from {thr.locator if thr else '(not found)'}")
@@ -87,14 +93,14 @@ def cmd_new(args: argparse.Namespace) -> int:
     written = scaffold.apply(plans, force=args.force)
     print(f"\nwrote {len(written)} file(s)")
     if written:
-        print("Now fill the Problem Statement with evidence, then run ``specgraph validate``.")
+        print("Now fill the Problem Statement with evidence, then run ``planlint validate``.")
     return 0
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
     prof = _profile(args)
     if not prof.openspec_root:
-        print("no openspec/ directory; run ``specgraph init`` first", file=sys.stderr)
+        print("no openspec/ directory; run ``planlint init`` first", file=sys.stderr)
         return 2
 
     spec_files = detect.find_spec_files(prof.openspec_root)
@@ -179,7 +185,7 @@ def cmd_graph(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="specgraph", description="Apply an OpenSpec discipline to a cloned repository."
+        prog="planlint", description="The CI gate that fails when a spec cites a gate this repo does not have."
     )
     parser.add_argument("--target", default=".", help="path to the cloned repository")
     # Global debug flag: diagnostics go to stderr only, never stdout, so JSON
@@ -233,6 +239,24 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     configure_logging(verbose=getattr(args, "verbose", False))
     return int(args.func(args))
+
+
+_DEPRECATION_WARNING = (
+    "`specgraph` is deprecated; use `planlint` instead. "
+    "The `specgraph` command is a backwards-compatible alias and will be removed."
+)
+
+
+def main_deprecated(argv: list[str] | None = None) -> int:
+    """Backwards-compatible entry point for the legacy `specgraph` command.
+
+    Emits a one-line deprecation warning to **stderr** (so stdout stays
+    parseable), then delegates to :func:`main` and returns its exit code. The
+    warning never changes the exit code — existing CI that runs
+    `specgraph validate` keeps failing on real errors, never silently passing.
+    """
+    print(_DEPRECATION_WARNING, file=sys.stderr)
+    return main(argv)
 
 
 if __name__ == "__main__":

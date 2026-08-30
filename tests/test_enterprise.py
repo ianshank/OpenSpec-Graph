@@ -123,9 +123,9 @@ def test_verbose_logs_to_stderr_not_stdout(repo: Path) -> None:
     _write_spec(repo, "c1", "cap", GOOD_HARNESS)
     result = _run_cli(repo, "--verbose", "validate", "--json")
     assert result.returncode == 0
-    assert "specgraph" in result.stderr.lower(), "verbose must emit diagnostics to stderr"
+    assert "planlint" in result.stderr.lower(), "verbose must emit diagnostics to stderr"
     json.loads(result.stdout), "stdout must remain parseable JSON even with --verbose"
-    assert "specgraph" not in result.stdout, "no log records on stdout"
+    assert "planlint" not in result.stdout, "no log records on stdout"
 
 
 def test_verbose_via_env_var(repo: Path) -> None:
@@ -134,7 +134,7 @@ def test_verbose_via_env_var(repo: Path) -> None:
         repo, "validate", "--json", env={**os.environ, "SPECGRAPH_LOG_LEVEL": "DEBUG"}
     )
     assert result.returncode == 0
-    assert "specgraph" in result.stderr.lower()
+    assert "planlint" in result.stderr.lower()
 
 
 def test_malformed_spec_fails_closed(repo: Path) -> None:
@@ -162,8 +162,8 @@ def test_verbose_or_closed(repo: Path) -> None:
     result = _run_cli(repo, "--verbose", "validate")
     assert result.returncode == 1, "invalid convention must fail closed"
     assert "FAIL" in result.stdout, "stdout must carry the failure"
-    assert "specgraph" in result.stderr.lower(), "--verbose must log to stderr"
-    assert "specgraph" not in result.stdout, "no log records on stdout"
+    assert "planlint" in result.stderr.lower(), "--verbose must log to stderr"
+    assert "planlint" not in result.stdout, "no log records on stdout"
 
 
 # --- AC-EH-6: no hard-coded thresholds in Makefile / workflow -----------------

@@ -18,7 +18,7 @@ tool-version pins to drift from the dev extras:
 - `make lint` (ruff) across `openspec_graph/`, `tests/`, `tools/`
 - `make typecheck` (mypy) across `openspec_graph/`, `tools/`
 - `make security` (gitleaks or fallback)
-- `specgraph validate` (self-dogfooding: the tool validates its own specs)
+- `planlint validate` (self-dogfooding: the tool validates its own specs)
 
 Every hook is fail-closed: a violation blocks the commit.
 
@@ -48,7 +48,7 @@ a local net before the round-trip to CI.
 | Job | Trigger | Gate |
 |---|---|---|
 | `test` (3.10–3.13) | push + PR | `make lint` + `make typecheck` + `make test` |
-| `self-validate` | push + PR | `specgraph validate --fail-on ERROR` (hard) |
+| `self-validate` | push + PR | `planlint validate --fail-on ERROR` (hard) |
 | `graph-diff` | PR only | `tools/diff_spec_graph.py` base→head (AC-CH-5/6) |
 | `security` | push + PR | gitleaks + no-hardcoded-thresholds (hard) |
 | `docs` | push + PR | `make docs-check` (hard) |
@@ -67,7 +67,7 @@ summary, check)`. A rule is a pure function
 violation. Add the `Rule` to the `RULES` tuple, regenerate the baseline:
 
 ```bash
-specgraph rules --json > tests/baseline_rules.json
+planlint rules --json > tests/baseline_rules.json
 ```
 
 …then add a deterministic test to `tests/`. The baseline test

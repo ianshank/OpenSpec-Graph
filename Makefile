@@ -18,11 +18,11 @@ typecheck: ## mypy with config from pyproject.toml — a hard gate
 security: ## Secret scan (gitleaks if installed, deterministic fallback otherwise)
 	python tools/check_secrets.py
 
-validate: ## Validate this repo's own OpenSpec change packages with specgraph
-	specgraph --target . validate --fail-on ERROR
+validate: ## Validate this repo's own OpenSpec change packages with planlint
+	planlint --target . validate --fail-on ERROR
 
 graph: ## Emit the spec dependency graph as JSON
-	specgraph --target . graph --format json
+	planlint --target . graph --format json
 
 ci: test lint validate ## The authoritative local core gate
 	@echo "ci: core gates passed"

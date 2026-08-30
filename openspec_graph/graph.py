@@ -156,7 +156,7 @@ def build_graph(profile: StackProfile) -> dict[str, object]:
     if not profile.openspec_root or not profile.openspec_root.is_dir():
         raise NoOpenSpecTreeError(
             f"no openspec/ directory found at {profile.root}/openspec; "
-            "run `specgraph init` first"
+            "run `planlint init` first"
         )
 
     spec_files = detect.find_spec_files(profile.openspec_root)

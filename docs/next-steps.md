@@ -6,8 +6,8 @@ over-engineering.
 
 ## Near term
 
-1. **Waiver audit report** — `specgraph validate` already downgrades waived
-   rules to INFO and keeps them visible. A `specgraph waivers` verb that lists
+1. **Waiver audit report** — `planlint validate` already downgrades waived
+   rules to INFO and keeps them visible. A `planlint waivers` verb that lists
    every active waiver across the tree would make suppressions reviewable at a
    glance. Low effort; pure read of existing parse output.
 
@@ -34,7 +34,7 @@ over-engineering.
 ## Deferred / out of scope
 
 6. **Autonomous spec generation** — using an LLM to *author* specs is explicitly
-   out of scope. `specgraph` evaluates specs; it does not propose them (see
+   out of scope. `planlint` evaluates specs; it does not propose them (see
    `docs/agents-skills-harness.md`). Authoring stays a human responsibility.
 
 7. **Docker as primary delivery** — the `Dockerfile` is a convenience runner.
@@ -52,7 +52,7 @@ it is not cargo-culted into the v0.1 surface.
    as an optional extra). Today the pre-commit hook already runs validate on
    commit, which covers the main need.
 
-9. **Scheduled self-validation cron** — a scheduled job that runs `specgraph
+9. **Scheduled self-validation cron** — a scheduled job that runs `planlint
    validate --fail-on ERROR` + `make security` against `main` to catch spec/rules
    drift introduced by dependency or tooling bumps. Only justified once the repo
    is consumed by more than one team; for a single-consumer v0.1 tool the PR CI

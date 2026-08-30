@@ -1,6 +1,6 @@
 # Agents, Skills, and the Harness Model
 
-`specgraph` is deliberately **not** an autonomous agent. There is no LLM in the
+`planlint` is deliberately **not** an autonomous agent. There is no LLM in the
 loop, no tool selection, no planning step. What it provides is a deterministic
 **governance harness** with a set of mechanical **skills** (rules) that turn
 spec conventions into CI gates. This document defines those terms in-repo so
@@ -18,7 +18,7 @@ they are not confused with autonomous-agent abstractions.
 - **Agent** — *not present in this repo.* An agent (in the broader Mango
   sense) would propose work; here, the harness only *evaluates* proposed work
   (specs) and reports. Cognitive/proposal logic is out of scope and stays
-  outside `specgraph` by design (INV-16 analogue: the harness disposes, it does
+  outside `planlint` by design (INV-16 analogue: the harness disposes, it does
   not propose).
 
 ## Why not autonomous agents

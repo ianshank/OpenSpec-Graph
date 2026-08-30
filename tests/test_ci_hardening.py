@@ -322,7 +322,7 @@ def test_rule_set_matches_baseline() -> None:
     live = rule_table()
     assert live == baseline, (
         "the rule set changed; if this is intentional, regenerate "
-        "tests/baseline_rules.json with `specgraph rules --json > tests/baseline_rules.json`"
+        "tests/baseline_rules.json with `planlint rules --json > tests/baseline_rules.json`"
     )
     # sanity: the baseline is non-empty and covers the rules we rely on
     assert len(baseline) == len(RULES)
