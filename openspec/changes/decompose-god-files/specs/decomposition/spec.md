@@ -73,14 +73,20 @@ structural only — the public API, CLI output, and graph JSON stay byte-identic
   _Verified by:_ `pytest -k import_boundary_discipline` · stage: `make test`
 
 - [ ] **AC-DG-7:** `make pre-pr` is green (ruff, mypy, coverage floors, security,
-  docs, no-hardcoded-thresholds, specgraph validate) after decomposition.
+  docs, no-hardcoded-thresholds, specgraph validate) after decomposition
+  (R-DG-1, R-DG-3, R-DG-5).
   _Verified by:_ `make pre-pr` · stage: `make pre-pr`
+
+- [ ] **AC-DG-8 (non-success):** No new module named `detect_*` or `cli_*` is
+  added; `detect.py` and `cli.py` remain single unsplit files. A split that
+  fragments either fails `make test` (R-DG-6).
+  _Verified by:_ `pytest -k detect_and_cli_remain_unsplit` · stage: `make test`
 
 ## Validation Matrix
 
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
-| Tests | `make test` | AC-DG-1, AC-DG-2, AC-DG-3, AC-DG-4, AC-DG-5, AC-DG-6 |
+| Tests | `make test` | AC-DG-1, AC-DG-2, AC-DG-3, AC-DG-4, AC-DG-5, AC-DG-6, AC-DG-8 |
 | Full gate | `make pre-pr` | AC-DG-7 |
 
 ---

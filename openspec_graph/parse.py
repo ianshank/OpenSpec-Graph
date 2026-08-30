@@ -38,6 +38,10 @@ from .parse_semantics import (
 from .parse_semantics import REQUIREMENT as _REQUIREMENT
 from .parse_upstream import parse_upstream as _parse_upstream
 
+# Backwards-compat alias: graph.py historically read parse._MAKE_REF. Kept so
+# any external reader of the pre-split private surface keeps working (R-DG-1).
+_MAKE_REF = MAKE_REF
+
 __all__ = [
     "MAKE_REF",
     "NEGATIVE_PATTERNS",

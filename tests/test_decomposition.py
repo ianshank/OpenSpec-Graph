@@ -77,7 +77,7 @@ def _outputs(root: Path) -> dict[str, str]:
 
 
 def _imported_roots(path: Path) -> set[str]:
-    """Top-level module names imported by a .py file (relative + absolute)."""
+    """Top-level module names imported by a .py file (absolute imports only)."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     roots: set[str] = set()
     for node in ast.walk(tree):
@@ -90,6 +90,29 @@ def _imported_roots(path: Path) -> set[str]:
     return roots
 
 
+def _imported_components(path: Path) -> set[str]:
+    """Every module-name component imported by a .py file.
+
+    Catches relative imports too, so the boundary test detects
+    ``from .graph import build_graph`` and ``from . import graph, cli``, not
+    just absolute ``import openspec_graph.graph``.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    comps: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                comps.update(alias.name.split("."))
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                comps.update(node.module.split("."))
+            elif node.level and node.level > 0:
+                # `from . import a, b` — names are submodule imports
+                for alias in node.names:
+                    comps.add(alias.name.split(".")[0])
+    return comps
+
+
 # --- AC-DG-1: public import surface unchanged -------------------------------
 
 
@@ -98,6 +121,7 @@ def test_public_import_compatibility() -> None:
     # same paths after the facade split.
     from openspec_graph import build_graph  # noqa: F401
     from openspec_graph.parse import (  # noqa: F401
+        _MAKE_REF,
         Criterion,
         ParsedSpec,
         Requirement,
@@ -174,18 +198,34 @@ def test_helpers_not_duplicated_inline() -> None:
         )
 
 
+# --- AC-DG-8 (non-success): detect.py and cli.py stay unsplit --------------
+
+
+def test_detect_and_cli_remain_unsplit() -> None:
+    # R-DG-6: detect.py and cli.py are out of scope. No new detect_*/cli_* module
+    # may appear; a split that fragments either fails.
+    forbidden = {p.name for p in PKG.glob("detect_*.py")} | {
+        p.name for p in PKG.glob("cli_*.py")
+    }
+    assert not forbidden, (
+        f"detect.py / cli.py were split into {sorted(forbidden)}; they are out of "
+        "scope for this change (R-DG-6)"
+    )
+
+
 # --- AC-DG-6 (non-success): parser/rule modules must not import cli or graph
 
 
 def test_import_boundary_discipline() -> None:
-    # No module except cli.py and __init__.py may import cli or graph.
+    # No module except cli.py and __init__.py may import cli or graph — including
+    # via relative imports (from .graph import ... / from . import graph).
     offenders: dict[str, set[str]] = {}
     for path in PKG.glob("*.py"):
         stem = path.stem
         if stem in _BOUNDARY_EXEMPT:
             continue
-        roots = _imported_roots(path)
-        bad = roots & {"cli", "graph"}
+        comps = _imported_components(path)
+        bad = comps & {"cli", "graph"}
         if bad:
             offenders[stem] = bad
     assert not offenders, (
