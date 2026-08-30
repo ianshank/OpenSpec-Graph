@@ -48,6 +48,8 @@ _RULE_LINE = re.compile(r"^([^:\s][^:]*?)\s*::?(?!=)\s*(.*)$")
 _VAR_EXPANSION = re.compile(r"\$[({]")
 _DIRECTIVE_PREFIXES = ("include ", "-include ", "sinclude ")
 _CONDITIONAL_PREFIXES = ("ifeq", "ifneq", "ifdef", "ifndef")
+_DEFINE_START = re.compile(r"^define\b")
+_DEFINE_END = re.compile(r"^endef\b")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -58,11 +60,12 @@ class MakefileFacts:
     has_include: bool
     has_conditional: bool
     unresolved_count: int
+    has_define: bool = False  # defaulted: additive, no existing call site breaks
 
     @property
     def confidence(self) -> str:
         """'low' if this parser saw a construct it cannot fully resolve."""
-        if self.has_include or self.has_conditional or self.unresolved_count > 0:
+        if self.has_include or self.has_conditional or self.has_define or self.unresolved_count > 0:
             return "low"
         return "high"
 
@@ -71,13 +74,29 @@ def parse_makefile(text: str) -> MakefileFacts:
     targets: set[str] = set()
     has_include = False
     has_conditional = False
+    has_define = False
     unresolved_count = 0
+    in_define = False
 
     for raw_line in text.splitlines():
         if raw_line[:1] in ("\t", " "):
             continue  # recipe body line: opaque text only, never interpreted
         line = raw_line.strip()
         if not line or line.startswith("#"):
+            continue
+
+        if in_define:
+            if _DEFINE_END.match(line):
+                in_define = False
+            continue  # define-block body: opaque replacement text, never a rule
+
+        if _DEFINE_START.match(line):
+            # A define...endef block's body is commonly written at column 0
+            # with no leading tab (unlike a recipe), so a body line like
+            # "Usage: make test" would otherwise match _RULE_LINE below and
+            # fabricate "Usage" as a target that doesn't exist.
+            has_define = True
+            in_define = True
             continue
         if line.startswith(_DIRECTIVE_PREFIXES) or line == "include":
             has_include = True
@@ -106,4 +125,5 @@ def parse_makefile(text: str) -> MakefileFacts:
         has_include=has_include,
         has_conditional=has_conditional,
         unresolved_count=unresolved_count,
+        has_define=has_define,
     )

@@ -94,6 +94,30 @@ def test_include_directive_lowers_confidence() -> None:
     assert "build" in facts.targets
 
 
+def test_define_block_body_is_never_parsed_as_a_rule() -> None:
+    # A define...endef body is commonly written at column 0 with no leading
+    # tab, so "Usage: make test" is a realistic body line -- without the
+    # in_define skip, it would match _RULE_LINE and fabricate "Usage" as a
+    # target that does not exist.
+    text = "define HELP_TEXT\nUsage: make test\nendef\nbuild:\n\techo hi\n"
+    facts = machinery.parse_makefile(text)
+    assert "Usage" not in facts.targets
+    assert facts.targets == ("build",)
+    assert facts.has_define is True
+    assert facts.confidence == "low"
+
+
+def test_define_block_suppresses_directive_and_conditional_detection_inside_it() -> None:
+    # A line that looks like an include/conditional directive inside a
+    # define block is opaque replacement text too, not a real directive.
+    text = "define HELP_TEXT\ninclude other.mk\nifeq (a,b)\nendef\nbuild:\n\techo hi\n"
+    facts = machinery.parse_makefile(text)
+    assert facts.has_include is False
+    assert facts.has_conditional is False
+    assert facts.has_define is True
+    assert facts.targets == ("build",)
+
+
 def test_target_specific_variable_assignment_still_resolves_the_target() -> None:
     text = "build: CFLAGS = -O2\n\techo hi\n"
     facts = machinery.parse_makefile(text)
@@ -120,6 +144,7 @@ def test_a_clean_makefile_parses_at_high_confidence() -> None:
     assert facts.unresolved_count == 0
     assert facts.has_include is False
     assert facts.has_conditional is False
+    assert facts.has_define is False
 
 
 def test_blank_lines_and_top_level_comments_are_skipped() -> None:
