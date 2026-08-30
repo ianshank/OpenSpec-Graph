@@ -1,7 +1,7 @@
 # Drop into .github/workflows/spec-gate.yml in the target repository.
 #
-# ``specgraph detect`` is read-only and always runs, so dialect/threshold drift shows
-# up in the log even when the gate passes. ``specgraph validate`` is the gate itself.
+# ``planlint detect`` is read-only and always runs, so dialect/threshold drift shows
+# up in the log even when the gate passes. ``planlint validate`` is the gate itself.
 name: spec-gate
 
 on:
@@ -22,20 +22,20 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install openspec-graph
-        run: pip install --quiet openspec-graph
+      - name: Install planlint
+        run: pip install --quiet git+https://github.com/ianshank/OpenSpec-Graph
 
       - name: Report detected conventions
-        run: `specgraph detect`
+        run: planlint detect
 
       - name: Validate every change package
-        run: `specgraph validate` --fail-on ERROR
+        run: planlint validate --fail-on ERROR
 
       # Warnings are recorded as an artifact rather than failing the build, so
       # the WARN backlog is visible without blocking unrelated work.
       - name: Record warnings
         if: always()
-        run: `specgraph validate` --fail-on WARN --json > spec-findings.json || true
+        run: planlint validate --fail-on WARN --json > spec-findings.json || true
 
       - uses: actions/upload-artifact@v4
         if: always()
