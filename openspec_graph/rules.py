@@ -8,6 +8,7 @@ Severity contract:
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 from collections.abc import Callable, Iterable
 from pathlib import Path
@@ -43,10 +44,8 @@ class Finding:
         if self.path:
             shown = self.path
             if root:
-                try:
+                with contextlib.suppress(ValueError):
                     shown = self.path.relative_to(root)
-                except ValueError:
-                    pass
             where = f"{shown}:{self.line}: " if self.line else f"{shown}: "
         return f"{self.severity:5s} {self.rule}  {where}{self.message}"
 

@@ -8,6 +8,7 @@ subprocesses (deterministic, observable) against fixture repos built in tmp_path
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -302,3 +303,140 @@ def test_docs_check_passes() -> None:
         capture_output=True, text=True, check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+# --- Peer-review edge cases (post-merge-quality-review) ---------------------
+# Targeted coverage of high-risk branches surfaced by the coverage report,
+# not a chase for 100%. Each test names the uncovered line it closes.
+
+from openspec_graph import graph as graph_mod
+from openspec_graph import log as log_mod
+from openspec_graph.rules import Finding
+
+
+def test_log_level_from_unknown_env_returns_default() -> None:
+    # Closes log.py:28 — an unrecognized SPECGRAPH_LOG_LEVEL must fall back to
+    # the default (WARNING), not raise and not crash the CLI. Asserts against
+    # the logging constants, not magic integers.
+    assert log_mod.level_from(verbose=False, env="BOGUS") == logging.WARNING
+    assert log_mod.level_from(verbose=False, env="DEBUG") == logging.DEBUG
+    assert log_mod.level_from(verbose=False, env="INFO") == logging.INFO
+    # --verbose overrides any env var, including an unknown one.
+    assert log_mod.level_from(verbose=True, env="BOGUS") == logging.DEBUG
+
+
+def test_graph_relative_to_outside_root_falls_back() -> None:
+    # Closes graph.py:160-161 — a spec path not under the repo root must fall
+    # back to its absolute string rather than raising ValueError.
+    outside = Path("/elsewhere/not/under/root/spec.md")
+    assert graph_mod._relative_to(outside, Path("/repo")) == str(outside)
+    # And a path under root still resolves relatively.
+    assert graph_mod._relative_to(Path("/repo/openspec/x.md"), Path("/repo")) == "openspec/x.md"
+
+
+def test_finding_render_when_path_outside_root() -> None:
+    # Closes rules.py:47-48 (the contextlib.suppress path) — a Finding whose
+    # path is not under root still renders, showing the absolute path.
+    f = Finding(
+        rule="G004",
+        severity="ERROR",
+        message="criterion cites a stage the repo lacks",
+        path=Path("/elsewhere/spec.md"),
+        line=12,
+    )
+    rendered = f.render(root=Path("/repo"))
+    assert "/elsewhere/spec.md:12" in rendered
+    assert "G004" in rendered
+
+
+def test_init_dry_run_writes_nothing(repo: Path) -> None:
+    # Closes cli.py:72-73 — `init --dry-run` lists the planned files but writes
+    # nothing (no openspec/ tree created).
+    result = _run_cli(repo, "init", "--dry-run")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "dry run" in result.stdout.lower()
+    assert not (repo / "openspec").exists(), "--dry-run must not create openspec/"
+
+
+_UPSTREAM_SPEC = """\
+# Spec delta — Demo capability
+
+## ADDED Requirements
+
+### Requirement: the writer SHALL attest every write
+
+Prose obligation.
+
+#### Scenario: attested writes record an evidence id
+
+- **GIVEN** an attested writer
+- **WHEN** `make test` runs the suite
+- **THEN** an evidence id is recorded
+"""
+
+
+def test_detect_warns_on_mixed_dialects(repo: Path) -> None:
+    # Closes cli.py:62 + parse.py:284 — a repo containing both an upstream-form
+    # spec and a harness-form spec is classified "mixed" and `detect` emits the
+    # warning rather than silently resolving per file.
+    _write_spec(repo, "c1", "cap", GOOD_HARNESS)
+    _write_spec(repo, "c2", "cap2", _UPSTREAM_SPEC)
+    result = _run_cli(repo, "detect")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "mixed" in result.stdout.lower()
+    assert "WARN" in result.stdout
+
+
+# --- Structural guards: wire AC-PR-3/4/6/8 into make test ---------------------
+# These read the repo's own source so a regression that reintroduces a banned
+# pattern fails `make test`, not a one-off manual grep.
+
+
+def test_graph_has_no_bare_truncation_magic_number() -> None:
+    # AC-PR-3: the public graph JSON contract must not carry a bare [:200]
+    # literal; the truncation limit is the named NODE_TEXT_LIMIT constant.
+    source = (REPO_ROOT / "openspec_graph" / "graph.py").read_text(encoding="utf-8")
+    assert "[:200]" not in source, "graph.py must use NODE_TEXT_LIMIT, not [:200]"
+    assert "NODE_TEXT_LIMIT" in source, "graph.py must define NODE_TEXT_LIMIT"
+
+
+def test_gate_scripts_have_no_duplicated_repo_root_literal() -> None:
+    # AC-PR-4: no gate script may re-derive the repo root with the inline
+    # Path(__file__).resolve().parent.parent literal; the scripts that need it
+    # import repo_root() from tools/_common.py instead. (Scripts that take root
+    # as a CLI arg are unaffected.)
+    import glob
+
+    scripts = glob.glob(str(REPO_ROOT / "tools" / "check_*.py"))
+    assert scripts, "expected at least one tools/check_*.py script"
+    for script in scripts:
+        text = Path(script).read_text(encoding="utf-8")
+        assert "Path(__file__).resolve().parent.parent" not in text, (
+            f"{script} must use tools/_common.repo_root(), not the literal"
+        )
+
+
+def test_common_module_is_stdlib_only() -> None:
+    # AC-PR-6: tools/_common.py must import only stdlib modules (no third-party
+    # deps), so the gate scripts stay runnable in a bare CI runner.
+    import ast
+
+    tree = ast.parse((REPO_ROOT / "tools" / "_common.py").read_text(encoding="utf-8"))
+    allowed = {"__future__", "pathlib", "os", "sys"}
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module.split(".")[0])
+    third_party = imported - allowed
+    assert not third_party, f"_common.py must be stdlib-only, found: {third_party}"
+
+
+def test_pre_push_hook_is_not_forced_into_makefile_or_ci() -> None:
+    # AC-PR-8: the pre-push hook is optional/docs-only; the Makefile and CI
+    # workflow must never reference or install it (a forced slow hook is rejected).
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "pre-push" not in makefile, "Makefile must not reference pre-push"
+    assert "pre-push" not in ci, "ci.yml must not reference pre-push"

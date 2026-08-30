@@ -8,7 +8,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _common import read_text, repo_root
+
+REPO_ROOT = repo_root()
 
 REQUIRED_DOCS = [
     "CHANGELOG.md",
@@ -22,8 +26,7 @@ REQUIRED_DOCS = [
 
 def check(root: Path = REPO_ROOT) -> list[str]:
     problems: list[str] = []
-    readme = (root / "README.md")
-    readme_text = readme.read_text(encoding="utf-8") if readme.exists() else ""
+    readme_text = read_text(root / "README.md")
     for doc in REQUIRED_DOCS:
         if not (root / doc).exists():
             problems.append(f"MISSING: {doc}")
