@@ -1,0 +1,44 @@
+# Drop into .github/workflows/spec-gate.yml in the target repository.
+#
+# ``specgraph detect`` is read-only and always runs, so dialect/threshold drift shows
+# up in the log even when the gate passes. ``specgraph validate`` is the gate itself.
+name: spec-gate
+
+on:
+  pull_request:
+    paths:
+      - "openspec/**"
+      - "Makefile"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+jobs:
+  specs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install openspec-graph
+        run: pip install --quiet openspec-graph
+
+      - name: Report detected conventions
+        run: `specgraph detect`
+
+      - name: Validate every change package
+        run: `specgraph validate` --fail-on ERROR
+
+      # Warnings are recorded as an artifact rather than failing the build, so
+      # the WARN backlog is visible without blocking unrelated work.
+      - name: Record warnings
+        if: always()
+        run: `specgraph validate` --fail-on WARN --json > spec-findings.json || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spec-findings
+          path: spec-findings.json
