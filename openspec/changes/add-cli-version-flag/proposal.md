@@ -10,12 +10,16 @@ by `--verbose`, so the short form must be uppercase `-V`.
 ## What Changes
 
 - `openspec_graph/cli.py`: new `_version_string()` helper resolves the
-  version from installed package metadata
-  (`importlib.metadata.version("openspec-graph")` — the distribution
-  name; *not* `"planlint"`, which is only the console-script name),
-  falling back to the package's existing `__version__` constant only when
-  running from an uninstalled checkout
-  (`importlib.metadata.PackageNotFoundError`). Wired as a standard
+  version from installed package metadata via
+  `importlib.metadata.packages_distributions()` — mapping the importable
+  package name (`openspec_graph`) to its distribution name
+  (`openspec-graph`, spelled differently, which is exactly why a mapping
+  lookup is used rather than a second hardcoded literal of that name;
+  *not* `"planlint"` either, which is only the console-script name) —
+  falling back to the package's existing `__version__` constant when
+  either that mapping doesn't contain the package or
+  `importlib.metadata.version()` itself raises
+  `PackageNotFoundError` (an uninstalled checkout). Wired as a standard
   argparse `action="version"` flag (`-V`/`--version`) on the top-level
   parser, alongside `--target`/`--verbose`.
 

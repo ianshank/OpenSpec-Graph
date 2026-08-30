@@ -2,16 +2,20 @@
 
 ## Milestone 1 — Track subprocess coverage  [DONE]
 
-- `sitecustomize.py` (new, repo root): calls `coverage.process_startup()`,
-  a no-op unless `COVERAGE_PROCESS_START` is set.
-- `pyproject.toml`: `[tool.coverage.run] parallel = true`; `tomli` added as
-  a `python_version < "3.11"` dev extra.
+- `pyproject.toml`: `[tool.coverage.run] parallel = true` activates
+  pytest-cov's own auto-installed subprocess-coverage hook; `tomli` added
+  as a `python_version < "3.11"` dev extra. (A `sitecustomize.py` was
+  added in an initial draft, believing a project-specific hook file was
+  necessary; an independent review found it non-functional and
+  redundant — pytest-cov already provides the identical hook — confirmed
+  by removing it and observing identical coverage, then removed for real.)
 - `tests/support.py`: `run_cli()` injects `COVERAGE_PROCESS_START` into the
-  subprocess env by default (caller-supplied `env` always wins).
-- `Makefile`: `lint` covers `sitecustomize.py`; `clean` removes
-  `.coverage.*` parallel-mode data files.
+  subprocess env by default (caller-supplied `env` always wins; proven by
+  a dedicated test inspecting the constructed subprocess env directly).
+- `Makefile`: `clean` removes `.coverage.*` parallel-mode data files.
 - **Gate:** `make test` green; total coverage not lower than before
-  (96.05% → 96.95% observed).
+  (96.05% → 96.95% observed, confirmed unchanged after the
+  `sitecustomize.py` removal).
 
 ## Milestone 2 — Close the six newly-visible gaps  [DONE]
 

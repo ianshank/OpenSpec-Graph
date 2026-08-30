@@ -52,6 +52,14 @@ way to ask the installed CLI what version it is without reading
   registered subcommand set. (C-VER-1)
   _Verified by:_ `pytest -k test_version_flag_is_not_a_registered_subcommand` · stage: `make test`
 
+- [x] **AC-VER-6:** The distribution name is resolved dynamically via
+  `importlib.metadata.packages_distributions()` from the importable
+  package name, not a second hardcoded copy of `pyproject.toml`'s
+  `[project]` name — a distinct failure mode (the top-level package
+  simply absent from that mapping) also falls back to `__version__`
+  rather than raising. (R-VER-2)
+  _Verified by:_ `pytest -k test_version_string_falls_back_when_top_level_package_is_unmapped` · stage: `make test`
+
 ---
 
 ## Invariants Touched
@@ -63,5 +71,5 @@ spec.
 
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
-| Focused | `make test` | AC-VER-1..5 |
+| Focused | `make test` | AC-VER-1..6 |
 | Full | `make pre-pr` | full regression, lint, typecheck, security, docs, no-hardcoded-thresholds |

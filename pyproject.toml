@@ -27,9 +27,12 @@ addopts = "-q"
 [tool.coverage.run]
 source = ["openspec_graph"]
 branch = true
-# Enables coverage.process_startup() (see sitecustomize.py) to track the
-# real CLI subprocesses tests/support.py's run_cli() launches -- without
-# this, every line reachable only through a subprocess invocation is
+# Activates pytest-cov's own auto-installed subprocess-coverage hook (a
+# .pth file it drops into site-packages that calls coverage.process_startup()
+# on every interpreter start whenever COVERAGE_PROCESS_START is set --
+# tests/support.py's run_cli() sets it) to track the real CLI subprocesses
+# run_cli() launches -- without this, every line reachable only through
+# a subprocess invocation is
 # structurally invisible to the coverage report, no matter how well tested.
 parallel = true
 

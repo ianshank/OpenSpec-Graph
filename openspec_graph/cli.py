@@ -37,11 +37,17 @@ logger = logging.getLogger("planlint")
 
 
 def _version_string() -> str:
-    # Distribution name is "openspec-graph" (pyproject.toml's [project]
-    # name) -- NOT "planlint", which is only the console-script name.
+    # Resolve the distribution name from the importable package name
+    # ("openspec_graph") via packages_distributions(), rather than a second
+    # hardcoded copy of pyproject.toml's [project] name ("openspec-graph"
+    # -- spelled differently, hyphen vs. underscore, which is exactly why
+    # only this mapping, not a literal, can bridge the two correctly).
+    # NOT "planlint", which is only the console-script name.
+    top_level = (__package__ or __name__).split(".")[0]
     try:
-        version = importlib.metadata.version("openspec-graph")
-    except importlib.metadata.PackageNotFoundError:
+        distributions = importlib.metadata.packages_distributions()[top_level]
+        version = importlib.metadata.version(distributions[0])
+    except (KeyError, IndexError, importlib.metadata.PackageNotFoundError):
         # Uninstalled checkout (e.g. running from a source clone without
         # `pip install -e .`): fall back to the package's own constant
         # rather than a third hardcoded copy.
@@ -73,6 +79,13 @@ def cmd_detect(args: argparse.Namespace) -> int:
             previous = json.loads(baseline_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             print(f"cannot read --diff baseline {baseline_path}: {exc}", file=sys.stderr)
+            return 2
+        if not isinstance(previous, dict):
+            print(
+                f"cannot read --diff baseline {baseline_path}: expected a JSON object, "
+                f"got {type(previous).__name__}",
+                file=sys.stderr,
+            )
             return 2
         changes = dialect_card.diff_cards(previous, prof.to_card())
         if changes:

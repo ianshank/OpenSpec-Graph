@@ -25,12 +25,15 @@ correct — branches.
 
 ## What Changes
 
-- **Milestone 1 (measurement):** `sitecustomize.py` (new, repo root) calls
-  `coverage.process_startup()`; `pyproject.toml` gains
-  `[tool.coverage.run] parallel = true` and a `tomli` dev-extra for the
-  Python 3.10 CI leg (`coverage` itself declares zero dependencies, and its
-  subprocess hook needs a TOML parser for its config file — stdlib
-  `tomllib` only covers 3.11+); `tests/support.py`'s `run_cli()` injects
+- **Milestone 1 (measurement):** `pyproject.toml` gains
+  `[tool.coverage.run] parallel = true`, which activates pytest-cov's own
+  auto-installed subprocess-coverage hook (a `.pth` file it drops into
+  site-packages, calling `coverage.process_startup()` on every interpreter
+  start whenever `COVERAGE_PROCESS_START` is set) — no project-specific
+  hook file needed. Also gains a `tomli` dev-extra for the Python 3.10 CI
+  leg (`coverage` itself declares zero dependencies, and its subprocess
+  hook needs a TOML parser for its config file — stdlib `tomllib` only
+  covers 3.11+); `tests/support.py`'s `run_cli()` injects
   `COVERAGE_PROCESS_START` into the subprocess environment by default.
   Purely additive — a caller-supplied `env` value for the same key always
   wins, and a normal CLI invocation outside the test suite is unaffected

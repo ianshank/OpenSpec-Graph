@@ -46,11 +46,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   as a real subprocess; with no `COVERAGE_PROCESS_START`/`parallel`
   configuration, pytest-cov was structurally blind to every line reachable
   only through those calls — the previously-reported ~96%/~92%
-  line/branch coverage was a floor, not ground truth. New
-  `sitecustomize.py` + `[tool.coverage.run] parallel = true` fix the gap;
-  total coverage rose to 96.95% purely from already-tested paths becoming
-  visible. Surfaced (and fixed) six real, previously-invisible gaps: a
-  false-negative test that passed for the wrong reason
+  line/branch coverage was a floor, not ground truth. `[tool.coverage.run]
+  parallel = true` fixes the gap by activating pytest-cov's own
+  auto-installed subprocess-coverage hook (a `.pth` file it drops into
+  site-packages; no project-specific hook file needed — an initial draft
+  added a `sitecustomize.py` believing it was necessary, but an
+  independent review found it non-functional and redundant, confirmed by
+  removing it and observing identical coverage). Total coverage rose to
+  96.95% purely from already-tested paths becoming visible. Surfaced (and
+  fixed) six real, previously-invisible gaps: a false-negative test that
+  passed for the wrong reason
   (`test_cli_validate_change_not_found`), one line of dead code in
   `parse.py`, and four genuinely correct but untested branches (a
   harness-to-upstream per-file fallback, two malformed-config fallthrough

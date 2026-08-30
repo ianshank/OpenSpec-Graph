@@ -287,6 +287,18 @@ def test_detect_json_flag_still_emits_full_profile_unchanged(repo: Path, capsys)
     assert "schema_version" not in payload
 
 
+def test_detect_format_json_takes_precedence_over_legacy_json_flag(repo: Path, capsys) -> None:
+    # Passing both --json and --format json together is an edge case a
+    # user could plausibly hit (habitually adding --json alongside the
+    # newer --format flag). --format json wins: it's the more specific,
+    # explicitly-requested output mode. Documented here so the precedence
+    # is a tested contract, not an accident of check-ordering.
+    assert main(["--target", str(repo), "detect", "--json", "--format", "json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert "schema_version" in payload, "the card (--format json) must win over the legacy --json shape"
+    assert "root" not in payload
+
+
 def test_detect_diff_exits_nonzero_and_lists_changed_fields_on_drift(
     repo: Path, tmp_path: Path, capsys
 ) -> None:
@@ -315,6 +327,23 @@ def test_detect_diff_exits_zero_on_no_drift(repo: Path, tmp_path: Path, capsys) 
 def test_detect_diff_with_missing_baseline_is_a_usage_error(repo: Path) -> None:
     result = main(["--target", str(repo), "detect", "--diff", "/nonexistent/baseline.json"])
     assert result == 2
+
+
+def test_detect_diff_with_valid_json_non_object_baseline_is_a_usage_error(
+    repo: Path, tmp_path: Path, capsys
+) -> None:
+    # A baseline file can be syntactically valid JSON (null, a list, a
+    # number) while still not being a card at all. json.loads() succeeds
+    # on all of these, so this must be checked explicitly -- without it,
+    # dialect_card.diff_cards()'s .get() calls raise AttributeError,
+    # which prints a traceback and exits 1, indistinguishable from "real
+    # drift found" and violating the documented 0/1/2 exit contract.
+    for bad_baseline in ("null", "[]", "42", '"just a string"'):
+        baseline_path = tmp_path / "baseline.json"
+        baseline_path.write_text(bad_baseline)
+        result = main(["--target", str(repo), "detect", "--diff", str(baseline_path)])
+        assert result == 2, f"baseline {bad_baseline!r} should be a usage error, got exit {result}"
+        assert "expected a JSON object" in capsys.readouterr().err
 
 
 def test_detect_never_writes_to_the_target_repo(repo: Path) -> None:

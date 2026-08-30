@@ -26,10 +26,12 @@ def write_spec(repo: Path, change: str, capability: str, body: str) -> Path:
 def run_cli(repo: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     """Run the planlint CLI against ``repo`` and return the completed process.
 
-    Injects ``COVERAGE_PROCESS_START`` (sitecustomize.py's hook reads it) so
-    this subprocess's coverage is tracked, not just the parent test
-    process's -- a caller-supplied ``env`` value for the same key always
-    wins, never overridden.
+    Injects ``COVERAGE_PROCESS_START`` so this subprocess's coverage is
+    tracked, not just the parent test process's -- pytest-cov's own
+    auto-installed subprocess hook (a .pth file in site-packages, active
+    whenever this env var is set) reads it, no project-specific hook file
+    needed. A caller-supplied ``env`` value for the same key always wins,
+    never overridden.
     """
     subprocess_env = dict(os.environ if env is None else env)
     subprocess_env.setdefault("COVERAGE_PROCESS_START", str(_PYPROJECT))

@@ -9,8 +9,8 @@ test: ## Run the test suite; line + branch coverage floors read from pyproject.t
 	python tools/check_coverage_floor.py coverage.json
 	python tools/check_branch_coverage.py coverage.json
 
-lint: ## Ruff check across the package, tests, tools, and the coverage subprocess hook — a hard gate
-	ruff check openspec_graph tests tools sitecustomize.py
+lint: ## Ruff check across the package, tests, and tools — a hard gate
+	ruff check openspec_graph tests tools
 
 typecheck: ## mypy with config from pyproject.toml — a hard gate
 	mypy openspec_graph tools
