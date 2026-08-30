@@ -1,0 +1,15 @@
+# gitleaks config for OpenSpec-Graph.
+# Runs in CI (gitleaks action) and locally via `make security` (real gitleaks if
+# installed, deterministic Python fallback otherwise). Test fixtures that
+# legitimately contain fake tokens are allowlisted by path.
+
+title = "OpenSpec-Graph secret scan"
+
+[allowlist]
+description = "test fixtures and generated/vendored paths that may contain fake secrets"
+paths = [
+  '''tests/.*''',
+  '''.git/.*''',
+  '''.venv/.*''',
+  '''node_modules/.*''',
+]

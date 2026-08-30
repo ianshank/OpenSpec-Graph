@@ -15,21 +15,31 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 
 from . import detect, rules, scaffold
 from . import graph as graph_module
+from .log import configure as configure_logging
 from .parse import parse_spec
 
 SEVERITY_ORDER = {"INFO": 0, "WARN": 1, "ERROR": 2}
 
+logger = logging.getLogger("specgraph")
+
 
 def _profile(args: argparse.Namespace) -> detect.StackProfile:
     root = Path(args.target).resolve()
+    logger.debug("profiling target %s", root)
     if not root.is_dir():
         raise SystemExit(f"target is not a directory: {root}")
-    return detect.profile(root)
+    prof = detect.profile(root)
+    logger.debug(
+        "profile: dialect=%s change_packages=%d openspec=%s",
+        prof.dialect, len(prof.change_dirs), bool(prof.openspec_root),
+    )
+    return prof
 
 
 def cmd_detect(args: argparse.Namespace) -> int:
@@ -96,6 +106,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     findings: list[rules.Finding] = []
     for path in spec_files:
+        logger.debug("evaluating %s", path)
         spec = parse_spec(path, args.dialect or prof.dialect)
         findings.extend(rules.evaluate(spec, prof))
 
@@ -171,6 +182,13 @@ def build_parser() -> argparse.ArgumentParser:
         prog="specgraph", description="Apply an OpenSpec discipline to a cloned repository."
     )
     parser.add_argument("--target", default=".", help="path to the cloned repository")
+    # Global debug flag: diagnostics go to stderr only, never stdout, so JSON
+    # output stays parseable (AC-EH-5). Overridden by nothing; overrides the
+    # SPECGRAPH_LOG_LEVEL env var when set.
+    parser.add_argument(
+        "-v", "--verbose", action="store_true",
+        help="emit debug diagnostics to stderr (does not affect stdout)",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_detect = sub.add_parser("detect", help="read-only stack and dialect report")
@@ -213,6 +231,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    configure_logging(verbose=getattr(args, "verbose", False))
     return int(args.func(args))
 
 

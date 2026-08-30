@@ -37,7 +37,7 @@ fail_under = 90
 branch_fail_under = 80
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "ruff"]
+dev = ["pytest", "pytest-cov", "ruff", "mypy"]
 
 [tool.ruff]
 line-length = 100
@@ -46,3 +46,15 @@ line-length = 100
 # tests use assert and subprocess intentionally; tools are scripts, not a package.
 "tests/*" = ["S101", "S603", "S607"]
 "tools/*" = ["S603", "S607", "INP001"]
+
+[tool.mypy]
+# Pragmatic strictness: the package uses dataclasses, regex parsing, and
+# dict-based graph nodes. Full strict mode would demand large annotation
+# surface for little safety gain; this config catches real type errors.
+python_version = "3.10"
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+no_implicit_optional = true
+files = ["openspec_graph", "tools"]
