@@ -272,13 +272,22 @@ def test_cli_validate_single_change(repo: Path, capsys) -> None:
     assert "1 spec(s)" in out
 
 
-def test_cli_validate_change_not_found(repo: Path) -> None:
+def test_cli_validate_change_not_found(repo: Path, capsys) -> None:
+    # A real openspec/ tree with an unrelated change must reach cli.py's
+    # "no specs found for change" guard (:117-119), not the earlier "no
+    # openspec/ directory" guard (:110-112) -- both exit 2, so without a
+    # real change present this test would pass for the wrong reason.
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     assert main(["--target", str(repo), "validate", "--change", "nope"]) == 2
+    err = capsys.readouterr().err
+    assert "no specs found for change" in err
+    assert "no openspec/ directory" not in err
 
 
 def test_cli_validate_no_openspec_dir(repo: Path, capsys) -> None:
     # repo has no openspec/ yet
     assert main(["--target", str(repo), "validate"]) == 2
+    assert "no openspec/ directory" in capsys.readouterr().err
 
 
 def test_cli_rules_human_readable(repo: Path, capsys) -> None:
