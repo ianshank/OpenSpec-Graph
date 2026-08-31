@@ -277,8 +277,21 @@ def filter_by_change(spec_files: Sequence[Path], change: str) -> list[Path]:
     Single-sourced: both ``cmd_validate`` and ``cmd_graph`` (``--change``)
     use this, rather than each carrying its own copy of the path filter to
     drift apart.
+
+    Matches structurally on ``Path.parts`` (mirroring ``ledger.owning_change``'s
+    own walk) rather than a ``str(p)`` substring: a substring check is
+    path-separator-dependent, and imprecise against a change name that
+    happens to collide with some other path segment (e.g. a change
+    literally named ``"specs"`` would substring-match every spec_files entry).
     """
-    return [p for p in spec_files if f"/changes/{change}/" in str(p)]
+    matched: list[Path] = []
+    for p in spec_files:
+        parts = p.parts
+        for i, part in enumerate(parts):
+            if part == "changes" and i + 1 < len(parts) and parts[i + 1] == change:
+                matched.append(p)
+                break
+    return matched
 
 
 def profile(root: Path) -> StackProfile:

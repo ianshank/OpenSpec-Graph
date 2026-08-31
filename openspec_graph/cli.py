@@ -11,7 +11,7 @@ Verbs:
   init      write openspec/specgraph.json + project.md, a snapshot of detected conventions
   new       scaffold a change package in the target's own dialect
   validate  run the rule engine over every change package
-  graph     emit the spec dependency graph as JSON (pure projection of validate)
+  graph     emit the spec dependency graph as JSON or Mermaid (pure projection of validate)
   rules     print the rule table
   waivers   list every waived rule across the tree, with file, line, reason, change
 
@@ -349,7 +349,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_rules.add_argument("--json", action="store_true")
     p_rules.set_defaults(func=cmd_rules)
 
-    p_graph = sub.add_parser("graph", help="emit the spec dependency graph as JSON")
+    p_graph = sub.add_parser("graph", help="emit the spec dependency graph (JSON or Mermaid)")
     p_graph.add_argument(
         "--format", choices=["json", "mermaid", "dot"], default="json",
         help="output format; 'dot' is rejected (rendering is out of scope)",

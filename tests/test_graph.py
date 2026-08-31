@@ -348,6 +348,20 @@ def test_filter_by_change_is_a_pure_path_filter() -> None:
     assert detect.filter_by_change(paths, "nope") == []
 
 
+def test_filter_by_change_is_precise_against_a_change_name_that_collides_with_another_path_segment() -> None:
+    # A change literally named "specs" must not match every entry just
+    # because "specs" is also a fixed path segment of the convention itself
+    # (openspec/changes/<name>/specs/<cap>/spec.md) -- a substring check
+    # (f"/changes/{change}/" in str(p)) would get this wrong; matching by
+    # structural position (Path.parts, the segment right after "changes")
+    # does not.
+    paths = [
+        Path("openspec/changes/specs/specs/cap/spec.md"),  # a change genuinely named "specs"
+        Path("openspec/changes/c1/specs/cap/spec.md"),
+    ]
+    assert detect.filter_by_change(paths, "specs") == [paths[0]]
+
+
 # --- CLI branch coverage (closes the gap that kept total below 90%) -----------
 
 
