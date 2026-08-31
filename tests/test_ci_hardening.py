@@ -310,6 +310,33 @@ def test_graph_diff_rejects_bad_args() -> None:
     assert result.returncode == 2
 
 
+# --- render_mermaid.py: thin consumer of a saved graph.json (CP-GV) ---------
+
+
+def test_render_mermaid_matches_to_mermaid_byte_for_byte(repo: Path, tmp_path: Path) -> None:
+    from openspec_graph.mermaid import to_mermaid
+
+    _write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    graph = _graph_json(repo)
+    graph_path = tmp_path / "graph.json"
+    graph_path.write_text(json.dumps(graph))
+
+    result = subprocess.run(
+        [sys.executable, str(TOOLS / "render_mermaid.py"), str(graph_path)],
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0
+    assert result.stdout == to_mermaid(graph)
+
+
+def test_render_mermaid_rejects_bad_args() -> None:
+    result = subprocess.run(
+        [sys.executable, str(TOOLS / "render_mermaid.py")],
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 2
+
+
 # --- AC-CH-8 / C-CH-1: the rule set matches the committed baseline -----------
 # A future change that adds or removes a rule without updating the baseline
 # fails this test — forcing the change to be a conscious decision (C-CH-1).
