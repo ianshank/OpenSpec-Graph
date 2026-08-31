@@ -5,6 +5,29 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — Mermaid graph export / CP-GV (`add-mermaid-graph-export` change package)
+
+- **`planlint graph --format mermaid`**: renders the dependency graph as a
+  Mermaid flowchart instead of JSON — GitHub/GitLab render it inline, so a
+  PR diff on `openspec/` can carry an actual picture. Real node ids (which
+  contain slashes/dots) are sanitized to synthetic identifiers; orphan and
+  missing (`exists: False`) nodes get distinct styling, and broken
+  (`finding`/`exists: False`) edges get a distinct `linkStyle` — spotting a
+  broken link is the entire point of a picture over raw JSON.
+  `--format dot` (image rendering, needing an external engine) stays
+  rejected exactly as before; this doesn't reopen that non-goal, only adds
+  to it.
+- **`planlint graph --change <name>`**: scopes which specs are rendered as
+  nodes/edges, a capability `validate` already had that `graph` didn't. The
+  whole-tree orphan-invariant check always still runs unscoped regardless
+  of what's rendered — scoping both would have reproduced the exact
+  false-positive-orphan bug `validate --change` already guards against.
+- New `openspec_graph/mermaid.py` (pure, stdlib-only) and companion
+  `tools/render_mermaid.py` (renders a previously-saved `graph --format
+  json` artifact without re-running `planlint`).
+- `detect.filter_by_change()`: the `--change` path filter, previously
+  inline only in `cmd_validate`, extracted and now shared by `graph` too.
+
 ### Added — waiver ledger and invariant lints / CP-4 (`add-waiver-ledger-and-inv-lints` change package)
 
 - **New rule `G007`** (ERROR): a waiver (`<!-- specgraph:allow RULE reason -->`)

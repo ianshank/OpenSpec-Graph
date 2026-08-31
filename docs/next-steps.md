@@ -6,15 +6,19 @@ over-engineering.
 
 ## Near term
 
-1. **Waiver audit report** — `planlint validate` already downgrades waived
-   rules to INFO and keeps them visible. A `planlint waivers` verb that lists
-   every active waiver across the tree would make suppressions reviewable at a
-   glance. Low effort; pure read of existing parse output.
+1. ~~**Waiver audit report**~~ — shipped in CP-4 (`add-waiver-ledger-and-inv-lints`)
+   as `planlint waivers --format json`: a stable-ordered ledger of every
+   waived rule across the tree, with file, line, reason, and owning change.
 
-2. **Dot/Graphviz rendering** — `graph --format dot` is currently rejected
-   (rendering is out of scope). If a consumer needs it, add a thin renderer that
-   consumes the JSON graph; keep it out of the core projection so
-   `broken_links` stays a pure finding count.
+2. ~~**Mermaid rendering**~~ — shipped in CP-GV (`add-mermaid-graph-export`)
+   as `graph --format mermaid`, exactly the "thin renderer that consumes the
+   JSON graph, kept out of the core projection" this item used to describe.
+   **Dot/Graphviz image rendering stays rejected** (`AC-GR-6`, unrevised) —
+   Mermaid is text GitHub/GitLab render natively; producing an actual image
+   still needs an external engine and is still out of scope. If a consumer
+   ever needs that specifically, `tools/render_mermaid.py`'s pattern (a thin
+   external consumer of the saved JSON, not a core-projection change) is the
+   template to follow.
 
 3. **Rule-pack plugins** — today the 18 rules are a fixed tuple. If a target
    repo needs a custom convention (e.g. "every AC cites a JIRA ticket"), allow
