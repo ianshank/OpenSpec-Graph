@@ -77,7 +77,7 @@
 - **Gate:** `make pre-pr` green; the doc-drift guard passes against the
   now-corrected docs.
 
-## Milestone 6 — Roadmap section + close out package + full verification
+## Milestone 6 — Roadmap section + close out package + full verification [DONE]
 
 - `docs/differentiation-roadmap.md`'s `CP-7` sketch replaced with an
   "implemented" writeup (mirroring how CP-AD got its own late addition
@@ -87,6 +87,10 @@
 - `CHANGELOG.md` entry.
 - **Gate:** full `make pre-pr`; dogfood spot-check —
   `planlint --target . validate --require-witness` against this repo's own
-  tree is expected to **fail closed** (this repo has no
-  `.planlint/witnesses/` of its own; that failure is a correct proof point
-  for AC-WM-9, not a gap). Pushed as a new PR.
+  tree **fails closed** as expected (this repo has no
+  `.planlint/witnesses/` of its own; 160 `W001` findings, exit 1 — a
+  correct proof point for `AC-WM-9`, not a gap). This branch's own
+  designated PR (#13, CP-AD) merged mid-implementation; the 6 CP-WM
+  commits were rebuilt on fresh `main` per the branch's merged-PR recovery
+  protocol (cherry-picked cleanly, zero conflicts) and pushed as
+  [PR #14](https://github.com/ianshank/planlint/pull/14).
