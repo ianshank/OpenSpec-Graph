@@ -14,7 +14,11 @@ they are not confused with autonomous-agent abstractions.
 - **Skill** — a single `Rule` in `rules.py`: a pure, deterministic function
   `(ParsedSpec, StackProfile) -> Iterable[str]`. Each skill encodes one spec
   convention (e.g. G002: every spec names a non-success outcome). Skills are
-  registered, not invoked dynamically; there is no routing.
+  registered, not invoked dynamically; there is no routing. Two skills
+  (G006, G009) are whole-tree properties no per-spec function can express —
+  their `Rule.check` is an inert registry stub (so they still list in
+  `planlint rules`) and their real logic lives in `rules.evaluate_tree()`
+  instead, called once per run over every parsed spec (see below).
 - **Agent** — *not present in this repo.* An agent (in the broader Mango
   sense) would propose work; here, the harness only *evaluates* proposed work
   (specs) and reports. Cognitive/proposal logic is out of scope and stays
@@ -25,7 +29,7 @@ they are not confused with autonomous-agent abstractions.
 
 The whole point of a governance CLI is **reproducibility**: the same spec tree
 must produce the same findings, every time, on every machine. That is
-incompatible with non-deterministic planning. The 18 rules are the "skills" —
+incompatible with non-deterministic planning. The 20 rules are the "skills" —
 fixed, auditable, and byte-stable in their output (AC-EH-4). Waivers are
 explicit inline comments (`<!-- specgraph:allow G003 reason -->`) that downgrade
 a finding to INFO but keep it visible — a suppression is never silent.
@@ -34,7 +38,10 @@ a finding to INFO but keep it visible — a suppression is never silent.
 
 ```text
   spec.md  ──parse──▶  ParsedSpec  ──rules.evaluate──▶  Finding[]
-                                                          │
+                            │                              │
+                            └──rules.evaluate_tree─────────┤   (G006/G009 only;
+                               (once, over every spec)      │    whole-tree)
+                                                             │
                                           graph.build_graph (pure projection)
                                                           │
                                               nodes / edges / broken_links

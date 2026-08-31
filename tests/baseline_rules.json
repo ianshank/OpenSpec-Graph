@@ -42,6 +42,18 @@
     "summary": "every waiver states a reason"
   },
   {
+    "id": "G008",
+    "severity": "WARN",
+    "dialects": "*",
+    "summary": "cited ADRs are declared"
+  },
+  {
+    "id": "G009",
+    "severity": "WARN",
+    "dialects": "*",
+    "summary": "declared ADRs are cited by a living spec or waived"
+  },
+  {
     "id": "H001",
     "severity": "ERROR",
     "dialects": "harness",

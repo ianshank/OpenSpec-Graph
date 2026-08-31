@@ -436,6 +436,179 @@ def test_invariant_source_name_falls_back_when_no_source_is_declared(tmp_path: P
     assert prof.invariant_source_name == "the contract"
 
 
+def test_detect_collects_adr_ids(tmp_path: Path) -> None:
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    (adr_dir / "0002-use-rest.md").write_text("# ADR-2: Use REST\n")
+    prof = detect.profile(tmp_path)
+    assert prof.adr_ids == ("ADR-1", "ADR-2")
+
+
+def test_adr_source_name_uses_the_real_directory_name_when_present(tmp_path: Path) -> None:
+    # Shared by G008 (rules_generic.py) and G009 (rules.py) so the two
+    # can't independently drift on this fallback wording.
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    prof = detect.profile(tmp_path)
+    assert prof.adr_source_name == "docs/adr"
+
+
+def test_adr_source_name_falls_back_when_no_source_is_declared(repo: Path) -> None:
+    # repo fixture has no docs/adr/ or any other ADR source at all.
+    prof = detect.profile(repo)
+    assert prof.adr_source is None
+    assert prof.adr_source_name == "the ADR log"
+
+
+def test_adrs_discovered_from_a_directory_of_numbered_files(tmp_path: Path) -> None:
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    (adr_dir / "0002-use-rest.md").write_text("# ADR-2: Use REST\n")
+    source, ids = detect._adrs(tmp_path)
+    assert source == adr_dir
+    assert ids == ("ADR-1", "ADR-2")
+
+
+def test_adrs_discovered_from_a_single_index_file(tmp_path: Path) -> None:
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    index = tmp_path / "docs" / "ADR.md"
+    index.parent.mkdir(parents=True)
+    index.write_text("# Decisions\n\n- ADR-1: Use Postgres\n- ADR-2: Use REST\n")
+    source, ids = detect._adrs(tmp_path)
+    assert source == index
+    assert ids == ("ADR-1", "ADR-2")
+
+
+def test_adr_ids_do_not_mismatch_on_zero_padded_filenames(tmp_path: Path) -> None:
+    # A file's zero-padded name ("0007-...") must never be read as the id --
+    # ids come from each file's own text content, never its filename. Here
+    # the filename says "7" but the body cites ADR-3; only ADR-3 is real.
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0007-use-grpc.md").write_text("# ADR-3: Use gRPC\n")
+    _source, ids = detect._adrs(tmp_path)
+    assert ids == ("ADR-3",)
+    assert "ADR-7" not in ids
+
+
+def test_adr_directory_declaration_ignores_a_later_reference_to_another_adr(tmp_path: Path) -> None:
+    # A file's declared id is its own FIRST mention (its title); a later
+    # "Supersedes ADR-99" reference elsewhere in its body must not be
+    # promoted to a second declaration -- ADR-99 was never really declared
+    # here, just cited (Copilot review finding on PR #13).
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0001-use-postgres.md").write_text(
+        "# ADR-1: Use Postgres\n\nSupersedes ADR-99, which is no longer a real decision.\n"
+    )
+    _source, ids = detect._adrs(tmp_path)
+    assert ids == ("ADR-1",)
+    assert "ADR-99" not in ids
+
+
+def test_adr_directory_declaration_prefers_a_heading_over_an_earlier_preamble_reference(
+    tmp_path: Path,
+) -> None:
+    # A "first mention anywhere" heuristic mis-declares this file as ADR-1:
+    # its body opens with a reference to a related decision *before* its
+    # own heading. The real declaration is on the heading line itself, so
+    # that must win regardless of what precedes it (adversarial review
+    # finding on PR #13 -- a residual gap in the original Copilot-review
+    # fix, which only handled a reference placed *after* the heading).
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0002-use-grpc.md").write_text(
+        "Related: ADR-1 (superseded by this decision).\n\n# ADR-2: Use gRPC\n"
+    )
+    _source, ids = detect._adrs(tmp_path)
+    assert ids == ("ADR-2",)
+    assert "ADR-1" not in ids
+
+
+def test_adr_directory_declaration_skips_a_heading_with_no_id_to_find_a_later_one(
+    tmp_path: Path,
+) -> None:
+    # A heading that itself contains no ADR id ("# Overview") must not stop
+    # the search -- the real declaring heading can come after it.
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0004-use-kafka.md").write_text("# Overview\n\n# ADR-4: Use Kafka\n")
+    _source, ids = detect._adrs(tmp_path)
+    assert ids == ("ADR-4",)
+
+
+def test_adr_directory_read_error_is_skipped_not_crashed(tmp_path: Path) -> None:
+    # glob("*.md") lists directory entries by name pattern only -- it
+    # doesn't check they're readable. A dangling symlink still matches and
+    # previously made read_text() raise an uncaught FileNotFoundError,
+    # crashing detect.profile() (and therefore every CLI verb) on any
+    # target repo with a broken symlink under docs/adr/ (adversarial
+    # review finding on PR #13). The broken entry must be skipped like any
+    # other non-declaring file, leaving the real declarations intact.
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    (adr_dir / "0002-broken.md").symlink_to(adr_dir / "does-not-exist.md")
+    source, ids = detect._adrs(tmp_path)
+    assert source == adr_dir
+    assert ids == ("ADR-1",)
+
+
+def test_adr_directory_with_no_ids_falls_through_to_the_next_candidate(tmp_path: Path) -> None:
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    empty_adr_dir = tmp_path / "docs" / "adr"
+    empty_adr_dir.mkdir(parents=True)
+    (empty_adr_dir / "README.md").write_text("Nothing declared here yet.\n")
+    index = tmp_path / "docs" / "ADR.md"
+    index.write_text("# Decisions\n\n- ADR-1: Use Postgres\n")
+    source, ids = detect._adrs(tmp_path)
+    assert source == index
+    assert ids == ("ADR-1",)
+
+
+def test_adr_single_file_with_no_ids_falls_through_to_the_next_candidate(tmp_path: Path) -> None:
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "adr").write_text("Nothing declared here yet.\n")
+    decisions = tmp_path / "docs" / "architecture" / "decisions"
+    decisions.parent.mkdir(parents=True)
+    decisions.write_text("# ADR-5: Use gRPC\n")
+    source, ids = detect._adrs(tmp_path)
+    assert source == decisions
+    assert ids == ("ADR-5",)
+
+
+def test_waiver_reason_text_is_not_scanned_as_a_citation(repo: Path) -> None:
+    # A waiver's own reason text must not satisfy the citation it's waiving
+    # -- naming "ADR-1"/"INV-77" in a reason must not add it to
+    # adr_refs/invariant_refs and silently resolve the very orphan the
+    # waiver exists to suppress (Copilot review finding on PR #13; the
+    # identical bug already existed, unfixed, for INV_REF since CP-4).
+    # INV-77 (not GOOD_HARNESS's own legitimately-cited INV-1) isolates the
+    # waiver-comment-only citation from the fixture's real citations.
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement",
+        "<!-- specgraph:allow G009 ADR-1 and INV-77 are cited here only to "
+        "prove the waiver's own reason text is never scanned as a citation "
+        "-->\n\n## Problem Statement",
+    )
+    path = write_spec(repo, "demo-change", "demo-cap", body)
+    spec = parse_spec(path, "harness")
+    assert "ADR-1" not in spec.adr_refs
+    assert "INV-77" not in spec.invariant_refs
+
+
 def test_dialect_detection_distinguishes_both_forms(repo: Path) -> None:
     harness = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     upstream = write_spec(repo, "c2", "cap2", GOOD_UPSTREAM)
@@ -627,6 +800,85 @@ def test_g006_is_skipped_under_change_scoping(repo: Path, capsys) -> None:
     assert exit_code == 0
     assert "G006" not in out.out
     assert "G006 skipped" in out.err
+
+
+def test_g008_fires_on_an_undeclared_adr(repo: Path) -> None:
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    body = GOOD_HARNESS.replace(
+        "**Evidence:** `demo/mod.py::run` writes without attestation.",
+        "**Evidence:** `demo/mod.py::run` writes without attestation. See ADR-99.",
+    )
+    found = findings_for(repo, body)
+    assert "G008" in rule_ids(found)
+    assert any("ADR-99" in f.message for f in found)
+
+
+def test_g009_fires_for_a_declared_adr_no_spec_cites(repo: Path) -> None:
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    (repo / "docs" / "adr" / "0002-use-rest.md").write_text("# ADR-2: Use REST\n")
+    body = GOOD_HARNESS.replace(
+        "**Evidence:** `demo/mod.py::run` writes without attestation.",
+        "**Evidence:** `demo/mod.py::run` writes without attestation. See ADR-1.",
+    )
+    found = tree_findings_for(repo, [("demo-change", "demo-cap", body)])
+    g009 = [f for f in found if f.rule == "G009"]
+    assert g009 and all(f.severity == "WARN" for f in g009)
+    assert any(f.subject == "ADR-2" for f in g009)
+    assert any("ADR-2" in f.message and "docs/adr" in f.message for f in g009)
+
+
+def test_g009_does_not_fire_once_cited_anywhere_in_the_tree(repo: Path) -> None:
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    body1 = GOOD_HARNESS.replace(
+        "**Evidence:** `demo/mod.py::run` writes without attestation.",
+        "**Evidence:** `demo/mod.py::run` writes without attestation. See ADR-1.",
+    )
+    other = GOOD_HARNESS.replace("AC-DMO", "AC-DM2").replace("R-DMO", "R-DM2")
+    found = tree_findings_for(
+        repo,
+        [("c1", "cap1", body1), ("c2", "cap2", other)],
+    )
+    assert "G009" not in rule_ids(found)
+
+
+def test_g009_is_downgraded_to_info_when_waived_anywhere_in_the_tree(repo: Path) -> None:
+    # Reason text deliberately avoids the ADR-n pattern itself -- adr_refs
+    # scans the whole raw text unconditionally, so naming the ADR here
+    # would make the waiver comment itself count as a citation and resolve
+    # the orphan before the waiver-downgrade path is even exercised.
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement",
+        "<!-- specgraph:allow G009 the decision predates this spec tree, not "
+        "yet cited anywhere -->\n\n## Problem Statement",
+    )
+    found = tree_findings_for(repo, [("demo-change", "demo-cap", body)])
+    g009 = [f for f in found if f.rule == "G009"]
+    assert g009 and all(f.severity == "INFO" and "[waived]" in f.message for f in g009)
+
+
+def test_g009_is_skipped_under_change_scoping(repo: Path, capsys) -> None:
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    write_spec(repo, "demo-change", "demo-cap", GOOD_HARNESS)
+    exit_code = main(["--target", str(repo), "validate", "--change", "demo-change"])
+    out = capsys.readouterr()
+    assert exit_code == 0
+    assert "G009" not in out.out
+    assert "G009 skipped" in out.err
+
+
+def test_no_openapi_or_event_schema_idents_are_reserved() -> None:
+    # C-AD-2: this change explicitly reserves no rule ident for the
+    # deferred OpenAPI/event-schema citation-checking work (DEC-AD-007) --
+    # mirrors DEC-MP-003's own precedent for not pre-reserving an id for
+    # unbuilt work.
+    idents = {r.ident for r in rules.RULES}
+    assert not any(i.startswith(("OPENAPI", "EVENT")) for i in idents), idents
 
 
 def test_h001_fires_when_an_ac_has_no_verification(repo: Path) -> None:

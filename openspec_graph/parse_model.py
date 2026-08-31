@@ -77,6 +77,13 @@ class ParsedSpec:
     suppressed: frozenset[str] = frozenset()
     waivers: tuple[Waiver, ...] = ()
     raw: str = dataclasses.field(repr=False, default="")
+    # Appended strictly after `raw`, not before: ParsedSpec is publicly
+    # exported, and inserting a new field ahead of an existing one shifts
+    # every later field's positional index -- a caller passing `raw`
+    # positionally would silently bind it to this field instead (Copilot
+    # review finding on PR #13). Every new field must go after the
+    # previous last field, never between existing ones.
+    adr_refs: tuple[str, ...] = ()
 
     @property
     def heading_drift(self) -> tuple[str, ...]:

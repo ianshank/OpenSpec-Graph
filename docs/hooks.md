@@ -76,6 +76,23 @@ planlint rules --json > tests/baseline_rules.json
 (`test_rule_set_matches_baseline`) fails if the rule set changes without the
 baseline being updated — a conscious decision, not an accident (C-CH-1).
 
+**A whole-tree rule** (a property of the entire spec tree, not one spec —
+e.g. G006 "a declared invariant is cited by *some* living spec", or G009's
+identical shape for ADRs) can't be expressed as a per-spec `Rule.check` at
+all; that signature only ever sees one `ParsedSpec` at a time. Both existing
+instances follow the same recipe instead: register an *inert* stub `Rule`
+whose `check` always returns nothing (so `planlint rules`/`rules --json`
+still lists the ident), then add the real logic as its own block in
+`rules.evaluate_tree()` (`rules.py`) — a plain function over
+`Sequence[ParsedSpec]`, called once per `validate`/`graph` run, never per
+spec. Every whole-tree `Finding` sets `path=` to the entity's own declaring
+source, not any one spec's path (`DEC-WL-004`); its `--change` interaction
+is an explicit decision, not silence (`DEC-WL-003`/`DEC-AD-004` — does a
+`--change`-filtered spec list put this check's correctness at risk, or
+not?). `evaluate_tree()` stays two parallel blocks rather than a registry
+for two instances; revisit that only if a third whole-tree rule arrives
+(`DEC-AD-003`).
+
 ## Adding a new pure derived-output module
 
 `dialect_card.py`, `ledger.py`, and `mermaid.py` are all the same shape: a

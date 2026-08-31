@@ -25,6 +25,7 @@ from pathlib import Path
 from .parse_harness import parse_harness as _parse_harness
 from .parse_model import Criterion, ParsedSpec, Requirement
 from .parse_semantics import (
+    ADR_REF,
     DELTA_HEADER,
     INV_REF,
     MAKE_REF,
@@ -35,6 +36,7 @@ from .parse_semantics import (
     hard_coded,
     parse_waivers,
     scenario_levels,
+    strip_waiver_comments,
     threshold_values,
 )
 from .parse_semantics import REQUIREMENT as _REQUIREMENT
@@ -79,6 +81,12 @@ def parse_spec(path: Path, dialect: str) -> ParsedSpec:
 
     status = STATUS.search(text)
     waivers = parse_waivers(text)
+    # A waiver's own reason text must never satisfy the citation it's
+    # waiving (e.g. naming "ADR-1" in a G009 waiver's reason must not put
+    # ADR-1 into adr_refs and silently resolve the orphan instead of
+    # waiving it) -- reference extraction scans the waiver-stripped text,
+    # never the raw text directly.
+    citation_text = strip_waiver_comments(text)
     return ParsedSpec(
         path=path,
         dialect=resolved,
@@ -86,14 +94,15 @@ def parse_spec(path: Path, dialect: str) -> ParsedSpec:
         status=status.group(1).upper() if status else None,
         requirements=reqs,
         criteria=criteria,
-        make_refs=tuple(sorted(set(MAKE_REF.findall(text)))),
-        invariant_refs=tuple(sorted(set(INV_REF.findall(text)))),
+        make_refs=tuple(sorted(set(MAKE_REF.findall(citation_text)))),
+        invariant_refs=tuple(sorted(set(INV_REF.findall(citation_text)))),
         hard_coded_thresholds=hard_coded(text),
         delta_headers=tuple(m.group(1) for m in DELTA_HEADER.finditer(text)),
         scenario_levels=scenario_levels(text),
         suppressed=frozenset(w.rule for w in waivers),
         waivers=waivers,
         raw=text,
+        adr_refs=tuple(sorted(set(ADR_REF.findall(citation_text)))),
     )
 
 

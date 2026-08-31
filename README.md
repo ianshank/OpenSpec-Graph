@@ -2,6 +2,20 @@
 
 **The CI gate that fails when a spec cites a gate this repo does not have.**
 
+**In plain English:** software teams often write planning documents — this
+project calls them "specs" — that describe what a feature should do, how
+it'll be tested, and what percentage of the code needs to be covered by
+tests. Those documents are supposed to match the real project, but nothing
+stops them from drifting out of sync: a spec might reference a test command
+that got renamed months ago, quote a coverage number the project no longer
+enforces, or cite a design decision that was never actually written down.
+`planlint` reads your project's real setup — its actual test commands, its
+actual coverage settings, its actual decision records — and checks every
+spec against those facts. If a spec claims something the project doesn't
+actually back up, `planlint` fails the check, the same way a broken test
+fails, catching the mismatch immediately instead of letting it mislead the
+next person who reads the plan.
+
 Point `planlint` at a cloned repository. It reads the target's *real* machinery —
 its make targets, where its coverage floor actually lives, its invariant
 source, which spec dialect it writes — then holds every spec to that, using the
@@ -16,10 +30,11 @@ linter with an exit code does not. `planlint` is a **linter under
 
 It is also a **dependency graph for specs**: requirements link to the criteria
 that verify them, criteria link to the make stage that runs them, invariants
-link to the contract that declares them, thresholds link to the config that gates
+link to the contract that declares them, ADRs link to the decision log that
+declares them, thresholds link to the config that gates
 them. `validate` fails when a link is broken — an orphan requirement, a
-criterion that cites a stage the repo doesn't have, an invariant cited but never
-declared, a threshold hard-coded instead of read from its source.
+criterion that cites a stage the repo doesn't have, an invariant or ADR cited
+but never declared, a threshold hard-coded instead of read from its source.
 
 Zero runtime dependencies. Python 3.10+.
 
@@ -126,6 +141,8 @@ quality without making the document wrong.
 | G005 | WARN | any | Every cited `INV-n` is declared in the invariant source |
 | G006 | WARN | any | Every declared invariant is cited by a living spec, or waived |
 | G007 | ERROR | any | Every waiver (`specgraph:allow`) states a reason |
+| G008 | WARN | any | Every cited `ADR-n` is declared in the ADR source |
+| G009 | WARN | any | Every declared ADR is cited by a living spec, or waived |
 | H001 | ERROR | harness | Every AC has `_Verified by:_` naming a runnable stage |
 | H002 | WARN | harness | Every AC traces to an `R-`/`C-` requirement |
 | H003 | WARN | harness | No orphan requirements (every one is verified by some AC) |

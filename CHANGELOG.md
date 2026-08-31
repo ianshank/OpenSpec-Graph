@@ -5,6 +5,77 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — architecture drift lint / CP-AD (`add-architecture-drift-lint` change package)
+
+- **New rules `G008`/`G009`** (both WARN): `G008` — a spec cites an `ADR-n`
+  id not declared in the detected ADR source. `G009` — a declared ADR cited
+  by no living spec anywhere, and not waived. Mirrors G005/G006 exactly. 20
+  rules total (was 18).
+- ADR discovery (`detect._adrs()`): tries a fixed, most-specific-first
+  candidate list (`docs/adr`, `docs/architecture/decisions`,
+  `docs/decisions`, `adr`, `docs/ADR.md`), supporting either a directory of
+  per-decision files or a single index file — unlike the single-file
+  `_invariants()` template, matching real-world ADR practice. Ids come from
+  scanning each candidate's own text, never filenames, so a zero-padded
+  filename can't silently mismatch a spec's bare citation.
+  `StackProfile.adr_source`/`adr_ids` threaded into both `to_card()` and
+  `dialect_card._COMPARABLE_FIELDS`.
+- `graph.py` gains its first new node type since the original five: `adr`,
+  reusing the existing `declares` edge type. An orphaned ADR gets graph
+  representation the same way an orphaned invariant already does.
+- New `tests/test_rule_registry_docs.py`: a single pytest test guarding
+  every prose claim about the rule registry's count or per-family id range
+  (README's table, `c4.md`, `docs/agents-skills-harness.md`,
+  `docs/next-steps.md`, `docs/differentiation-roadmap.md`, `rules.py`'s own
+  module docstring) against `rules.RULES` itself — added after the third
+  independent recurrence of this exact drift class in this codebase's
+  history (`c4.md` twice, then `rules.py`'s own docstring, found live
+  during this change's own design).
+- **Scoped to ADR only.** OpenAPI operationId and event-schema id
+  citation-checking, and a `c4.md`-doc-freshness rule pair, are explicit
+  non-goals this round — not partial or stubbed work, and no rule ident is
+  reserved for either. See the change package's own Non-Goals and Decisions
+  for the full reasoning.
+- `docs/differentiation-roadmap.md` gains a proper CP-AD section, mirroring
+  how CP-GV got its own late addition.
+- **Fixed, from GitHub's automated review on the PR:** ADR directory
+  discovery no longer promotes a file's *reference* to another decision
+  ("Supersedes ADR-99") into a *declaration* of it — only a file's own
+  first mention (its title) counts. A waiver's own reason text can no
+  longer satisfy the citation it's waiving (the identical bug already
+  existed, unfixed, for `INV_REF` since CP-4). `dialect_card.diff_cards()`
+  no longer reports a field entirely absent from an older, pre-upgrade
+  card as false repository drift against the new card's default value — a
+  latent bug present since this schema's first additive field, not new to
+  CP-AD. `ParsedSpec.adr_refs` was moved to strictly after the existing
+  `raw` field, since inserting it earlier would have silently shifted
+  `raw`'s positional index for any caller of the publicly-exported
+  `ParsedSpec` still constructing it positionally.
+- **Fixed, from an adversarial code review:** ADR directory discovery no
+  longer crashes `detect.profile()` (and therefore every CLI verb) when a
+  candidate directory contains a dangling symlink — `glob("*.md")` matches
+  a broken symlink by name alone, so the read is now guarded and an
+  unreadable entry is skipped like any other non-declaring file (the same
+  guard was added to `_invariants()`'s read for the equivalent
+  permission-denied case). The "a file's first `ADR-n` mention is its
+  declaration" heuristic now prefers the first mention on a markdown
+  heading line over an earlier body reference, closing a residual gap in
+  the fix above it: a file whose body opens with "Related: ADR-1" before
+  its own `# ADR-2: ...` heading no longer gets `ADR-1` mistaken for its
+  declared id.
+
+### Changed — architecture doc converted to Mermaid diagrams
+
+- `docs/architecture/c4.md`'s Context, Container, and Module-map diagrams
+  (previously ASCII art in `text` fences) are now real Mermaid flowcharts,
+  and the Data-flow section gained a new pipeline diagram alongside its
+  existing prose. Every diagram was validated for correct Mermaid syntax
+  before landing. `tests/test_rule_registry_docs.py`'s module-map
+  family-range check was generalized to match the new format (no longer
+  requires the old ASCII tree's `# G001-G009`-style Python-comment
+  formatting) while still guarding the same underlying fact against
+  `rules.RULES`.
+
 ### Added — Mermaid graph export / CP-GV (`add-mermaid-graph-export` change package)
 
 - **`planlint graph --format mermaid`**: renders the dependency graph as a

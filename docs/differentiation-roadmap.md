@@ -248,10 +248,10 @@ spec, or explicitly waived." Orphan invariants are the other lie.
 > `openspec/changes/add-mermaid-graph-export/specs/mermaid-graph-export/spec.md`
 > (`AC-GV-1..9`). Not part of the original CP-1..8 numbering above — added
 > from a later planning round covering four capabilities together
-> (architecture drift detection, witness mode, policy packs, visualization);
-> the other three (`add-architecture-drift-lint`, `add-witness-mode` — this
-> is CP-7 above — and `add-rule-pack-plugins`/`add-security-policy-pack`)
-> are designed but not yet implemented.
+> (architecture drift detection, witness mode, policy packs, visualization).
+> `add-architecture-drift-lint` (CP-AD, below) has since also shipped;
+> `add-witness-mode` (CP-7 above) and `add-rule-pack-plugins`/
+> `add-security-policy-pack` remain designed but not yet implemented.
 
 `graph --format json` computed the full dependency graph with no way to see
 it. `graph --format mermaid` renders the same graph as a Mermaid flowchart —
@@ -274,6 +274,54 @@ stays rejected; this doesn't reopen that non-goal, only adds to it.
   (`build_graph()`'s new scoping param), `openspec_graph/detect.py`
   (`filter_by_change()`, shared with `cmd_validate`). New
   `tools/render_mermaid.py`.
+
+### CP-AD: `add-architecture-drift-lint` (v1) — implemented
+
+> Status: implemented. See the approved spec at
+> `openspec/changes/add-architecture-drift-lint/specs/architecture-drift-lint/spec.md`
+> (`AC-AD-1..16`). Not part of the original CP-1..8 numbering above — from
+> the same later planning round as CP-GV. Re-grounded in a fresh Explore +
+> Plan pass before implementation: the original motivation
+> (`docs/architecture/c4.md` stating a stale rule count/range) had already
+> been fixed twice on this branch by the time this CP was designed; the
+> live recurrence of that same drift class (`rules.py`'s own module
+> docstring) is what actually motivated the new rules and this change's own
+> doc-drift guard. Scoped to ADR citation-checking only — OpenAPI/
+> event-schema and a C4 doc-freshness rule pair are explicit non-goals, not
+> partial work.
+
+`planlint` already caught one class of citation drift — a spec citing an
+undeclared `INV-n`, or a declared invariant no living spec cites (G005/G006).
+Nothing extended that discipline to architecture decision records. New rules
+`G008` (cited-must-exist) and `G009` (declared-must-be-cited) mirror
+G005/G006 exactly; 20 rules total (was 18).
+
+- **AC-AD-1..9:** ADR ids are discovered from either a directory of
+  per-decision files or a single index file, extracted by scanning each
+  candidate's own text (never filenames, so a zero-padded filename can't
+  mismatch a spec's bare citation) — `G008`/`G009` fire and waive exactly
+  like `G005`/`G006`. Their `--change` behavior mirrors G006's own split,
+  not a single "skip": `validate --change` skips G009 entirely, while
+  `graph --change` does the opposite — keeps it unscoped and *includes*
+  its findings (`DEC-AD-004`).
+- **AC-AD-10..13:** `graph` gains its first new node type since the
+  original five, `adr`, reusing the existing `declares` edge type; an
+  orphaned ADR gets graph and Mermaid representation the same way an
+  orphaned invariant already does, and `broken_links` still equals
+  `validate`'s finding count (`AC-GR-4`) with both new rules present.
+- **AC-AD-14..16:** a new `tests/test_rule_registry_docs.py` mechanically
+  checks every prose claim about the rule count/family ranges against
+  `rules.RULES` itself (`AC-AD-14`); a change to `adr_source`/`adr_ids` is
+  detected by `dialect_card.diff_cards()`, proving the fields are threaded
+  into `_COMPARABLE_FIELDS` (`AC-AD-15`); and no rule ident is reserved for
+  the deferred OpenAPI/event-schema work (`AC-AD-16`).
+- **Touch map:** new `ADR_REF`/`adr_refs` (`parse_semantics.py`/
+  `parse_model.py`/`parse.py`), `detect.py` (`ADR_SOURCES`/`_adrs()`/
+  `StackProfile.adr_source`/`adr_ids`/`adr_source_name`), `dialect_card.py`
+  (`_COMPARABLE_FIELDS`), `rules_generic.py`/`rules.py` (`G008`/`G009`,
+  `evaluate_tree()`), `cli.py` (`--change` heads-up lines), `graph.py`
+  (`adr` node type, rule-aware `_add_tree_finding_edges()`). New
+  `tests/test_rule_registry_docs.py`.
 
 ### CP-5: `add-delta-lint` (v1, the org-visible feature)
 

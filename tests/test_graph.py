@@ -220,6 +220,48 @@ def test_graph_marks_an_orphan_invariant_node(repo: Path) -> None:
     )
 
 
+def test_graph_matches_validate_findings_with_an_orphan_adr(repo: Path) -> None:
+    # A second declared ADR no spec cites -- forces a real G009 (tree-level)
+    # finding, proving AC-GR-4 still holds once evaluate_tree() findings
+    # include G009 alongside G006.
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    (repo / "docs" / "adr" / "0002-use-rest.md").write_text("# ADR-2: Use REST\n")
+    body = GOOD_HARNESS.replace(
+        "**Evidence:** `demo/mod.py::run` writes without attestation.",
+        "**Evidence:** `demo/mod.py::run` writes without attestation. See ADR-1.",
+    )
+    write_spec(repo, "demo-change", "demo-cap", body)
+    prof = detect.profile(repo)
+
+    specs = [parse_spec(p, "auto") for p in detect.find_spec_files(prof.openspec_root)]
+    tree_findings = rules.evaluate_tree(specs, prof)
+    assert any(f.rule == "G009" for f in tree_findings), "fixture must produce a real orphan"
+    validate_findings = sum(len(rules.evaluate(s, prof)) for s in specs) + len(tree_findings)
+
+    graph = graph_module.build_graph(prof)
+    assert graph["broken_links"] == validate_findings
+
+
+def test_graph_marks_an_orphan_adr_node(repo: Path) -> None:
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    (repo / "docs" / "adr" / "0002-use-rest.md").write_text("# ADR-2: Use REST\n")
+    body = GOOD_HARNESS.replace(
+        "**Evidence:** `demo/mod.py::run` writes without attestation.",
+        "**Evidence:** `demo/mod.py::run` writes without attestation. See ADR-1.",
+    )
+    graph = graph_for(repo, body)
+    adr2_nodes = [n for n in graph["nodes"] if n["id"] == "adr:ADR-2"]
+    assert adr2_nodes, "an orphan ADR must still get a graph node"
+    assert adr2_nodes[0]["type"] == "adr"
+    assert adr2_nodes[0]["orphan"] is True
+    assert any(
+        e["source"] == "adr:ADR-2" and e["type"] == "finding" and e["target"] == "G009"
+        for e in graph["edges"]
+    )
+
+
 # --- AC-GR-5: unknown make stage -> edge to a stage node not in make_targets -
 
 
@@ -314,6 +356,69 @@ def test_graph_change_prints_a_g006_unscoped_heads_up(repo: Path, capsys) -> Non
     assert exit_code == 0
     err = capsys.readouterr().err
     assert "INFO  G006 included unscoped" in err
+
+
+def test_graph_change_prints_a_g009_unscoped_heads_up(repo: Path, capsys) -> None:
+    # Same story as G006's own heads-up, for the ADR orphan check (DEC-AD-004).
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    exit_code = main(["--target", str(repo), "graph", "--change", "c1", "--format", "json"])
+    assert exit_code == 0
+    err = capsys.readouterr().err
+    assert "INFO  G009 included unscoped" in err
+
+
+def test_graph_change_does_not_falsely_orphan_an_adr_cited_outside_the_scope(
+    repo: Path, capsys
+) -> None:
+    # Mirrors the identical guard for invariants: naively scoping
+    # evaluate_tree()'s input to the rendered --change would make an ADR
+    # cited only by an unrendered change look orphaned. It must not.
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    (repo / "docs" / "adr" / "0002-use-rest.md").write_text("# ADR-2: Use REST\n")
+    body_c1 = GOOD_HARNESS.replace(
+        "**Evidence:** `demo/mod.py::run` writes without attestation.",
+        "**Evidence:** `demo/mod.py::run` writes without attestation. See ADR-1.",
+    )  # cites ADR-1 only
+    body_c2 = (
+        GOOD_HARNESS.replace("AC-DMO", "AC-DM2")
+        .replace("R-DMO", "R-DM2")
+        .replace(
+            "**Evidence:** `demo/mod.py::run` writes without attestation.",
+            "**Evidence:** `demo/mod.py::run` writes without attestation. See ADR-2.",
+        )
+    )  # cites ADR-2 only
+    write_spec(repo, "c1", "cap1", body_c1)
+    write_spec(repo, "c2", "cap2", body_c2)
+
+    exit_code = main(["--target", str(repo), "graph", "--change", "c1", "--format", "json"])
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    orphan_nodes = [n for n in payload["nodes"] if n.get("type") == "adr" and n.get("orphan")]
+    assert not any(n["name"] == "ADR-2" for n in orphan_nodes), (
+        "ADR-2 is genuinely cited by c2 -- rendering only c1 must not make it look orphaned"
+    )
+
+
+def test_graph_change_still_surfaces_a_genuinely_orphaned_adr(repo: Path, capsys) -> None:
+    # The other half of the same fix: evaluate_tree() must still RUN (and
+    # its results still surface) under --change, just always unscoped --
+    # scoping must not silently suppress a real orphan either.
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    (repo / "docs" / "adr" / "0002-use-rest.md").write_text("# ADR-2: Use REST\n")
+    body_c1 = GOOD_HARNESS.replace(
+        "**Evidence:** `demo/mod.py::run` writes without attestation.",
+        "**Evidence:** `demo/mod.py::run` writes without attestation. See ADR-1.",
+    )  # cites ADR-1 only; ADR-2 is cited by nothing anywhere
+    write_spec(repo, "c1", "cap1", body_c1)
+
+    exit_code = main(["--target", str(repo), "graph", "--change", "c1", "--format", "json"])
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    orphan_nodes = [n for n in payload["nodes"] if n.get("type") == "adr" and n.get("orphan")]
+    assert any(n["name"] == "ADR-2" for n in orphan_nodes)
+    assert payload["broken_links"] > 0
 
 
 def test_graph_change_does_not_falsely_orphan_an_invariant_cited_outside_the_scope(

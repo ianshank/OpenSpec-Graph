@@ -3,7 +3,7 @@
 Decomposed into focused modules; this file is the facade/registry:
 
 - :mod:`rule_types` — ``Finding``/``Rule`` dataclasses, severity constants.
-- :mod:`rules_generic` — universal rules G001-G005.
+- :mod:`rules_generic` — universal rules G001-G009.
 - :mod:`rules_harness` — harness-dialect rules H001-H006.
 - :mod:`rules_upstream` — upstream-dialect rules U001-U005.
 
@@ -76,28 +76,47 @@ def evaluate(spec: ParsedSpec, profile: StackProfile) -> list[Finding]:
 def evaluate_tree(specs: Sequence[ParsedSpec], profile: StackProfile) -> list[Finding]:
     """Whole-tree rules no per-spec ``Rule.check`` can express (DEC-WL-001).
 
-    Currently just G006 (a declared invariant cited by no living spec).
-    Called once per ``validate``/``graph`` run after every living spec is
-    parsed -- not once per spec, unlike ``evaluate()``. Every ``Finding``
-    here sets ``path=profile.invariant_source`` rather than a spec's own
-    path, since there is no single owning spec; leaving ``path`` unset
-    would default it to ``None``, and ``cmd_validate``'s text renderer
-    sorts by ``(str(f.path), f.rule)`` -- ``str(None) == "None"`` sorts
-    before every real path, silently jumping G006 to the top (DEC-WL-004).
+    G006 (a declared invariant cited by no living spec) and G009 (the same
+    shape for ADRs, DEC-AD-003) -- two parallel blocks, not a registry; see
+    DEC-AD-003 for why generalizing this into a dynamic dispatch mechanism
+    isn't warranted for two instances. Called once per ``validate``/``graph``
+    run after every living spec is parsed -- not once per spec, unlike
+    ``evaluate()``. Every ``Finding`` here sets ``path=`` to the entity's own
+    declaring source (``profile.invariant_source``/``profile.adr_source``)
+    rather than a spec's own path, since there is no single owning spec;
+    leaving ``path`` unset would default it to ``None``, and
+    ``cmd_validate``'s text renderer sorts by ``(str(f.path), f.rule)`` --
+    ``str(None) == "None"`` sorts before every real path, silently jumping
+    the finding to the top (DEC-WL-004).
     """
     findings: list[Finding] = []
-    waived = any("G006" in spec.suppressed for spec in specs)
+
+    waived_invariant = any("G006" in spec.suppressed for spec in specs)
     for inv_id in rules_generic.orphan_invariant_ids(specs, profile):
         message = f"{inv_id} is declared in {profile.invariant_source_name} but cited by no living spec"
         findings.append(
             Finding(
                 rule="G006",
-                severity=INFO if waived else WARN,
-                message=f"[waived] {message}" if waived else message,
+                severity=INFO if waived_invariant else WARN,
+                message=f"[waived] {message}" if waived_invariant else message,
                 path=profile.invariant_source,
                 subject=inv_id,
             )
         )
+
+    waived_adr = any("G009" in spec.suppressed for spec in specs)
+    for adr_id in rules_generic.orphan_adr_ids(specs, profile):
+        message = f"{adr_id} is declared in {profile.adr_source_name} but cited by no living spec"
+        findings.append(
+            Finding(
+                rule="G009",
+                severity=INFO if waived_adr else WARN,
+                message=f"[waived] {message}" if waived_adr else message,
+                path=profile.adr_source,
+                subject=adr_id,
+            )
+        )
+
     return findings
 
 

@@ -6,9 +6,10 @@ broken-link count is the finding count from `rules.evaluate`. The two can never
 disagree by construction (R-GR-1, AC-GR-4).
 
 Node types: ``spec``, ``requirement``, ``criterion``, ``stage``,
-``invariant``. Edge types: ``traces-to`` (criterion -> requirement),
-``verified-by`` (criterion -> stage), ``declares`` (spec -> invariant),
-``finding`` (spec -> rule, a broken link recorded from `validate`).
+``invariant``, ``adr``. Edge types: ``traces-to`` (criterion -> requirement),
+``verified-by`` (criterion -> stage), ``declares`` (spec -> invariant or
+spec -> adr), ``finding`` (spec -> rule, or entity -> rule for a tree-scoped
+finding -- a broken link recorded from `validate`).
 """
 
 from __future__ import annotations
@@ -120,6 +121,25 @@ def _add_invariant_edges(
         )
 
 
+def _add_adr_edges(
+    nodes: list[dict[str, object]],
+    edges: list[dict[str, object]],
+    seen: set[str],
+    spec: ParsedSpec,
+    spec_node: str,
+    known_adrs: set[str],
+) -> None:
+    # spec -> adr (declares). Undeclared ADRs are edges to nodes marked
+    # exists=False. Mirrors _add_invariant_edges() exactly (DEC-AD-005).
+    for adr in spec.adr_refs:
+        exists = adr in known_adrs
+        adr_node = f"adr:{adr}"
+        _add_node(nodes, seen, adr_node, type="adr", name=adr, exists=exists)
+        edges.append(
+            {"source": spec_node, "target": adr_node, "type": "declares", "exists": exists}
+        )
+
+
 def _add_finding_edges(edges: list[dict[str, object]], spec_node: str, findings: list[rules.Finding]) -> int:
     # Broken links: the findings `validate` reports for this spec. Counting
     # them here guarantees the graph's broken-link total equals validate's
@@ -138,25 +158,34 @@ def _add_finding_edges(edges: list[dict[str, object]], spec_node: str, findings:
     return len(findings)
 
 
+# Node "type" to synthesize for a tree-scoped finding's subject, keyed by
+# the rule that produced it. Extend this mapping when a third whole-tree
+# orphan check arrives (DEC-AD-005) -- not a general plugin mechanism, just
+# the two-entry literal this project already uses this shape for elsewhere
+# (_COMPARABLE_FIELDS, ALLOWED_VERBS).
+_TREE_FINDING_NODE_KIND: dict[str, str] = {"G006": "invariant", "G009": "adr"}
+
+
 def _add_tree_finding_edges(
     nodes: list[dict[str, object]],
     edges: list[dict[str, object]],
     seen: set[str],
     findings: list[rules.Finding],
 ) -> int:
-    # Tree-level findings (currently just G006) are about an entity in the
-    # tree -- an invariant, named by finding.subject -- not one spec, so
+    # Tree-level findings (G006, G009) are about an entity in the tree --
+    # an invariant or ADR, named by finding.subject -- not one spec, so
     # there is no spec_node to hang the edge off of like _add_finding_edges
-    # does. _add_invariant_edges only ever creates invariant:{id} nodes for
-    # invariants some spec actually cites; an orphan by definition never
+    # does. _add_invariant_edges/_add_adr_edges only ever create a node for
+    # an entity some spec actually cites; an orphan by definition never
     # gets one there, so this must create the node explicitly or the edge
     # below would point at a node that was never added (AC-GR-4).
     for finding in findings:
-        inv_node = f"invariant:{finding.subject}"
-        _add_node(nodes, seen, inv_node, type="invariant", name=finding.subject, exists=True, orphan=True)
+        kind = _TREE_FINDING_NODE_KIND.get(finding.rule, "unknown")
+        entity_node = f"{kind}:{finding.subject}"
+        _add_node(nodes, seen, entity_node, type=kind, name=finding.subject, exists=True, orphan=True)
         edges.append(
             {
-                "source": inv_node,
+                "source": entity_node,
                 "target": finding.rule,
                 "type": "finding",
                 "broken": True,
@@ -205,6 +234,7 @@ def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None)
     render_paths = set(all_spec_files) if spec_files is None else set(spec_files)
     known_stages = set(profile.make_targets)
     known_invariants = set(profile.invariant_ids)
+    known_adrs = set(profile.adr_ids)
     dialect = profile.dialect if profile.dialect != "unknown" else "auto"
 
     nodes: list[dict[str, object]] = []
@@ -225,6 +255,7 @@ def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None)
         _add_requirement_nodes(nodes, seen_nodes, spec, spec_node)
         _add_criterion_nodes(nodes, edges, seen_nodes, spec, spec_node, known_stages)
         _add_invariant_edges(nodes, edges, seen_nodes, spec, spec_node, known_invariants)
+        _add_adr_edges(nodes, edges, seen_nodes, spec, spec_node, known_adrs)
         broken_links += _add_finding_edges(edges, spec_node, rules.evaluate(spec, profile))
 
     broken_links += _add_tree_finding_edges(
@@ -245,6 +276,9 @@ def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None)
             str(profile.invariant_source.relative_to(profile.root))
             if profile.invariant_source
             else None
+        ),
+        "adr_source": (
+            str(profile.adr_source.relative_to(profile.root)) if profile.adr_source else None
         ),
     }
 
