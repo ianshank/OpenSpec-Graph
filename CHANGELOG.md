@@ -26,14 +26,31 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - New `tests/test_rule_registry_docs.py`: a single pytest test guarding
   every prose claim about the rule registry's count or per-family id range
   (README's table, `c4.md`, `docs/agents-skills-harness.md`,
-  `docs/next-steps.md`, `rules.py`'s own module docstring) against
-  `rules.RULES` itself — added after the third independent recurrence of
-  this exact drift class in this codebase's history (`c4.md` twice, then
-  `rules.py`'s own docstring, found live during this change's own design).
+  `docs/next-steps.md`, `docs/differentiation-roadmap.md`, `rules.py`'s own
+  module docstring) against `rules.RULES` itself — added after the third
+  independent recurrence of this exact drift class in this codebase's
+  history (`c4.md` twice, then `rules.py`'s own docstring, found live
+  during this change's own design).
 - **Scoped to ADR only.** OpenAPI operationId and event-schema id
   citation-checking, and a `c4.md`-doc-freshness rule pair, are explicit
-  non-goals this round — not partial or stubbed work. See the change
-  package's own Non-Goals and Decisions for the full reasoning.
+  non-goals this round — not partial or stubbed work, and no rule ident is
+  reserved for either. See the change package's own Non-Goals and Decisions
+  for the full reasoning.
+- `docs/differentiation-roadmap.md` gains a proper CP-AD section, mirroring
+  how CP-GV got its own late addition.
+- **Fixed, from GitHub's automated review on the PR:** ADR directory
+  discovery no longer promotes a file's *reference* to another decision
+  ("Supersedes ADR-99") into a *declaration* of it — only a file's own
+  first mention (its title) counts. A waiver's own reason text can no
+  longer satisfy the citation it's waiving (the identical bug already
+  existed, unfixed, for `INV_REF` since CP-4). `dialect_card.diff_cards()`
+  no longer reports a field entirely absent from an older, pre-upgrade
+  card as false repository drift against the new card's default value — a
+  latent bug present since this schema's first additive field, not new to
+  CP-AD. `ParsedSpec.adr_refs` was moved to strictly after the existing
+  `raw` field, since inserting it earlier would have silently shifted
+  `raw`'s positional index for any caller of the publicly-exported
+  `ParsedSpec` still constructing it positionally.
 
 ### Added — Mermaid graph export / CP-GV (`add-mermaid-graph-export` change package)
 

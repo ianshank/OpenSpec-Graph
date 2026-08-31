@@ -26,11 +26,11 @@ over-engineering.
    contract (sorted, byte-stable JSON) must hold for plugins too.
 
 4. **Configurable discovery lists** — `detect.py`'s `INVARIANT_SOURCES`,
-   `MANIFESTS`, and the inline `governance-policy.json` candidate paths are
-   fixed tuples with no override. Not a bug (nothing today is wrong; it's a
-   coverage limitation of a working heuristic), but a repo with an invariant
-   source or manifest convention outside the curated list is invisible to
-   `detect`. Deliberately deferred out of the `add-dialect-cards` (CP-2)
+   `ADR_SOURCES`, `MANIFESTS`, and the inline `governance-policy.json`
+   candidate paths are fixed tuples with no override. Not a bug (nothing
+   today is wrong; it's a coverage limitation of a working heuristic), but
+   a repo with an invariant/ADR source or manifest convention outside the
+   curated list is invisible to `detect`. Deliberately deferred out of the `add-dialect-cards` (CP-2)
    change that surfaced it: making these overridable reopens the same
    "should a hand-editable file change live-detected behavior?" question the
    `fix-init-snapshot-wording` change just resolved against (`detect` always

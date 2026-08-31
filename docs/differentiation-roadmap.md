@@ -299,8 +299,11 @@ G005/G006 exactly; 20 rules total (was 18).
 - **AC-AD-1..9:** ADR ids are discovered from either a directory of
   per-decision files or a single index file, extracted by scanning each
   candidate's own text (never filenames, so a zero-padded filename can't
-  mismatch a spec's bare citation) — `G008`/`G009` fire, waive, and skip
-  under `--change` exactly like `G005`/`G006`.
+  mismatch a spec's bare citation) — `G008`/`G009` fire and waive exactly
+  like `G005`/`G006`. Their `--change` behavior mirrors G006's own split,
+  not a single "skip": `validate --change` skips G009 entirely, while
+  `graph --change` does the opposite — keeps it unscoped and *includes*
+  its findings (`DEC-AD-004`).
 - **AC-AD-10..13:** `graph` gains its first new node type since the
   original five, `adr`, reusing the existing `declares` edge type; an
   orphaned ADR gets graph and Mermaid representation the same way an
@@ -308,8 +311,10 @@ G005/G006 exactly; 20 rules total (was 18).
   `validate`'s finding count (`AC-GR-4`) with both new rules present.
 - **AC-AD-14..16:** a new `tests/test_rule_registry_docs.py` mechanically
   checks every prose claim about the rule count/family ranges against
-  `rules.RULES` itself, and no rule ident is reserved for the deferred
-  OpenAPI/event-schema work.
+  `rules.RULES` itself (`AC-AD-14`); a change to `adr_source`/`adr_ids` is
+  detected by `dialect_card.diff_cards()`, proving the fields are threaded
+  into `_COMPARABLE_FIELDS` (`AC-AD-15`); and no rule ident is reserved for
+  the deferred OpenAPI/event-schema work (`AC-AD-16`).
 - **Touch map:** new `ADR_REF`/`adr_refs` (`parse_semantics.py`/
   `parse_model.py`/`parse.py`), `detect.py` (`ADR_SOURCES`/`_adrs()`/
   `StackProfile.adr_source`/`adr_ids`/`adr_source_name`), `dialect_card.py`

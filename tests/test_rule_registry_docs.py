@@ -49,6 +49,7 @@ def test_total_rule_count_matches_every_prose_claim() -> None:
         ("docs/architecture/c4.md", r"(\d+)\s+deterministic rules"),
         ("docs/agents-skills-harness.md", r"The (\d+) rules"),
         ("docs/next-steps.md", r"the (\d+) rules"),
+        ("docs/differentiation-roadmap.md", r"(\d+)\s+rules total"),
     ]
     for doc, pattern in claims:
         text = (REPO_ROOT / doc).read_text(encoding="utf-8")

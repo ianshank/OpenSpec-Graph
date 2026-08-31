@@ -37,7 +37,21 @@ __all__ = ["SCHEMA_VERSION", "diff_cards"]
 
 
 def diff_cards(previous: dict[str, object], current: dict[str, object]) -> list[str]:
-    """Return human-readable descriptions of every changed field; empty if none."""
+    """Return human-readable descriptions of every changed field; empty if none.
+
+    A field entirely ABSENT from ``previous`` (not merely null-valued, but
+    missing as a key) is a schema addition, not repository drift -- an
+    older card, saved before that field existed, never tracked that
+    dimension at all. Comparing its absence against ``current``'s default
+    value for the same field would report every tool upgrade that adds a
+    field as false drift on an otherwise-unchanged repository (e.g. a
+    pre-CP-AD card with no ``adr_ids`` key diffed after upgrading would
+    otherwise spuriously report ``adr_ids changed: None -> []`` -- a
+    Copilot review finding on PR #13, present for every prior additive
+    field this schema has ever grown, not new to CP-AD). Skipped silently:
+    an absent key is excluded from comparison entirely, whatever
+    ``current``'s value for it is.
+    """
     changes: list[str] = []
     if previous.get("schema_version") != current.get("schema_version"):
         changes.append(
@@ -45,6 +59,8 @@ def diff_cards(previous: dict[str, object], current: dict[str, object]) -> list[
             f"{current.get('schema_version')!r}"
         )
     for field in _COMPARABLE_FIELDS:
+        if field not in previous:
+            continue
         old, new = previous.get(field), current.get(field)
         if old != new:
             changes.append(f"{field} changed: {old!r} -> {new!r}")

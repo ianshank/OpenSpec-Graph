@@ -296,18 +296,37 @@ def _adrs(root: Path) -> tuple[Path | None, tuple[str, ...]]:
             # known, accepted coverage limitation (mirrors
             # INVARIANT_SOURCES' own fixed-candidate-list limitation), not
             # a bug.
-            texts = [
-                p.read_text(encoding="utf-8", errors="replace") for p in sorted(path.glob("*.md"))
-            ]
-            text = "\n".join(texts)
+            #
+            # One declared id per file -- its own FIRST ADR-n mention (the
+            # file's own title/heading) -- not every mention in its body.
+            # A decision record's prose routinely CITES another decision
+            # without DECLARING it ("Supersedes ADR-99"); scanning the
+            # whole file for every occurrence would wrongly promote that
+            # citation to a second declaration, letting G008 accept a
+            # citation to an ADR that was never really declared, or G009
+            # report it as an orphan that was never really declared either
+            # (Copilot review finding on PR #13). A document's own title
+            # always precedes any reference to a related decision in its
+            # body, so the first match is a reliable declaration marker
+            # without needing a stricter heading-only regex.
+            ids_list: list[str] = []
+            for p in sorted(path.glob("*.md")):
+                first = _ADR_ID.search(p.read_text(encoding="utf-8", errors="replace"))
+                if first:
+                    ids_list.append(first.group())
+            ids = sorted(set(ids_list), key=lambda s: (int(s.split("-")[1]), s))
         elif path.is_file():
+            # A single index file is itself a declaration list by
+            # convention (mirrors _invariants()'s CONTRACT.md assumption),
+            # so every mention is a real declaration -- scanning the whole
+            # file, not just its first match, is correct here.
             text = path.read_text(encoding="utf-8", errors="replace")
+            ids = sorted(
+                set(_ADR_ID.findall(text)),
+                key=lambda s: (int(s.split("-")[1]), s),
+            )
         else:
             continue
-        ids = sorted(
-            set(_ADR_ID.findall(text)),
-            key=lambda s: (int(s.split("-")[1]), s),
-        )
         if ids:
             return path, tuple(ids)
     return None, ()

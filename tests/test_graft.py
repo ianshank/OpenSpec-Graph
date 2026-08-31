@@ -498,6 +498,42 @@ def test_adr_ids_do_not_mismatch_on_zero_padded_filenames(tmp_path: Path) -> Non
     assert "ADR-7" not in ids
 
 
+def test_adr_directory_declaration_ignores_a_later_reference_to_another_adr(tmp_path: Path) -> None:
+    # A file's declared id is its own FIRST mention (its title); a later
+    # "Supersedes ADR-99" reference elsewhere in its body must not be
+    # promoted to a second declaration -- ADR-99 was never really declared
+    # here, just cited (Copilot review finding on PR #13).
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0001-use-postgres.md").write_text(
+        "# ADR-1: Use Postgres\n\nSupersedes ADR-99, which is no longer a real decision.\n"
+    )
+    _source, ids = detect._adrs(tmp_path)
+    assert ids == ("ADR-1",)
+    assert "ADR-99" not in ids
+
+
+def test_waiver_reason_text_is_not_scanned_as_a_citation(repo: Path) -> None:
+    # A waiver's own reason text must not satisfy the citation it's waiving
+    # -- naming "ADR-1"/"INV-77" in a reason must not add it to
+    # adr_refs/invariant_refs and silently resolve the very orphan the
+    # waiver exists to suppress (Copilot review finding on PR #13; the
+    # identical bug already existed, unfixed, for INV_REF since CP-4).
+    # INV-77 (not GOOD_HARNESS's own legitimately-cited INV-1) isolates the
+    # waiver-comment-only citation from the fixture's real citations.
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement",
+        "<!-- specgraph:allow G009 ADR-1 and INV-77 are cited here only to "
+        "prove the waiver's own reason text is never scanned as a citation "
+        "-->\n\n## Problem Statement",
+    )
+    path = write_spec(repo, "demo-change", "demo-cap", body)
+    spec = parse_spec(path, "harness")
+    assert "ADR-1" not in spec.adr_refs
+    assert "INV-77" not in spec.invariant_refs
+
+
 def test_dialect_detection_distinguishes_both_forms(repo: Path) -> None:
     harness = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     upstream = write_spec(repo, "c2", "cap2", GOOD_UPSTREAM)

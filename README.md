@@ -16,10 +16,11 @@ linter with an exit code does not. `planlint` is a **linter under
 
 It is also a **dependency graph for specs**: requirements link to the criteria
 that verify them, criteria link to the make stage that runs them, invariants
-link to the contract that declares them, thresholds link to the config that gates
+link to the contract that declares them, ADRs link to the decision log that
+declares them, thresholds link to the config that gates
 them. `validate` fails when a link is broken — an orphan requirement, a
-criterion that cites a stage the repo doesn't have, an invariant cited but never
-declared, a threshold hard-coded instead of read from its source.
+criterion that cites a stage the repo doesn't have, an invariant or ADR cited
+but never declared, a threshold hard-coded instead of read from its source.
 
 Zero runtime dependencies. Python 3.10+.
 

@@ -47,3 +47,15 @@ def test_diff_cards_detects_an_adr_source_change() -> None:
     changes = dialect_card.diff_cards(old, new)
     assert any("adr_source" in c for c in changes)
     assert any("adr_ids" in c for c in changes)
+
+
+def test_diff_cards_does_not_report_a_field_absent_from_the_old_card_as_drift() -> None:
+    # A pre-upgrade card saved before adr_ids existed has no such key at
+    # all -- not `None`, absent. Comparing that absence against the new
+    # card's default ([]) would report every schema-growing tool upgrade
+    # as false repository drift on an unchanged repo (Copilot review
+    # finding on PR #13; a latent bug present since this schema's first
+    # additive field, not new to CP-AD).
+    old = {"schema_version": 1, "dialect": "harness"}  # no adr_source/adr_ids key at all
+    new = {"schema_version": 1, "dialect": "harness", "adr_source": None, "adr_ids": []}
+    assert dialect_card.diff_cards(old, new) == []

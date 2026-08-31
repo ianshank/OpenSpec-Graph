@@ -76,7 +76,14 @@ for adding protection — resolved here as a single test, not new tooling
   project's own later, better-considered rule (`C-WL-1`, CP-4): "New
   Finding/ParsedSpec fields MUST be additive only." A positional field would
   break any existing keyword-only `ParsedSpec(...)` test-fixture construction
-  that doesn't already pass it.
+  that doesn't already pass it. **Amended (GitHub automated review on PR
+  #13):** the first implementation still inserted `adr_refs` *before* the
+  existing `raw` field, which is not actually additive — it shifts `raw`'s
+  own positional index for any caller of the publicly-exported `ParsedSpec`
+  still constructing it positionally, silently binding `raw` to the wrong
+  value. Fixed by moving `adr_refs` to strictly after `raw`, the true last
+  field — "additive" means appended after *every* existing field, not just
+  after the ones added most recently.
 - **DEC-AD-002:** ADR discovery (`detect._adrs()`) supports a directory
   candidate (one numbered file per decision — the dominant real-world
   convention) tried before a single-file index fallback, unlike
@@ -84,7 +91,20 @@ for adding protection — resolved here as a single test, not new tooling
   regex-scanning each candidate's own text (mirroring `_invariants()`'s
   proven mechanism), never parsed from filenames — a zero-padded filename
   (`0007-....md`) and a spec's bare citation (`ADR-7`) would otherwise
-  silently mismatch.
+  silently mismatch. **Amended (GitHub automated review on PR #13):** the
+  first implementation scanned a directory candidate's *entire* file for
+  every `ADR-n` occurrence, which conflates a declaration with a mere
+  reference — a decision record's own prose routinely cites another
+  decision ("Supersedes ADR-99") without declaring it. Fixed: a directory
+  candidate's declared id is now only its *first* mention (its own title),
+  never a later in-body reference; a single-index file is unaffected —
+  scanning its whole text for every mention is still correct there, since
+  that form is a declaration list by convention (mirroring
+  `_invariants()`'s own CONTRACT.md assumption). Separately, reference
+  *extraction* (`ADR_REF`/`INV_REF`/`MAKE_REF` scanning a spec's own text)
+  now excludes waiver-comment spans first — a waiver's own reason text
+  must not be able to satisfy the citation it exists to waive, the same
+  bug class already present, unfixed, for `INV_REF` since CP-4.
 - **DEC-AD-003:** `rules.evaluate_tree()` gains a second parallel block for
   G009, identical in shape to the existing G006 block — not generalized into
   a tree-rule registry. Two instances doesn't justify a dispatch mechanism;
@@ -136,6 +156,21 @@ for adding protection — resolved here as a single test, not new tooling
   ident-prefix-to-module mapping that makes `c4.md`'s module map trivially
   checkable. Revisit only if/when OpenAPI+event-schema land and this file's
   size or checkability actually degrades.
+- **DEC-AD-009 (found by GitHub's automated review on PR #13):**
+  `dialect_card.diff_cards()` compared a field entirely absent from an
+  older card's keys against the new card's default value for that field —
+  reporting every additive schema growth (not just this change's own
+  `adr_source`/`adr_ids`, but every prior one back to CP-2) as false
+  repository drift the first time a pre-upgrade snapshot was diffed
+  against a newer `planlint`, on an otherwise-unchanged repo. This directly
+  threatened `C-AD-1`'s own guarantee ("existing JSON shapes only grow,
+  never change") in the one place a consumer would actually observe it
+  break: `detect --diff`'s output. Fixed generally, not just for ADR
+  fields: a field missing as a *key* from the previous card is now skipped
+  in comparison entirely, regardless of the current card's value for it —
+  a schema addition is not drift. No `SCHEMA_VERSION` bump; consistent
+  with this project's established additive-fields-don't-need-a-version-bump
+  discipline (`C-WL-1`).
 
 ---
 

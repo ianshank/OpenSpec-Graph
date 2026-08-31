@@ -167,3 +167,24 @@ def suppressions(text: str) -> frozenset[str]:
     """Unchanged signature/behavior; now derived from parse_waivers() so the
     two can never drift apart."""
     return frozenset(w.rule for w in parse_waivers(text))
+
+
+def strip_waiver_comments(text: str) -> str:
+    """Blank out ``<!-- specgraph:allow ... -->`` spans, preserving length
+    (and therefore line numbers) so any caller still computing offsets
+    against the result stays correct.
+
+    A waiver's own reason text must never be able to satisfy the very
+    citation (``INV-n``, ``ADR-n``, a backtick-fenced ``make`` target) it
+    exists to waive -- e.g. a comment reading "specgraph:allow G009 ADR-1
+    is not yet cited" would otherwise put ``ADR-1`` into ``adr_refs``, silently
+    resolving the orphan G009 was waiving instead of waiving it (Copilot
+    review finding on PR #13; the identical class of bug already existed,
+    unfixed, for ``INV_REF`` since CP-4 -- ``test_g006_is_downgraded_to_info_
+    when_waived_anywhere_in_the_tree``'s own test comment names it, worked
+    around there by carefully avoiding the pattern in test fixtures rather
+    than fixed at the source). Reference-extraction (``MAKE_REF``/
+    ``INV_REF``/``ADR_REF``) scans this function's output, never the raw
+    text directly, for exactly that reason.
+    """
+    return SUPPRESS.sub(lambda m: " " * len(m.group()), text)
