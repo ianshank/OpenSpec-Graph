@@ -612,3 +612,26 @@ def test_cli_target_not_a_directory(tmp_path, capsys) -> None:
 # selector under fail_under=90. It is not a unit test: asserting it here would
 # require invoking pytest on this file, which re-runs this test and recurses.
 # The gate is exercised directly in the implementation step (`make ci`).
+
+
+# --- AC-WM-21: witnesses (CP-WM) get no graph representation, ever ----------
+
+
+def test_graph_never_includes_w001_or_w002_findings_even_with_a_stale_witness_present(
+    repo: Path,
+) -> None:
+    # A repo with zero recorded witnesses would fire W001 for every cited
+    # stage under --require-witness -- graph must never reflect that under
+    # any flag, since it has no --require-witness of its own (DEC-WM-013).
+    path = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    prof = detect.profile(repo)
+    spec = parse_spec(path, "harness")
+
+    # Prove W001 really would fire here, so this test isn't vacuous.
+    assert any(f.rule == "W001" for f in rules.evaluate(spec, prof, rules.RULES))
+
+    non_witness_only = rules.evaluate(spec, prof, rules.NON_WITNESS_RULES)
+    graph = graph_module.build_graph(prof)
+    assert graph["broken_links"] == len(non_witness_only)
+    node_types = {n.get("type") for n in graph.get("nodes", [])}
+    assert "witness" not in node_types

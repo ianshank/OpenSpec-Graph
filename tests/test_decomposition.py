@@ -36,6 +36,7 @@ _NEW_MODULES = [
     "ledger",
     "mermaid",
     "witness",
+    "rules_witness",
 ]
 
 # Modules that must NOT import cli or graph (the orchestration/output layers).
@@ -46,14 +47,17 @@ _BOUNDARY_EXEMPT = {"cli", "__init__"}
 # for the canonical fixture repo (tests/fixtures/). Captured before the split;
 # any drift after decomposition fails AC-DG-2.
 #
-# The "rules" hash was re-pinned once, by `fix-u003-mandatory-given`, which
-# reworded U003's summary (GIVEN became optional). "validate" and "graph" were
-# byte-identical across that change -- the fixture corpus has no scenario that
-# omits GIVEN, so no finding moved; only the rule's advertised summary did.
+# The "rules" hash has been re-pinned twice: once by `fix-u003-mandatory-given`
+# (reworded U003's summary -- GIVEN became optional), once by `add-witness-mode`
+# (W001/W002 added to RULES, listed by `rules --json` for discoverability even
+# though neither is evaluated without --require-witness). "validate" and
+# "graph" stayed byte-identical across both changes -- the canonical fixture
+# never passes --require-witness, and `graph` never evaluates W001/W002 at
+# all (DEC-WM-013), so neither pathway's output shape moved.
 _EXPECTED_HASHES = {
     "validate": "0a810b4f791fa5684dbf384df7ab626ddf96c3b62fcd9d8299dc8d774a3b82e0",
     "graph": "23eea4b474ff9d6d5c4f89dbb86acaac53562544a551d79bceb5c984d2015482",
-    "rules": "23e303bff7262a05a9542e0ca7d58945f80fbe61044066593a4a381108a26c44",
+    "rules": "add77deda2a87edae3346278ced2633828b4bf5d0ae50d4d9c200f8c7e5d06de",
 }
 
 
