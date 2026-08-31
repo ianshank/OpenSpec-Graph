@@ -10,6 +10,7 @@ import configparser
 import dataclasses
 import json
 import re
+from collections.abc import Sequence
 from pathlib import Path
 
 from . import dialect_card, machinery
@@ -268,6 +269,16 @@ def detect_dialect(spec_paths: list[Path]) -> str:
 
 def find_spec_files(openspec_root: Path) -> list[Path]:
     return sorted(openspec_root.glob("changes/*/specs/*/spec.md"))
+
+
+def filter_by_change(spec_files: Sequence[Path], change: str) -> list[Path]:
+    """Narrow a spec-file list to one change package's own specs.
+
+    Single-sourced: both ``cmd_validate`` and ``cmd_graph`` (``--change``)
+    use this, rather than each carrying its own copy of the path filter to
+    drift apart.
+    """
+    return [p for p in spec_files if f"/changes/{change}/" in str(p)]
 
 
 def profile(root: Path) -> StackProfile:

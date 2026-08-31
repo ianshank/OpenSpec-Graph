@@ -27,7 +27,7 @@ import logging
 import sys
 from pathlib import Path
 
-from . import detect, dialect_card, ledger, rules, scaffold
+from . import detect, dialect_card, ledger, mermaid, rules, scaffold
 from . import graph as graph_module
 from .log import configure as configure_logging
 from .parse import ParsedSpec, parse_spec
@@ -161,7 +161,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     spec_files = detect.find_spec_files(prof.openspec_root)
     if args.change:
-        spec_files = [p for p in spec_files if f"/changes/{args.change}/" in str(p)]
+        spec_files = detect.filter_by_change(spec_files, args.change)
         if not spec_files:
             print(f"no specs found for change {args.change!r}", file=sys.stderr)
             return 2
@@ -230,6 +230,9 @@ def cmd_rules(args: argparse.Namespace) -> int:
 def cmd_graph(args: argparse.Namespace) -> int:
     # Rendering is a downstream concern; reject it before doing any work so
     # the message is explicit rather than a generic argparse complaint (AC-GR-6).
+    # Mermaid is not "rendering" in that sense -- it's text GitHub/GitLab
+    # render natively, the same posture as JSON output; planlint still does
+    # no image rendering. This AC is unrevised, only added to.
     if args.format == "dot":
         print(
             "error: --format dot is not supported; graph rendering is a "
@@ -239,15 +242,28 @@ def cmd_graph(args: argparse.Namespace) -> int:
         return 2
 
     prof = _profile(args)
+    spec_files = None
+    if args.change:
+        if not prof.openspec_root:
+            print("no openspec/ directory; run ``planlint init`` first", file=sys.stderr)
+            return 2
+        spec_files = detect.filter_by_change(detect.find_spec_files(prof.openspec_root), args.change)
+        if not spec_files:
+            print(f"no specs found for change {args.change!r}", file=sys.stderr)
+            return 2
+
     try:
-        graph = graph_module.build_graph(prof)
+        graph = graph_module.build_graph(prof, spec_files=spec_files)
     except graph_module.NoOpenSpecTreeError as exc:
         # Name the missing directory and exit non-zero rather than emitting an
         # empty graph (AC-GR-2).
         print(str(exc), file=sys.stderr)
         return 2
 
-    print(json.dumps(graph, indent=2))
+    if args.format == "mermaid":
+        print(mermaid.to_mermaid(graph), end="")
+    else:
+        print(json.dumps(graph, indent=2))
     return 0
 
 
@@ -335,9 +351,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_graph = sub.add_parser("graph", help="emit the spec dependency graph as JSON")
     p_graph.add_argument(
-        "--format", choices=["json", "dot"], default="json",
+        "--format", choices=["json", "mermaid", "dot"], default="json",
         help="output format; 'dot' is rejected (rendering is out of scope)",
     )
+    p_graph.add_argument("--change", help="limit rendered nodes/edges to one change package")
     p_graph.set_defaults(func=cmd_graph)
 
     p_waivers = sub.add_parser("waivers", help="list every waived rule across the tree")

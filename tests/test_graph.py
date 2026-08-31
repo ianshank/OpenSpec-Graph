@@ -255,6 +255,99 @@ def test_graph_accepts_json_format_explicitly(repo: Path, capsys) -> None:
     assert "nodes" in payload and "edges" in payload
 
 
+# --- AC-GV: --format mermaid + --change scoping (change package: add-mermaid-graph-export) --
+
+
+def test_graph_format_mermaid_emits_a_flowchart(repo: Path, capsys) -> None:
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    exit_code = main(["--target", str(repo), "graph", "--format", "mermaid"])
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert out.startswith("flowchart LR")
+    assert "-->|" in out
+
+
+def test_graph_dot_is_still_rejected_after_mermaid_ships(repo: Path, capsys) -> None:
+    # AC-GV-4: adding --format mermaid does not revise AC-GR-6 -- dot stays
+    # rejected with the exact same message and exit code.
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    exit_code = main(["--target", str(repo), "graph", "--format", "dot"])
+    assert exit_code == 2
+    err = capsys.readouterr().err
+    assert "error: --format dot is not supported; graph rendering is a " "downstream, out-of-scope concern. Use --format json." in err
+
+
+def test_graph_change_scopes_which_specs_are_rendered(repo: Path, capsys) -> None:
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    write_spec(repo, "c2", "cap2", GOOD_HARNESS.replace("AC-DMO", "AC-DM2").replace("R-DMO", "R-DM2"))
+    exit_code = main(["--target", str(repo), "graph", "--change", "c1", "--format", "json"])
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["specs"] == 1
+    spec_nodes = [n for n in payload["nodes"] if n["type"] == "spec"]
+    assert len(spec_nodes) == 1
+    assert "c1" in spec_nodes[0]["path"]
+
+
+def test_graph_change_does_not_falsely_orphan_an_invariant_cited_outside_the_scope(
+    repo: Path, capsys
+) -> None:
+    # The bug an adversarial review caught: naively scoping evaluate_tree()'s
+    # input to the rendered --change would make an invariant cited only by
+    # an unrendered change look orphaned. It must not.
+    (repo / "CONTRACT.md").write_text("# Contract\n\n- INV-1 no unattested writes\n- INV-2 gates are ordered\n")
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)  # cites INV-1 only
+    other = GOOD_HARNESS.replace("INV-1", "INV-2").replace("AC-DMO", "AC-DM2").replace("R-DMO", "R-DM2")
+    write_spec(repo, "c2", "cap2", other)  # cites INV-2 only
+
+    exit_code = main(["--target", str(repo), "graph", "--change", "c1", "--format", "json"])
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    orphan_nodes = [n for n in payload["nodes"] if n.get("type") == "invariant" and n.get("orphan")]
+    assert not any(n["name"] == "INV-2" for n in orphan_nodes), (
+        "INV-2 is genuinely cited by c2 -- rendering only c1 must not make it look orphaned"
+    )
+
+
+def test_graph_change_still_surfaces_a_genuinely_orphaned_invariant(repo: Path, capsys) -> None:
+    # The other half of the same fix: evaluate_tree() must still RUN (and
+    # its results still surface) under --change, just always unscoped --
+    # scoping must not silently suppress a real orphan either.
+    (repo / "CONTRACT.md").write_text("# Contract\n\n- INV-1 no unattested writes\n- INV-2 gates are ordered\n")
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)  # cites INV-1 only; INV-2 is cited by nothing anywhere
+
+    exit_code = main(["--target", str(repo), "graph", "--change", "c1", "--format", "json"])
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    orphan_nodes = [n for n in payload["nodes"] if n.get("type") == "invariant" and n.get("orphan")]
+    assert any(n["name"] == "INV-2" for n in orphan_nodes)
+    assert payload["broken_links"] > 0
+
+
+def test_graph_change_not_found(repo: Path, capsys) -> None:
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    exit_code = main(["--target", str(repo), "graph", "--change", "nope"])
+    assert exit_code == 2
+    err = capsys.readouterr().err
+    assert "no specs found for change" in err
+
+
+def test_graph_change_with_no_openspec_dir(repo: Path, capsys) -> None:
+    # repo has no openspec/ yet
+    exit_code = main(["--target", str(repo), "graph", "--change", "c1"])
+    assert exit_code == 2
+    assert "no openspec/ directory" in capsys.readouterr().err
+
+
+def test_filter_by_change_is_a_pure_path_filter() -> None:
+    paths = [
+        Path("openspec/changes/c1/specs/cap/spec.md"),
+        Path("openspec/changes/c2/specs/cap/spec.md"),
+    ]
+    assert detect.filter_by_change(paths, "c1") == [paths[0]]
+    assert detect.filter_by_change(paths, "nope") == []
+
+
 # --- CLI branch coverage (closes the gap that kept total below 90%) -----------
 
 

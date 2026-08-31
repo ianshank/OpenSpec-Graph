@@ -13,6 +13,7 @@ Node types: ``spec``, ``requirement``, ``criterion``, ``stage``,
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 from . import detect, parse, rules
@@ -175,12 +176,24 @@ def _mark_orphan_requirements(nodes: list[dict[str, object]], edges: list[dict[s
             node["orphan"] = True
 
 
-def build_graph(profile: StackProfile) -> dict[str, object]:
+def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None) -> dict[str, object]:
     """Build the dependency graph for every change package under ``openspec/``.
 
     Raises ``NoOpenSpecTreeError`` if the target has no ``openspec/`` tree
     (AC-GR-2): the caller exits non-zero with a message naming the missing
     directory rather than emitting an empty graph.
+
+    ``spec_files``, if given (e.g. ``--change``-filtered), scopes which specs
+    get rendered as nodes/edges -- but never what feeds
+    ``rules.evaluate_tree()``, which always sees the full, unscoped tree
+    regardless. Scoping that too would reproduce the exact false-positive-
+    orphan bug ``cmd_validate --change`` already guards against (DEC-WL-003):
+    an invariant cited only outside the rendered scope would wrongly look
+    orphaned. Unlike ``cmd_validate``, which skips G006 entirely under
+    ``--change``, the tree-level check still runs here and its (correctly
+    unscoped) findings are still included -- an orphan invariant is, by
+    definition, cited by no living spec anywhere, so it isn't "content
+    belonging to a different change" being leaked into a scoped picture.
     """
     if not profile.openspec_root or not profile.openspec_root.is_dir():
         raise NoOpenSpecTreeError(
@@ -188,7 +201,8 @@ def build_graph(profile: StackProfile) -> dict[str, object]:
             "run `planlint init` first"
         )
 
-    spec_files = detect.find_spec_files(profile.openspec_root)
+    all_spec_files = detect.find_spec_files(profile.openspec_root)
+    render_paths = set(all_spec_files) if spec_files is None else set(spec_files)
     known_stages = set(profile.make_targets)
     known_invariants = set(profile.invariant_ids)
     dialect = profile.dialect if profile.dialect != "unknown" else "auto"
@@ -197,11 +211,15 @@ def build_graph(profile: StackProfile) -> dict[str, object]:
     edges: list[dict[str, object]] = []
     seen_nodes: set[str] = set()
     broken_links = 0
-    specs: list[ParsedSpec] = []
+    all_specs: list[ParsedSpec] = []
+    rendered = 0
 
-    for path in spec_files:
+    for path in all_spec_files:
         spec = parse.parse_spec(path, dialect)
-        specs.append(spec)
+        all_specs.append(spec)
+        if path not in render_paths:
+            continue
+        rendered += 1
         rel = _relative_to(path, profile.root)
         spec_node = _add_spec_node(nodes, seen_nodes, spec, rel)
         _add_requirement_nodes(nodes, seen_nodes, spec, spec_node)
@@ -209,16 +227,16 @@ def build_graph(profile: StackProfile) -> dict[str, object]:
         _add_invariant_edges(nodes, edges, seen_nodes, spec, spec_node, known_invariants)
         broken_links += _add_finding_edges(edges, spec_node, rules.evaluate(spec, profile))
 
-    # No --change filtering here (unlike cmd_validate), so this always runs
-    # unscoped -- the one case evaluate_tree()'s orphan check is valid for.
-    broken_links += _add_tree_finding_edges(nodes, edges, seen_nodes, rules.evaluate_tree(specs, profile))
+    broken_links += _add_tree_finding_edges(
+        nodes, edges, seen_nodes, rules.evaluate_tree(all_specs, profile)
+    )
 
     _mark_orphan_requirements(nodes, edges)
 
     return {
         "root": str(profile.root),
         "dialect": profile.dialect,
-        "specs": len(spec_files),
+        "specs": rendered,
         "nodes": nodes,
         "edges": edges,
         "broken_links": broken_links,
