@@ -127,20 +127,33 @@ def _load_one(path: Path) -> Witness | None:
         return None
     try:
         data = json.loads(payload)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        # json.loads(bytes) decodes internally before parsing -- non-UTF-8
+        # bytes raise UnicodeDecodeError (a ValueError sibling, not a
+        # JSONDecodeError subclass) directly from that step, before json's
+        # own parser ever runs. Must not escape load_witnesses()'s "never
+        # raises" contract (R-WM-9).
         return None
-    if not isinstance(data, dict) or data.get("schema_version") != WITNESS_SCHEMA_VERSION:
+    if not isinstance(data, dict):
+        return None
+    schema_version = data.get("schema_version")
+    # bool is an int subclass in Python (True == 1) -- schema_version: true
+    # must not silently pass this check as if it were the real value 1.
+    if isinstance(schema_version, bool) or schema_version != WITNESS_SCHEMA_VERSION:
         return None
     coverage = data.get("coverage")
     if coverage is not None:
         if isinstance(coverage, bool) or not isinstance(coverage, (int, float)) or not math.isfinite(coverage):
             return None
         coverage = float(coverage)
+    exit_code = data.get("exit_code")
+    if isinstance(exit_code, bool) or not isinstance(exit_code, int):
+        return None
     try:
         return Witness(
-            schema_version=int(data["schema_version"]),
+            schema_version=schema_version,
             stage=str(data["stage"]),
-            exit_code=int(data["exit_code"]),
+            exit_code=exit_code,
             coverage=coverage,
             sha=str(data["sha"]),
             recorded_at=str(data["recorded_at"]),

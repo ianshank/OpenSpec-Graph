@@ -133,6 +133,63 @@ def test_load_witnesses_skips_malformed_json_without_raising(tmp_path: Path) -> 
     assert witness.load_witnesses(tmp_path) == ()
 
 
+def test_load_witnesses_skips_valid_json_that_is_not_an_object(tmp_path: Path) -> None:
+    # Well-formed JSON whose top-level value isn't a dict at all (a bare
+    # array here) -- distinct from malformed JSON above; .get() would raise
+    # AttributeError on this without the isinstance(data, dict) guard.
+    payload = b"[1, 2, 3]"
+    directory = tmp_path / witness.WITNESS_DIR_NAME
+    directory.mkdir(parents=True)
+    (directory / f"{witness.compute_hash(payload)}.json").write_bytes(payload)
+    assert witness.load_witnesses(tmp_path) == ()
+
+
+def test_load_witnesses_skips_non_utf8_bytes_without_raising(tmp_path: Path) -> None:
+    # GitHub Copilot review finding on PR #14: json.loads(bytes) decodes
+    # internally before parsing, and non-UTF-8 bytes raise
+    # UnicodeDecodeError (a ValueError sibling, not a json.JSONDecodeError
+    # subclass) directly from that step -- a real, previously-uncaught
+    # violation of load_witnesses()'s "never raises" contract (R-WM-9) for
+    # any hash-matching-but-non-UTF-8 file (this is content-addressed, so
+    # naturally-corrupted bytes would fail the hash check first; the real
+    # trigger is a hand-crafted or non-first-party-tool-written file --
+    # still a real concern given .planlint/witnesses/ is part of the
+    # target repo's own, potentially untrusted, working tree).
+    payload = b'{"stage": "test\xc3\x28"}'  # \xc3 starts a 2-byte UTF-8
+    # sequence; \x28 ("(") is not a valid continuation byte.
+    directory = tmp_path / witness.WITNESS_DIR_NAME
+    directory.mkdir(parents=True)
+    (directory / f"{witness.compute_hash(payload)}.json").write_bytes(payload)
+    assert witness.load_witnesses(tmp_path) == ()
+
+
+def test_load_witnesses_skips_a_schema_version_that_is_a_bool_not_an_int(tmp_path: Path) -> None:
+    # GitHub Copilot review finding on PR #14: bool is an int subclass in
+    # Python (True == 1), so schema_version: true would otherwise silently
+    # pass the `== WITNESS_SCHEMA_VERSION` check -- defeating the strict
+    # schema-version validation DEC-WM-018 specifically added to close this
+    # exact bug class (the same shape as the already-fixed
+    # dialect_card.diff_cards() schema bug).
+    directory = tmp_path / witness.WITNESS_DIR_NAME
+    directory.mkdir(parents=True)
+    payload = witness.serialize(_witness(schema_version=True))
+    (directory / f"{witness.compute_hash(payload)}.json").write_bytes(payload)
+    assert witness.load_witnesses(tmp_path) == ()
+
+
+def test_load_witnesses_skips_an_exit_code_that_is_a_bool_not_an_int(tmp_path: Path) -> None:
+    # Same bug class as schema_version above, one line down in the same
+    # function -- not itself flagged by the review, but exit_code == 0
+    # means "the assertion held" in W001's own logic, so silently coercing
+    # exit_code: false to 0 would be a stricter, more consequential version
+    # of the identical type-confusion bug, not a hypothetical one.
+    directory = tmp_path / witness.WITNESS_DIR_NAME
+    directory.mkdir(parents=True)
+    payload = witness.serialize(_witness(exit_code=False))
+    (directory / f"{witness.compute_hash(payload)}.json").write_bytes(payload)
+    assert witness.load_witnesses(tmp_path) == ()
+
+
 def test_load_witnesses_skips_a_file_missing_a_required_field_without_raising(tmp_path: Path) -> None:
     data = {"schema_version": witness.WITNESS_SCHEMA_VERSION, "stage": "test", "exit_code": 0}
     _write_raw(tmp_path, data)
