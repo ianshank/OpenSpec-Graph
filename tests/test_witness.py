@@ -117,7 +117,7 @@ def test_load_witnesses_skips_a_dangling_symlink_without_raising(tmp_path: Path)
 
 
 def test_load_witnesses_skips_a_file_whose_content_does_not_match_its_filename_hash(tmp_path: Path) -> None:
-    # AC-WM-3 (non-success): a tampered/corrupt witness must fail closed,
+    # AC-WM-16 (non-success): a tampered/corrupt witness must fail closed,
     # not raise and not be treated as a pass.
     directory = tmp_path / witness.WITNESS_DIR_NAME
     directory.mkdir(parents=True)

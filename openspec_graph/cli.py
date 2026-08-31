@@ -180,12 +180,16 @@ def cmd_validate(args: argparse.Namespace) -> int:
     # swap is the single mechanism that both gates them here and excludes
     # them from graph.py's output (rules.NON_WITNESS_RULES, DEC-WM-007).
     # Default validate behavior is unchanged: the rules aren't evaluated at
-    # all when the flag is absent, not computed and silently discarded.
+    # all when the flag is absent, not computed and silently discarded --
+    # and, unlike the --change-scoped skips below (a real coverage caveat
+    # on an unusual path, worth flagging every time), no stderr line either:
+    # this is the default path every existing caller already runs, and
+    # printing on it would be new, permanent noise on the common case, not
+    # a warning about a narrowed result.
     if args.require_witness:
         rule_set: tuple[rules.Rule, ...] = rules.RULES
     else:
         rule_set = rules.NON_WITNESS_RULES
-        print("INFO  W001/W002 not evaluated (pass --require-witness to enable)", file=sys.stderr)
 
     findings: list[rules.Finding] = []
     specs: list[ParsedSpec] = []

@@ -1598,6 +1598,25 @@ def test_w001_fires_when_a_cited_stage_has_no_matching_witness(repo: Path) -> No
     assert any(f.rule == "W001" for f in found)
 
 
+def test_w001_reports_never_witnessed_not_a_sha_failure_when_the_store_is_empty(
+    repo: Path,
+) -> None:
+    # Copilot review finding on PR #14: detect.profile()'s real wiring sets
+    # current_sha=None whenever witnesses is empty (DEC-WM-008's lazy skip)
+    # -- so the common "nobody has run `witness` yet" case must not read as
+    # "sha could not be determined" (a misdiagnosis suggesting a git
+    # problem). Mirrors the real StackProfile relationship exactly, unlike
+    # test_w001_fires_for_every_citation_when_current_sha_is_none below,
+    # which deliberately tests the other case: witnesses exist but sha
+    # detection itself failed.
+    path = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    prof = _profile_with(repo, witnesses=(), current_sha=None)
+    found = rules.evaluate(parse_spec(path, "harness"), prof, rules.RULES)
+    w001 = [f for f in found if f.rule == "W001"]
+    assert w001 and "never been witnessed" in w001[0].message
+    assert not any("could not be determined" in f.message for f in w001)
+
+
 def test_w001_fires_when_the_witness_sha_does_not_match_current_sha(repo: Path) -> None:
     path = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     prof = _profile_with(repo, witnesses=(_witness(sha=OTHER_SHA),))
@@ -1702,6 +1721,38 @@ def test_w001_fires_independently_for_each_stage_cited_in_one_upstream_scenario(
     messages = " ".join(f.message for f in found if f.rule == "W001")
     assert "`build`" in messages
     assert "`regression`" in messages
+
+
+def test_w001_reports_never_witnessed_for_a_stage_the_non_empty_store_lacks(repo: Path) -> None:
+    # The store isn't empty (so the top-level "nothing has ever been
+    # witnessed" short-circuit doesn't apply) and current_sha is known, but
+    # none of the recorded witnesses are for this specific stage -- must
+    # still fall through to the same "never been witnessed" message, not
+    # the "not at the current commit" one (that's for a witness that
+    # exists for this stage but at a stale sha, a different case).
+    body = textwrap.dedent(
+        """\
+        # Spec delta — Demo capability
+
+        ## ADDED Requirements
+
+        ### Requirement: the writer SHALL attest every write
+
+        Prose obligation.
+
+        #### Scenario: attested writes record an evidence id
+
+        - **GIVEN** `make build` has succeeded
+        - **WHEN** `make regression` runs the suite
+        - **THEN** an evidence id is recorded
+        """
+    )
+    path = write_spec(repo, "c1", "cap1", body)
+    prof = _profile_with(repo, witnesses=(_witness(stage="build"),))
+    found = rules.evaluate(parse_spec(path, "upstream"), prof, rules.RULES)
+    w001 = {f.message for f in found if f.rule == "W001"}
+    assert not any("`build`" in m for m in w001)
+    assert any("`regression`" in m and "never been witnessed" in m for m in w001)
 
 
 def test_w001_waiver_suppresses_the_finding_and_downgrades_to_info(repo: Path) -> None:
@@ -1811,10 +1862,16 @@ def test_validate_without_require_witness_never_evaluates_w001(repo: Path, capsy
     assert not any(f["rule"] == "W001" for f in out["findings"])
 
 
-def test_validate_require_witness_flag_prints_skip_message_when_absent(repo: Path, capsys) -> None:
+def test_validate_without_require_witness_prints_no_witness_related_stderr(repo: Path, capsys) -> None:
+    # Copilot review finding on PR #14: the default (flag-absent) path is
+    # every existing caller's own behavior, unmodified by this change --
+    # printing new INFO noise on it, forever, would contradict that and
+    # could break a downstream consumer expecting clean stderr on success.
+    # Unlike the --change-scoped skip messages below (a real, narrowed-scope
+    # caveat worth flagging every time), there is nothing to flag here.
     write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     main(["--target", str(repo), "validate"])
-    assert "W001/W002 not evaluated" in capsys.readouterr().err
+    assert "witness" not in capsys.readouterr().err.lower()
 
 
 def test_validate_require_witness_fails_closed_on_a_repo_with_no_witness_store(repo: Path) -> None:

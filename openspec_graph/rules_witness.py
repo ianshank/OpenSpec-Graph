@@ -40,6 +40,13 @@ def _missing_witness(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]:
     and failing-run findings would otherwise be indistinguishable to a CI
     maintainer staring at a red ``--require-witness`` run)."""
     for crit, stage in _stage_citations(spec):
+        if not profile.witnesses:
+            # current_sha is None here too (DEC-WM-008's lazy skip -- never
+            # even attempted), but that's not why this citation is unproven:
+            # nothing has ever been witnessed. Saying "sha could not be
+            # determined" would misdiagnose this as a git problem.
+            yield f"{crit.ident} cites `{stage}`, which has never been witnessed"
+            continue
         if profile.current_sha is None:
             yield (
                 f"{crit.ident} cites `{stage}`, but the current commit sha could not "

@@ -486,8 +486,9 @@ def profile(root: Path) -> StackProfile:
     witnesses = witness.load_witnesses(root)
     # Lazy: detect.profile() runs on every detect/validate/graph call
     # (including this project's own 300+-test suite), and the current sha
-    # is meaningless with zero witnesses to compare against -- AC-WM-3
-    # fails closed regardless of its value in that case (DEC-WM-008).
+    # is meaningless with zero witnesses to compare against -- never even
+    # computed in that case (AC-WM-19, DEC-WM-008); validate still fails
+    # closed on an empty witness store regardless (AC-WM-9).
     current_sha = _current_sha(root) if witnesses else None
     return StackProfile(
         root=root,
