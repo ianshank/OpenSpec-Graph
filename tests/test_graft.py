@@ -691,6 +691,76 @@ def test_g006_is_skipped_under_change_scoping(repo: Path, capsys) -> None:
     assert "G006 skipped" in out.err
 
 
+def test_g008_fires_on_an_undeclared_adr(repo: Path) -> None:
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    body = GOOD_HARNESS.replace(
+        "**Evidence:** `demo/mod.py::run` writes without attestation.",
+        "**Evidence:** `demo/mod.py::run` writes without attestation. See ADR-99.",
+    )
+    found = findings_for(repo, body)
+    assert "G008" in rule_ids(found)
+    assert any("ADR-99" in f.message for f in found)
+
+
+def test_g009_fires_for_a_declared_adr_no_spec_cites(repo: Path) -> None:
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    (repo / "docs" / "adr" / "0002-use-rest.md").write_text("# ADR-2: Use REST\n")
+    body = GOOD_HARNESS.replace(
+        "**Evidence:** `demo/mod.py::run` writes without attestation.",
+        "**Evidence:** `demo/mod.py::run` writes without attestation. See ADR-1.",
+    )
+    found = tree_findings_for(repo, [("demo-change", "demo-cap", body)])
+    g009 = [f for f in found if f.rule == "G009"]
+    assert g009 and all(f.severity == "WARN" for f in g009)
+    assert any(f.subject == "ADR-2" for f in g009)
+    assert any("ADR-2" in f.message and "docs/adr" in f.message for f in g009)
+
+
+def test_g009_does_not_fire_once_cited_anywhere_in_the_tree(repo: Path) -> None:
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    body1 = GOOD_HARNESS.replace(
+        "**Evidence:** `demo/mod.py::run` writes without attestation.",
+        "**Evidence:** `demo/mod.py::run` writes without attestation. See ADR-1.",
+    )
+    other = GOOD_HARNESS.replace("AC-DMO", "AC-DM2").replace("R-DMO", "R-DM2")
+    found = tree_findings_for(
+        repo,
+        [("c1", "cap1", body1), ("c2", "cap2", other)],
+    )
+    assert "G009" not in rule_ids(found)
+
+
+def test_g009_is_downgraded_to_info_when_waived_anywhere_in_the_tree(repo: Path) -> None:
+    # Reason text deliberately avoids the ADR-n pattern itself -- adr_refs
+    # scans the whole raw text unconditionally, so naming the ADR here
+    # would make the waiver comment itself count as a citation and resolve
+    # the orphan before the waiver-downgrade path is even exercised.
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    body = GOOD_HARNESS.replace(
+        "## Problem Statement",
+        "<!-- specgraph:allow G009 the decision predates this spec tree, not "
+        "yet cited anywhere -->\n\n## Problem Statement",
+    )
+    found = tree_findings_for(repo, [("demo-change", "demo-cap", body)])
+    g009 = [f for f in found if f.rule == "G009"]
+    assert g009 and all(f.severity == "INFO" and "[waived]" in f.message for f in g009)
+
+
+def test_g009_is_skipped_under_change_scoping(repo: Path, capsys) -> None:
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    write_spec(repo, "demo-change", "demo-cap", GOOD_HARNESS)
+    exit_code = main(["--target", str(repo), "validate", "--change", "demo-change"])
+    out = capsys.readouterr()
+    assert exit_code == 0
+    assert "G009" not in out.out
+    assert "G009 skipped" in out.err
+
+
 def test_h001_fires_when_an_ac_has_no_verification(repo: Path) -> None:
     body = GOOD_HARNESS.replace(
         "  _Verified by:_ `pytest -k test_attested_write` · stage: `make regression`\n",

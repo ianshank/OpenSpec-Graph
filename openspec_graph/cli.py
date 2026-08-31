@@ -175,12 +175,14 @@ def cmd_validate(args: argparse.Namespace) -> int:
         findings.extend(rules.evaluate(spec, prof))
 
     if args.change:
-        # G006 is a whole-tree property (DEC-WL-001); spec_files was just
-        # filtered by --change above, so evaluate_tree() over that filtered
-        # set would report every invariant outside the filtered view as
-        # falsely orphaned (DEC-WL-003). A --change-scoped run's contract
-        # is "does this one package pass" either way, so skip it outright.
+        # G006/G009 are whole-tree properties (DEC-WL-001/DEC-AD-003);
+        # spec_files was just filtered by --change above, so evaluate_tree()
+        # over that filtered set would report every invariant/ADR outside
+        # the filtered view as falsely orphaned (DEC-WL-003/DEC-AD-004). A
+        # --change-scoped run's contract is "does this one package pass"
+        # either way, so skip both outright.
         print("INFO  G006 skipped (tree-wide check needs an unscoped run)", file=sys.stderr)
+        print("INFO  G009 skipped (tree-wide check needs an unscoped run)", file=sys.stderr)
     else:
         findings.extend(rules.evaluate_tree(specs, prof))
 
@@ -251,14 +253,20 @@ def cmd_graph(args: argparse.Namespace) -> int:
         if not spec_files:
             print(f"no specs found for change {args.change!r}", file=sys.stderr)
             return 2
-        # Unlike `validate --change` (which skips G006 outright, DEC-WL-003),
-        # `graph --change` keeps evaluate_tree() running unscoped and folds
-        # its results into broken_links (DEC-GV-002) -- so a nonzero
-        # broken_links here can reflect an invariant issue entirely outside
-        # the rendered scope. Flagged so that is never a silent surprise.
+        # Unlike `validate --change` (which skips G006/G009 outright,
+        # DEC-WL-003/DEC-AD-004), `graph --change` keeps evaluate_tree()
+        # running unscoped and folds its results into broken_links
+        # (DEC-GV-002) -- so a nonzero broken_links here can reflect an
+        # invariant/ADR issue entirely outside the rendered scope. Flagged
+        # so that is never a silent surprise.
         print(
             "INFO  G006 included unscoped (tree-wide check; may report an "
             "invariant outside this --change scope)",
+            file=sys.stderr,
+        )
+        print(
+            "INFO  G009 included unscoped (tree-wide check; may report an "
+            "ADR outside this --change scope)",
             file=sys.stderr,
         )
 

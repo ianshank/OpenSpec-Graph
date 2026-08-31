@@ -316,6 +316,15 @@ def test_graph_change_prints_a_g006_unscoped_heads_up(repo: Path, capsys) -> Non
     assert "INFO  G006 included unscoped" in err
 
 
+def test_graph_change_prints_a_g009_unscoped_heads_up(repo: Path, capsys) -> None:
+    # Same story as G006's own heads-up, for the ADR orphan check (DEC-AD-004).
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    exit_code = main(["--target", str(repo), "graph", "--change", "c1", "--format", "json"])
+    assert exit_code == 0
+    err = capsys.readouterr().err
+    assert "INFO  G009 included unscoped" in err
+
+
 def test_graph_change_does_not_falsely_orphan_an_invariant_cited_outside_the_scope(
     repo: Path, capsys
 ) -> None:

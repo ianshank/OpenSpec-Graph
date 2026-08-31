@@ -1,8 +1,9 @@
-"""Universal (dialect-agnostic) rules: G001-G007.
+"""Universal (dialect-agnostic) rules: G001-G009.
 
-G006's real check is cross-tree (a declared invariant cited by no living
-spec anywhere), so it cannot be expressed as a per-spec ``Rule.check`` --
-see ``orphan_invariant_ids()`` below and ``rules.evaluate_tree()``.
+G006/G009's real checks are cross-tree (a declared invariant/ADR cited by no
+living spec anywhere), so neither can be expressed as a per-spec
+``Rule.check`` -- see ``orphan_invariant_ids()``/``orphan_adr_ids()`` below
+and ``rules.evaluate_tree()``.
 """
 
 from __future__ import annotations
@@ -111,6 +112,35 @@ def _orphan_invariant_registry_stub(_s: ParsedSpec, _p: StackProfile) -> Iterabl
     return ()
 
 
+def _unknown_adr(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]:
+    if not profile.adr_ids:
+        return
+    known = set(profile.adr_ids)
+    for ref in spec.adr_refs:
+        if ref not in known:
+            yield f"references {ref}, which is not declared in {profile.adr_source_name}"
+
+
+def orphan_adr_ids(specs: Sequence[ParsedSpec], profile: StackProfile) -> tuple[str, ...]:
+    """Declared ADRs cited by no spec in ``specs``.
+
+    A whole-tree question, not a per-spec one -- called once by
+    ``rules.evaluate_tree()``, never per-spec. Same shape as
+    ``orphan_invariant_ids()`` above (DEC-AD-003).
+    """
+    if not profile.adr_ids:
+        return ()
+    cited = {ref for spec in specs for ref in spec.adr_refs}
+    return tuple(adr for adr in profile.adr_ids if adr not in cited)
+
+
+def _orphan_adr_registry_stub(_s: ParsedSpec, _p: StackProfile) -> Iterable[str]:
+    # Inert: the real cross-tree check is orphan_adr_ids(), run once per
+    # validate/graph pass by rules.evaluate_tree(), not per spec. This stub
+    # exists only so `planlint rules`/`rules --json` lists G009.
+    return ()
+
+
 GENERIC_RULES: tuple[Rule, ...] = (
     Rule("G001", ERROR, ("*",), "spec declares verifiable criteria", _no_criteria),
     Rule("G002", ERROR, ("*",), "at least one non-success criterion", _needs_negative),
@@ -125,4 +155,12 @@ GENERIC_RULES: tuple[Rule, ...] = (
         _orphan_invariant_registry_stub,
     ),
     Rule("G007", ERROR, ("*",), "every waiver states a reason", _unjustified_waiver),
+    Rule("G008", WARN, ("*",), "cited ADRs are declared", _unknown_adr),
+    Rule(
+        "G009",
+        WARN,
+        ("*",),
+        "declared ADRs are cited by a living spec or waived",
+        _orphan_adr_registry_stub,
+    ),
 )
