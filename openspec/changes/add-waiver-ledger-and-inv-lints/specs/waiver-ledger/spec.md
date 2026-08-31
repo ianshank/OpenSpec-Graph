@@ -76,7 +76,7 @@ Waivers are silently downgraded to INFO today with no record of what was waived,
 - [x] **AC-WL-13:** `graph --format json`'s `broken_links` count still equals the total finding count (including tree-level findings) with G006 present — the AC-GR-4 invariant holds. (C-WL-1)
   _Verified by:_ `pytest -k test_graph_matches_validate_findings_with_an_orphan_invariant` · stage: `make test`
 
-- [ ] **AC-WL-1:** `planlint waivers --format json` emits a ledger of every waived rule with file, line, reason, and the owning change package, in stable order. (R-WL-6)
+- [x] **AC-WL-1:** `planlint waivers --format json` emits a ledger of every waived rule with file, line, reason, and the owning change package, in stable order. (R-WL-6)
   _Verified by:_ `pytest -k test_cli_waivers_json_lists_reason_file_line_and_change` · stage: `make test`
 
 ---

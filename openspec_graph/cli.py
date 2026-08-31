@@ -13,6 +13,7 @@ Verbs:
   validate  run the rule engine over every change package
   graph     emit the spec dependency graph as JSON (pure projection of validate)
   rules     print the rule table
+  waivers   list every waived rule across the tree, with file, line, reason, change
 
 Exit codes: 0 clean, 1 findings at or above the fail level, 2 usage error.
 """
@@ -26,7 +27,7 @@ import logging
 import sys
 from pathlib import Path
 
-from . import detect, dialect_card, rules, scaffold
+from . import detect, dialect_card, ledger, rules, scaffold
 from . import graph as graph_module
 from .log import configure as configure_logging
 from .parse import ParsedSpec, parse_spec
@@ -250,6 +251,29 @@ def cmd_graph(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_waivers(args: argparse.Namespace) -> int:
+    prof = _profile(args)
+    if not prof.openspec_root:
+        print("no openspec/ directory; run ``planlint init`` first", file=sys.stderr)
+        return 2
+
+    spec_files = detect.find_spec_files(prof.openspec_root)
+    specs = [parse_spec(path, args.dialect or prof.dialect) for path in spec_files]
+    entries = ledger.build_ledger(specs, prof.root)
+
+    if args.format == "json":
+        print(json.dumps([e.as_dict() for e in entries], indent=2))
+        return 0
+
+    if not entries:
+        print("no waivers found")
+        return 0
+    print(f"{'RULE':6s} {'LINE':>5s}  {'CHANGE':30s} {'PATH':40s} REASON")
+    for e in entries:
+        print(f"{e.rule:6s} {e.line:5d}  {(e.change or '-'):30s} {e.path:40s} {e.reason}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="planlint", description="The CI gate that fails when a spec cites a gate this repo does not have."
@@ -315,6 +339,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="output format; 'dot' is rejected (rendering is out of scope)",
     )
     p_graph.set_defaults(func=cmd_graph)
+
+    p_waivers = sub.add_parser("waivers", help="list every waived rule across the tree")
+    p_waivers.add_argument("--dialect", choices=["harness", "upstream", "auto"])
+    p_waivers.add_argument("--format", choices=["text", "json"], default="text")
+    p_waivers.set_defaults(func=cmd_waivers)
 
     return parser
 

@@ -22,7 +22,7 @@ from tests.support import run_cli, write_spec
 # The closed set of verbs planlint exposes. Adding a verb here is a deliberate,
 # reviewed product decision — never an accident. Authoring verbs (propose,
 # apply, chat) are explicitly excluded (the non-success criterion of AC-RP-3).
-ALLOWED_VERBS = {"detect", "init", "new", "validate", "graph", "rules"}
+ALLOWED_VERBS = {"detect", "init", "new", "validate", "graph", "rules", "waivers"}
 REJECTED_VERBS = {"propose", "apply", "chat", "generate", "draft"}
 
 

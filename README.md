@@ -31,6 +31,7 @@ planlint --target /path/to/clone detect --diff prev.json  # exit 1 + list what d
 planlint --target /path/to/clone init        # write a snapshot of detected conventions into openspec/
 planlint --target /path/to/clone new add-thing --capability thing-capability
 planlint --target /path/to/clone validate    # exit 1 on any ERROR — the gate
+planlint --target /path/to/clone waivers --format json  # ledger of every waived rule, tree-wide
 planlint --version                           # print the installed version and exit
 ```
 
@@ -158,6 +159,17 @@ The finding is downgraded to `INFO` and prefixed `[waived]` — it still appears
 in the report and in CI logs. It is not deleted. A waiver you cannot see is a
 rule you no longer have. The `specgraph:allow` comment syntax is a stable
 contract identifier kept under that name for backwards compatibility.
+
+A waiver with no reason text fails the gate (`G007`) — a suppression is a
+claim, and a claim with nothing behind it is not a judgement call.
+
+`planlint waivers --format json` lists every waived rule across the whole
+tree — rule, file, line, reason, and the owning change package — so a
+suppression is discoverable without grepping every `spec.md` by hand:
+
+```bash
+planlint --target /path/to/clone waivers --format json
+```
 
 ## What it found in a real repository
 
