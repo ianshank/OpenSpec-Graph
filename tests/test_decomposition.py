@@ -34,6 +34,7 @@ _NEW_MODULES = [
     "machinery",
     "dialect_card",
     "ledger",
+    "mermaid",
 ]
 
 # Modules that must NOT import cli or graph (the orchestration/output layers).
