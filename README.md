@@ -2,6 +2,20 @@
 
 **The CI gate that fails when a spec cites a gate this repo does not have.**
 
+**In plain English:** software teams often write planning documents — this
+project calls them "specs" — that describe what a feature should do, how
+it'll be tested, and what percentage of the code needs to be covered by
+tests. Those documents are supposed to match the real project, but nothing
+stops them from drifting out of sync: a spec might reference a test command
+that got renamed months ago, quote a coverage number the project no longer
+enforces, or cite a design decision that was never actually written down.
+`planlint` reads your project's real setup — its actual test commands, its
+actual coverage settings, its actual decision records — and checks every
+spec against those facts. If a spec claims something the project doesn't
+actually back up, `planlint` fails the check, the same way a broken test
+fails, catching the mismatch immediately instead of letting it mislead the
+next person who reads the plan.
+
 Point `planlint` at a cloned repository. It reads the target's *real* machinery —
 its make targets, where its coverage floor actually lives, its invariant
 source, which spec dialect it writes — then holds every spec to that, using the
