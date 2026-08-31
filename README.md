@@ -154,6 +154,8 @@ quality without making the document wrong.
 | U003 | ERROR | upstream | Every Scenario names a stimulus (`WHEN`) and an outcome (`THEN`); `GIVEN` is optional |
 | U004 | WARN | upstream | Requirements use SHALL / MUST |
 | U005 | WARN | upstream | Heading depths match the convention |
+| W001 | ERROR | any | Every cited stage has a fresh, exit-0 witness (only under `--require-witness`) |
+| W002 | ERROR | any | A witness's recorded coverage meets the detected floor (only under `--require-witness`) |
 
 G002 is the load-bearing one: *at least one criterion must name a non-success
 outcome — what this change rejects, denies, or fails closed on.* A plan that

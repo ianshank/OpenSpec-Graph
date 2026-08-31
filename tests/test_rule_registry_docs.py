@@ -24,7 +24,12 @@ from openspec_graph.rules import RULES
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-_FAMILIES = (("G", "rules_generic"), ("H", "rules_harness"), ("U", "rules_upstream"))
+_FAMILIES = (
+    ("G", "rules_generic"),
+    ("H", "rules_harness"),
+    ("U", "rules_upstream"),
+    ("W", "rules_witness"),
+)
 
 
 def _family_range(prefix: str) -> tuple[str, str]:
@@ -34,7 +39,7 @@ def _family_range(prefix: str) -> tuple[str, str]:
 
 def test_readme_rules_table_matches_rules_exactly() -> None:
     text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    found = dict(re.findall(r"^\| (G\d{3}|H\d{3}|U\d{3}) \| (ERROR|WARN) \|", text, re.MULTILINE))
+    found = dict(re.findall(r"^\| (G\d{3}|H\d{3}|U\d{3}|W\d{3}) \| (ERROR|WARN) \|", text, re.MULTILINE))
     expected = {r.ident: r.severity for r in RULES}
     assert found == expected, (
         f"README.md's rules table is out of sync with rules.RULES.\n"

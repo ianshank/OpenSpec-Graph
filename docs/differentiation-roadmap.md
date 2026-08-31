@@ -294,7 +294,8 @@ stays rejected; this doesn't reopen that non-goal, only adds to it.
 undeclared `INV-n`, or a declared invariant no living spec cites (G005/G006).
 Nothing extended that discipline to architecture decision records. New rules
 `G008` (cited-must-exist) and `G009` (declared-must-be-cited) mirror
-G005/G006 exactly; 20 rules total (was 18).
+G005/G006 exactly; 22 rules total (18 before this change, 20 after — see
+CP-7 below for the next increment, to 22).
 
 - **AC-AD-1..9:** ADR ids are discovered from either a directory of
   per-decision files or a single index file, extracted by scanning each
