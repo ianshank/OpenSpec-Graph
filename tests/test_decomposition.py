@@ -42,10 +42,15 @@ _BOUNDARY_EXEMPT = {"cli", "__init__"}
 # Path-normalized SHA-256 of validate --json / graph --format json / rules --json
 # for the canonical fixture repo (tests/fixtures/). Captured before the split;
 # any drift after decomposition fails AC-DG-2.
+#
+# The "rules" hash was re-pinned once, by `fix-u003-mandatory-given`, which
+# reworded U003's summary (GIVEN became optional). "validate" and "graph" were
+# byte-identical across that change -- the fixture corpus has no scenario that
+# omits GIVEN, so no finding moved; only the rule's advertised summary did.
 _EXPECTED_HASHES = {
     "validate": "0a810b4f791fa5684dbf384df7ab626ddf96c3b62fcd9d8299dc8d774a3b82e0",
     "graph": "6a63cc66d2e319f9fde85a37f46f333429c6be9989be5d5eb6686183afedfa9c",
-    "rules": "f3d9bb39ba1634c3cd47328361c1d8c32afd1c4c02172a169e28b823ec2af946",
+    "rules": "d8b7c26e93ca66750478c13be3bb93d1a1745ea51782852bd51b6d37bb464a79",
 }
 
 

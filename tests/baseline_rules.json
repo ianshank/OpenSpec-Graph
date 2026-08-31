@@ -93,7 +93,7 @@
     "id": "U003",
     "severity": "ERROR",
     "dialects": "upstream",
-    "summary": "scenarios are GIVEN/WHEN/THEN"
+    "summary": "scenarios state a stimulus and an outcome"
   },
   {
     "id": "U004",

@@ -132,7 +132,7 @@ quality without making the document wrong.
 | H006 | WARN | harness | Required sections present |
 | U001 | ERROR | upstream | An `ADDED`/`MODIFIED`/`REMOVED` delta header is declared |
 | U002 | ERROR | upstream | Every requirement has at least one Scenario |
-| U003 | ERROR | upstream | Every Scenario is GIVEN / WHEN / THEN |
+| U003 | ERROR | upstream | Every Scenario names a stimulus (`WHEN`) and an outcome (`THEN`); `GIVEN` is optional |
 | U004 | WARN | upstream | Requirements use SHALL / MUST |
 | U005 | WARN | upstream | Heading depths match the convention |
 

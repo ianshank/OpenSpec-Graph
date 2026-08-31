@@ -673,6 +673,81 @@ def test_u003_fires_on_a_scenario_missing_then(repo: Path) -> None:
     assert "U003" in rule_ids(findings_for(repo, body, "upstream"))
 
 
+# --- U003: GIVEN is optional (fix-u003-mandatory-given) --------------------
+#
+# Every negative body below is a single targeted `.replace()` mutation of
+# GOOD_UPSTREAM, so the passing and failing fixtures cannot drift (AC-UG-5).
+
+_GIVEN_LINE = "- **GIVEN** an attested writer\n"
+_WHEN_LINE = "- **WHEN** `make regression` runs the suite"
+_THEN_LINE = "- **THEN** an evidence id is recorded"
+
+NO_GIVEN_UPSTREAM = GOOD_UPSTREAM.replace(_GIVEN_LINE, "")
+MISSING_WHEN_UPSTREAM = GOOD_UPSTREAM.replace(_WHEN_LINE, "- the suite runs")
+MISSING_THEN_UPSTREAM = GOOD_UPSTREAM.replace(_THEN_LINE, "- it works")
+
+
+def test_u003_accepts_a_scenario_without_given(repo: Path) -> None:
+    """AC-UG-1: WHEN + THEN with no GIVEN is executable and must not fire.
+
+    Regression for a 100% false-positive rate: run against an external
+    upstream-dialect corpus, U003 reported 66 of 68 scenarios, and every one
+    of them carried WHEN and THEN while omitting only GIVEN.
+    """
+    assert "GIVEN" not in NO_GIVEN_UPSTREAM.split("#### Scenario:")[1]
+    assert "U003" not in rule_ids(findings_for(repo, NO_GIVEN_UPSTREAM, "upstream"))
+
+
+def test_u003_still_fires_when_when_is_absent(repo: Path) -> None:
+    """AC-UG-2: a scenario with no stimulus is still not executable."""
+    assert "U003" in rule_ids(findings_for(repo, MISSING_WHEN_UPSTREAM, "upstream"))
+
+
+def test_u003_still_fires_when_then_is_absent(repo: Path) -> None:
+    """AC-UG-3: a scenario that asserts no outcome is still not executable."""
+    assert "U003" in rule_ids(findings_for(repo, MISSING_THEN_UPSTREAM, "upstream"))
+
+
+def test_u003_accepts_a_full_gwt_scenario(repo: Path) -> None:
+    """AC-UG-4: the previously accepted three-clause shape is not lost."""
+    assert "U003" not in rule_ids(findings_for(repo, GOOD_UPSTREAM, "upstream"))
+
+
+def test_u003_negative_fixtures_are_mutations_of_the_positive() -> None:
+    """AC-UG-5: each failing fixture differs from the passing one by one clause."""
+    for mutated, removed in (
+        (NO_GIVEN_UPSTREAM, _GIVEN_LINE.strip()),
+        (MISSING_WHEN_UPSTREAM, _WHEN_LINE),
+        (MISSING_THEN_UPSTREAM, _THEN_LINE),
+    ):
+        assert mutated != GOOD_UPSTREAM, "mutation must actually change the fixture"
+        assert removed in GOOD_UPSTREAM, "the clause must exist in the source fixture"
+        assert removed not in mutated, "the mutation must remove exactly that clause"
+
+
+def test_u003_summary_does_not_require_given() -> None:
+    """AC-UG-6: the rule must stop advertising a check it no longer makes."""
+    u003 = next(r for r in rules.RULES if r.ident == "U003")
+    assert "GIVEN" not in u003.summary.upper()
+
+
+def test_u002_unchanged_by_the_u003_fix(repo: Path) -> None:
+    """AC-UG-7: a requirement with no scenario at all still fires U002."""
+    body = NO_GIVEN_UPSTREAM + "\n### Requirement: the reader SHALL verify ids\n\nProse.\n"
+    assert "U002" in rule_ids(findings_for(repo, body, "upstream"))
+
+
+def test_rule_registry_baseline_is_unchanged() -> None:
+    """AC-UG-8: no rule id added, no finding emitted for an omitted GIVEN."""
+    import json
+
+    baseline = json.loads(
+        (Path(__file__).resolve().parent / "baseline_rules.json").read_text(encoding="utf-8")
+    )
+    assert {r["id"] for r in baseline} == {r.ident for r in rules.RULES}
+    assert len(baseline) == len(rules.RULES)
+
+
 def test_u004_fires_on_a_non_normative_requirement(repo: Path) -> None:
     body = GOOD_UPSTREAM.replace(
         "### Requirement: the writer SHALL attest every write",
