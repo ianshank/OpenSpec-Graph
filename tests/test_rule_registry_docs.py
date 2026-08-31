@@ -73,8 +73,11 @@ def test_c4_module_map_family_ranges_match_rules() -> None:
     text = (REPO_ROOT / "docs" / "architecture" / "c4.md").read_text(encoding="utf-8")
     for prefix, module in _FAMILIES:
         low, high = _family_range(prefix)
-        # c4.md's module map uses an en dash; tolerate either dash character.
-        pattern = rf"{module}\.py\s+#\s*{re.escape(low)}[–-]{re.escape(high)}"
-        assert re.search(pattern, text), (
+        # c4.md's module map is a Mermaid diagram (a caption below it states
+        # each family's range) -- tolerate an en dash or hyphen, and any
+        # short run of markup/whitespace between the filename and the range
+        # rather than requiring the old ASCII tree's "# " comment style.
+        pattern = rf"{module}\.py.{{0,40}}?{re.escape(low)}[–-]{re.escape(high)}"
+        assert re.search(pattern, text, re.DOTALL), (
             f"c4.md's module map doesn't claim {module}.py covers {low}-{high}"
         )

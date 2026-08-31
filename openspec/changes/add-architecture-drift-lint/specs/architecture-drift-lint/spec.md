@@ -105,6 +105,22 @@ for adding protection — resolved here as a single test, not new tooling
   now excludes waiver-comment spans first — a waiver's own reason text
   must not be able to satisfy the citation it exists to waive, the same
   bug class already present, unfixed, for `INV_REF` since CP-4.
+  **Amended (adversarial code review on PR #13):** two further gaps in the
+  fix above. First, `glob("*.md")` lists directory entries by name pattern
+  only, not readability — a dangling symlink still matches and made
+  `read_text()` raise an uncaught `FileNotFoundError`, crashing
+  `detect.profile()` (and therefore every CLI verb) on any target repo with
+  a broken symlink under its ADR directory; the read is now wrapped and an
+  unreadable entry is skipped like any other non-declaring file (the same
+  guard was added to `_invariants()`'s read for the equivalent
+  permission-denied case, and to `_adrs()`'s single-file branch). Second,
+  "first mention = declaration" still assumed a file's own title always
+  precedes any reference to a related decision in its body; a file whose
+  body opens with "Related: ADR-1" *before* its own `# ADR-2: ...` heading
+  broke that assumption and got `ADR-1` captured as its declared id. Fixed
+  by preferring the first `ADR-n` mention that appears on a markdown
+  heading line, falling back to the first mention anywhere only when no
+  heading contains an id at all (`detect._declared_adr_id()`).
 - **DEC-AD-003:** `rules.evaluate_tree()` gains a second parallel block for
   G009, identical in shape to the existing G006 block — not generalized into
   a tree-rule registry. Two instances doesn't justify a dispatch mechanism;

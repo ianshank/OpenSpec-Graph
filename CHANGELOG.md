@@ -51,6 +51,30 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `raw` field, since inserting it earlier would have silently shifted
   `raw`'s positional index for any caller of the publicly-exported
   `ParsedSpec` still constructing it positionally.
+- **Fixed, from an adversarial code review:** ADR directory discovery no
+  longer crashes `detect.profile()` (and therefore every CLI verb) when a
+  candidate directory contains a dangling symlink — `glob("*.md")` matches
+  a broken symlink by name alone, so the read is now guarded and an
+  unreadable entry is skipped like any other non-declaring file (the same
+  guard was added to `_invariants()`'s read for the equivalent
+  permission-denied case). The "a file's first `ADR-n` mention is its
+  declaration" heuristic now prefers the first mention on a markdown
+  heading line over an earlier body reference, closing a residual gap in
+  the fix above it: a file whose body opens with "Related: ADR-1" before
+  its own `# ADR-2: ...` heading no longer gets `ADR-1` mistaken for its
+  declared id.
+
+### Changed — architecture doc converted to Mermaid diagrams
+
+- `docs/architecture/c4.md`'s Context, Container, and Module-map diagrams
+  (previously ASCII art in `text` fences) are now real Mermaid flowcharts,
+  and the Data-flow section gained a new pipeline diagram alongside its
+  existing prose. Every diagram was validated for correct Mermaid syntax
+  before landing. `tests/test_rule_registry_docs.py`'s module-map
+  family-range check was generalized to match the new format (no longer
+  requires the old ASCII tree's `# G001-G009`-style Python-comment
+  formatting) while still guarding the same underlying fact against
+  `rules.RULES`.
 
 ### Added — Mermaid graph export / CP-GV (`add-mermaid-graph-export` change package)
 

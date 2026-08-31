@@ -51,6 +51,10 @@ ADR_SOURCES: tuple[str, ...] = (
 _MAKE_TARGET = re.compile(r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", re.MULTILINE)
 _INV_ID = re.compile(r"\bINV-\d+\b")
 _ADR_ID = re.compile(r"\bADR-\d+\b")
+# A markdown heading line ("# Title", "## Title", ...) -- used to prefer an
+# ADR file's own title over an earlier body reference to a different ADR
+# when picking its declared id (see _adrs()).
+_HEADING_LINE = re.compile(r"^#+[ \t]+\S.*$", re.MULTILINE)
 _FAIL_UNDER = re.compile(r"^\s*fail_under\s*=\s*(\d+)", re.MULTILINE)
 
 
@@ -273,8 +277,16 @@ def _invariants(root: Path) -> tuple[Path | None, tuple[str, ...]]:
         path = root / rel
         if not path.exists():
             continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            # An untrusted target repo's candidate may exist but be
+            # unreadable (permission-denied, a broken symlink `exists()`
+            # didn't catch, etc.) -- treat it like any other non-match
+            # rather than crashing every CLI verb that calls detect.profile().
+            continue
         ids = sorted(
-            set(_INV_ID.findall(path.read_text(encoding="utf-8", errors="replace"))),
+            set(_INV_ID.findall(text)),
             # String tie-breaker: two ids that parse to the same integer
             # (e.g. "INV-1" and "INV-01") would otherwise order by
             # hash-seed-dependent set iteration -- unlikely, but the
@@ -287,6 +299,29 @@ def _invariants(root: Path) -> tuple[Path | None, tuple[str, ...]]:
     return None, ()
 
 
+def _declared_adr_id(text: str) -> str | None:
+    """Pick the one ADR id a file's own text *declares*, as opposed to
+    merely *cites* in passing ("Supersedes ADR-99", "Related: ADR-1").
+
+    Prefer the first id that appears on a markdown heading line -- a
+    decision record's own title -- since a title is a far more reliable
+    declaration marker than raw position in the file: a preamble,
+    front-matter, or "Related decisions" line can otherwise precede the
+    file's own heading and get mistaken for the declaration (found by
+    adversarial review after the original "just take the first mention"
+    fix, itself a Copilot review finding on PR #13). Fall back to the
+    first mention anywhere only when no heading contains an id at all, so
+    a file that doesn't follow the heading convention still yields its
+    one prior candidate rather than silently dropping to zero ids.
+    """
+    for heading in _HEADING_LINE.finditer(text):
+        match = _ADR_ID.search(heading.group())
+        if match:
+            return match.group()
+    first = _ADR_ID.search(text)
+    return first.group() if first else None
+
+
 def _adrs(root: Path) -> tuple[Path | None, tuple[str, ...]]:
     for rel in ADR_SOURCES:
         path = root / rel
@@ -297,30 +332,36 @@ def _adrs(root: Path) -> tuple[Path | None, tuple[str, ...]]:
             # INVARIANT_SOURCES' own fixed-candidate-list limitation), not
             # a bug.
             #
-            # One declared id per file -- its own FIRST ADR-n mention (the
-            # file's own title/heading) -- not every mention in its body.
-            # A decision record's prose routinely CITES another decision
-            # without DECLARING it ("Supersedes ADR-99"); scanning the
-            # whole file for every occurrence would wrongly promote that
-            # citation to a second declaration, letting G008 accept a
-            # citation to an ADR that was never really declared, or G009
-            # report it as an orphan that was never really declared either
-            # (Copilot review finding on PR #13). A document's own title
-            # always precedes any reference to a related decision in its
-            # body, so the first match is a reliable declaration marker
-            # without needing a stricter heading-only regex.
+            # One declared id per file, via _declared_adr_id() -- not every
+            # mention in its body. Scanning the whole file for every
+            # occurrence would wrongly promote a citation to a second
+            # declaration, letting G008 accept a citation to an ADR that
+            # was never really declared, or G009 report it as an orphan
+            # that was never really declared either.
             ids_list: list[str] = []
             for p in sorted(path.glob("*.md")):
-                first = _ADR_ID.search(p.read_text(encoding="utf-8", errors="replace"))
-                if first:
-                    ids_list.append(first.group())
+                try:
+                    text = p.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    # glob() lists directory entries by name pattern only --
+                    # a dangling symlink still matches "*.md" but can't be
+                    # read. Skip it like any other non-declaring file
+                    # instead of crashing every CLI verb that calls
+                    # detect.profile() (adversarial review finding on PR #13).
+                    continue
+                declared = _declared_adr_id(text)
+                if declared:
+                    ids_list.append(declared)
             ids = sorted(set(ids_list), key=lambda s: (int(s.split("-")[1]), s))
         elif path.is_file():
             # A single index file is itself a declaration list by
             # convention (mirrors _invariants()'s CONTRACT.md assumption),
             # so every mention is a real declaration -- scanning the whole
             # file, not just its first match, is correct here.
-            text = path.read_text(encoding="utf-8", errors="replace")
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
             ids = sorted(
                 set(_ADR_ID.findall(text)),
                 key=lambda s: (int(s.split("-")[1]), s),

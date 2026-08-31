@@ -514,6 +514,81 @@ def test_adr_directory_declaration_ignores_a_later_reference_to_another_adr(tmp_
     assert "ADR-99" not in ids
 
 
+def test_adr_directory_declaration_prefers_a_heading_over_an_earlier_preamble_reference(
+    tmp_path: Path,
+) -> None:
+    # A "first mention anywhere" heuristic mis-declares this file as ADR-1:
+    # its body opens with a reference to a related decision *before* its
+    # own heading. The real declaration is on the heading line itself, so
+    # that must win regardless of what precedes it (adversarial review
+    # finding on PR #13 -- a residual gap in the original Copilot-review
+    # fix, which only handled a reference placed *after* the heading).
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0002-use-grpc.md").write_text(
+        "Related: ADR-1 (superseded by this decision).\n\n# ADR-2: Use gRPC\n"
+    )
+    _source, ids = detect._adrs(tmp_path)
+    assert ids == ("ADR-2",)
+    assert "ADR-1" not in ids
+
+
+def test_adr_directory_declaration_skips_a_heading_with_no_id_to_find_a_later_one(
+    tmp_path: Path,
+) -> None:
+    # A heading that itself contains no ADR id ("# Overview") must not stop
+    # the search -- the real declaring heading can come after it.
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0004-use-kafka.md").write_text("# Overview\n\n# ADR-4: Use Kafka\n")
+    _source, ids = detect._adrs(tmp_path)
+    assert ids == ("ADR-4",)
+
+
+def test_adr_directory_read_error_is_skipped_not_crashed(tmp_path: Path) -> None:
+    # glob("*.md") lists directory entries by name pattern only -- it
+    # doesn't check they're readable. A dangling symlink still matches and
+    # previously made read_text() raise an uncaught FileNotFoundError,
+    # crashing detect.profile() (and therefore every CLI verb) on any
+    # target repo with a broken symlink under docs/adr/ (adversarial
+    # review finding on PR #13). The broken entry must be skipped like any
+    # other non-declaring file, leaving the real declarations intact.
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    (adr_dir / "0002-broken.md").symlink_to(adr_dir / "does-not-exist.md")
+    source, ids = detect._adrs(tmp_path)
+    assert source == adr_dir
+    assert ids == ("ADR-1",)
+
+
+def test_adr_directory_with_no_ids_falls_through_to_the_next_candidate(tmp_path: Path) -> None:
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    empty_adr_dir = tmp_path / "docs" / "adr"
+    empty_adr_dir.mkdir(parents=True)
+    (empty_adr_dir / "README.md").write_text("Nothing declared here yet.\n")
+    index = tmp_path / "docs" / "ADR.md"
+    index.write_text("# Decisions\n\n- ADR-1: Use Postgres\n")
+    source, ids = detect._adrs(tmp_path)
+    assert source == index
+    assert ids == ("ADR-1",)
+
+
+def test_adr_single_file_with_no_ids_falls_through_to_the_next_candidate(tmp_path: Path) -> None:
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "adr").write_text("Nothing declared here yet.\n")
+    decisions = tmp_path / "docs" / "architecture" / "decisions"
+    decisions.parent.mkdir(parents=True)
+    decisions.write_text("# ADR-5: Use gRPC\n")
+    source, ids = detect._adrs(tmp_path)
+    assert source == decisions
+    assert ids == ("ADR-5",)
+
+
 def test_waiver_reason_text_is_not_scanned_as_a_citation(repo: Path) -> None:
     # A waiver's own reason text must not satisfy the citation it's waiving
     # -- naming "ADR-1"/"INV-77" in a reason must not add it to
