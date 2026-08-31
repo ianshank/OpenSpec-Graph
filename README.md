@@ -32,6 +32,7 @@ planlint --target /path/to/clone init        # write a snapshot of detected conv
 planlint --target /path/to/clone new add-thing --capability thing-capability
 planlint --target /path/to/clone validate    # exit 1 on any ERROR — the gate
 planlint --target /path/to/clone waivers --format json  # ledger of every waived rule, tree-wide
+planlint --target /path/to/clone graph --format mermaid  # a picture, not just JSON (see below)
 planlint --version                           # print the installed version and exit
 ```
 
@@ -290,6 +291,14 @@ build fails. The first change package, [`add-graph-export`](openspec/changes/add
 specs a `planlint graph` verb that emits the dependency graph as JSON; it
 carries seven acceptance criteria, two of them non-success paths, and it
 validates clean against the rules it will one day implement.
+
+`graph --format mermaid` (see [`add-mermaid-graph-export`](openspec/changes/add-mermaid-graph-export/specs/mermaid-graph-export/spec.md))
+renders the same graph as a Mermaid flowchart instead — GitHub/GitLab render
+it inline, so a PR diff on `openspec/` can carry an actual picture, not just
+JSON. `--format dot` stays rejected (`AC-GR-6`): Mermaid is text these hosts
+render natively, a different thing from image rendering, which is what that
+rejection protects against. `graph --change <name>` scopes the picture to one
+change package.
 
 ## Design constraints
 

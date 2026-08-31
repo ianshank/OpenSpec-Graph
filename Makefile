@@ -1,4 +1,4 @@
-.PHONY: help test lint typecheck security validate graph ci pre-pr docs-check clean
+.PHONY: help test lint typecheck security validate graph graph-mermaid ci pre-pr docs-check thresholds clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-14s %s\n", $$1, $$2}'
@@ -24,15 +24,20 @@ validate: ## Validate this repo's own OpenSpec change packages with planlint
 graph: ## Emit the spec dependency graph as JSON
 	planlint --target . graph --format json
 
+graph-mermaid: ## Emit the spec dependency graph as a Mermaid flowchart
+	planlint --target . graph --format mermaid
+
 ci: test lint validate ## The authoritative local core gate
 	@echo "ci: core gates passed"
 
-pre-pr: ci typecheck security docs-check ## The full enterprise AQA gate before opening a PR
-	python tools/check_no_hardcoded_thresholds.py
+pre-pr: ci typecheck security docs-check thresholds ## The full enterprise AQA gate before opening a PR
 	@echo "pre-pr: all enterprise gates passed"
 
 docs-check: ## Confirm required docs exist and are linked from README
 	python tools/check_docs.py
+
+thresholds: ## Confirm no hard-coded thresholds in the Makefile or workflow YAML
+	python tools/check_no_hardcoded_thresholds.py
 
 clean: ## Remove build, cache, and coverage artifacts
 	rm -rf build dist *.egg-info .pytest_cache .ruff_cache .mypy_cache htmlcov

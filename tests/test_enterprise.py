@@ -94,6 +94,17 @@ def test_graph_json_is_deterministic(repo: Path) -> None:
     assert g["broken_links"] == 0
 
 
+def test_graph_format_mermaid_is_deterministic(repo: Path) -> None:
+    # mermaid.to_mermaid() already has a pure-function determinism test
+    # (tests/test_mermaid.py); this is the CLI-level counterpart every
+    # other --format gets (see test_graph_json_is_deterministic above).
+    _write_spec(repo, "c1", "cap", GOOD_HARNESS)
+    out1 = _run_cli(repo, "graph", "--format", "mermaid").stdout
+    out2 = _run_cli(repo, "graph", "--format", "mermaid").stdout
+    assert out1 == out2, "graph --format mermaid must be byte-identical across runs"
+    assert out1.startswith("flowchart LR")
+
+
 def test_rules_json_is_deterministic(repo: Path) -> None:
     # rules --json has no target dependency, but run against the repo anyway.
     out1 = _run_cli(repo, "rules", "--json").stdout

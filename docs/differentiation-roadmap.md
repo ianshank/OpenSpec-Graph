@@ -210,7 +210,15 @@ we already learned that.
   parsing was low-confidence — never fail closed, and never shell out to
   `make` to try to do better.
 
-### CP-4: `add-waiver-ledger-and-inv-lints` (v1)
+### CP-4: `add-waiver-ledger-and-inv-lints` (v1) — implemented
+
+> Status: implemented. See the approved spec at
+> `openspec/changes/add-waiver-ledger-and-inv-lints/specs/waiver-ledger/spec.md`
+> (`AC-WL-1..13`, not `AC-WL-1..3` — the sketch below under-counted; the
+> orphan-invariant check needed its own whole-tree evaluation pathway,
+> `rules.evaluate_tree()`, since no per-spec `Rule.check` can express "cited
+> by *some* spec in the tree") — that spec is authoritative; this section is
+> kept as the original sketch.
 
 Two linked additions. (a) **Waiver ledger**: a machine-readable record of every
 `<!-- specgraph:allow G003 reason -->` waiver across the tree — rule, file,
@@ -233,6 +241,39 @@ spec, or explicitly waived." Orphan invariants are the other lie.
 - **Cutline:** if owner attribution requires git blame and that is slow on huge
   monorepos, ship reason+file+line first and defer owner to a follow-up — the
   ledger is useful without blame.
+
+### CP-GV: `add-mermaid-graph-export` (v1) — implemented
+
+> Status: implemented. See the approved spec at
+> `openspec/changes/add-mermaid-graph-export/specs/mermaid-graph-export/spec.md`
+> (`AC-GV-1..9`). Not part of the original CP-1..8 numbering above — added
+> from a later planning round covering four capabilities together
+> (architecture drift detection, witness mode, policy packs, visualization);
+> the other three (`add-architecture-drift-lint`, `add-witness-mode` — this
+> is CP-7 above — and `add-rule-pack-plugins`/`add-security-policy-pack`)
+> are designed but not yet implemented.
+
+`graph --format json` computed the full dependency graph with no way to see
+it. `graph --format mermaid` renders the same graph as a Mermaid flowchart —
+text GitHub/GitLab render natively, so a PR diff on `openspec/` can carry an
+actual picture. `--format dot` (image rendering, needing an external engine)
+stays rejected; this doesn't reopen that non-goal, only adds to it.
+
+- **AC-GV-1..4:** `--format mermaid` emits a valid flowchart with sanitized
+  node ids and distinct styling for orphan/missing nodes and broken edges;
+  `--format dot` stays rejected, byte-identical message and exit code.
+- **AC-GV-5..8:** `graph --change <name>` scopes which specs are rendered —
+  but never what feeds the whole-tree orphan-invariant check, which always
+  runs unscoped regardless of what's rendered (the same false-positive-orphan
+  trap `cmd_validate --change` already guards against, `DEC-WL-003`,
+  rediscovered and fixed here as `DEC-GV-001`).
+- **AC-GV-9:** companion `tools/render_mermaid.py` renders a previously-saved
+  `graph --format json` artifact without re-running `planlint`.
+- **Touch map:** new `openspec_graph/mermaid.py`, `openspec_graph/cli.py`
+  (`graph --change`/`--format mermaid`), `openspec_graph/graph.py`
+  (`build_graph()`'s new scoping param), `openspec_graph/detect.py`
+  (`filter_by_change()`, shared with `cmd_validate`). New
+  `tools/render_mermaid.py`.
 
 ### CP-5: `add-delta-lint` (v1, the org-visible feature)
 
@@ -336,6 +377,7 @@ eval suite, plus a two-repo comparison table as the homepage.
 | CP-2 dialect cards | `detect.py`, `cli.py` | `dialect_card.py` |
 | CP-3 structural machinery | `parse_semantics.py`, `detect.py`, `rules_generic.py` | `machinery.py` |
 | CP-4 waiver + INV | `parse_semantics.py`, `rules_generic.py`, `rules.py`, `cli.py` | `ledger.py` |
+| CP-GV mermaid export | `cli.py`, `graph.py`, `detect.py` | `mermaid.py`, `tools/render_mermaid.py` |
 | CP-5 delta lint | `detect.py`, `cli.py` | `delta.py` |
 | CP-6 SARIF + actions | `cli.py`, `.github/workflows/` | `sarif.py`, `.github/actions/planlint/` |
 | CP-7 witness mode | `cli.py`, `rules_harness.py` | `witness.py` |
@@ -355,6 +397,7 @@ module below the hub layer imports `cli` or `graph`).
 | Card non-determinism | dialect card diffs "clean" across runs | Freeze field order before shipping |
 | Structural Makefile parse is low-confidence | `include`, conditional, or variable expansion in target position | Fall back to regex detection + INFO; never fail closed, never shell out to `make` to try harder |
 | Witness mode destabilizes v1 | `--require-witness` changes default | Opt-in flag only; default `validate` unchanged |
+| Mermaid diagram illegible/invalid at scale | unsanitized node ids break syntax; an unscoped whole-tree diagram exceeds real render limits | Synthetic node ids (mandatory, not cosmetic); `--change` scoping so a diagram covers one change, not the whole portfolio |
 | SARIF finding loss | GitHub rejects a finding shape | Map to supported subset; never drop ERRORs |
 | Corpus non-reproducible | real-failure spec is proprietary | Drop from public set; keep only publishable fixtures |
 | Anti-clone false positive | sibling packages legitimately share a stage | H007 is WARN; require *both* identical set AND no git activity |

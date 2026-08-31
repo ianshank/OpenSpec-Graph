@@ -1,18 +1,26 @@
 # Keep the Docker image small — only ship what the CLI needs to run.
+# Kept in step with .gitignore's own artifact list -- no reason for the two
+# to diverge without cause.
 .git
 .github
 .venv
 venv
+env
 __pycache__
-*.pyc
+*.py[cod]
 .ruff_cache
 .mypy_cache
 .pytest_cache
+.dmypy.json
+dmypy.json
 htmlcov
 .coverage
+.coverage.*
+*.cover
 coverage.json
 coverage.xml
 *.egg-info
+*.egg
 build
 dist
 tests
@@ -23,3 +31,13 @@ docs
 !README.md
 Dockerfile
 .dockerignore
+# Local CI artifacts (planlint's own dogfooding output, never shipped)
+spec-graph.json
+spec-findings.json
+head.json
+base.json
+# Editor / OS
+.idea
+.vscode
+*.swp
+.DS_Store
