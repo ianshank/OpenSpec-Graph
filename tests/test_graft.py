@@ -436,6 +436,68 @@ def test_invariant_source_name_falls_back_when_no_source_is_declared(tmp_path: P
     assert prof.invariant_source_name == "the contract"
 
 
+def test_detect_collects_adr_ids(tmp_path: Path) -> None:
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    (adr_dir / "0002-use-rest.md").write_text("# ADR-2: Use REST\n")
+    prof = detect.profile(tmp_path)
+    assert prof.adr_ids == ("ADR-1", "ADR-2")
+
+
+def test_adr_source_name_uses_the_real_directory_name_when_present(tmp_path: Path) -> None:
+    # Shared by G008 (rules_generic.py) and G009 (rules.py) so the two
+    # can't independently drift on this fallback wording.
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    prof = detect.profile(tmp_path)
+    assert prof.adr_source_name == "docs/adr"
+
+
+def test_adr_source_name_falls_back_when_no_source_is_declared(repo: Path) -> None:
+    # repo fixture has no docs/adr/ or any other ADR source at all.
+    prof = detect.profile(repo)
+    assert prof.adr_source is None
+    assert prof.adr_source_name == "the ADR log"
+
+
+def test_adrs_discovered_from_a_directory_of_numbered_files(tmp_path: Path) -> None:
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0001-use-postgres.md").write_text("# ADR-1: Use Postgres\n")
+    (adr_dir / "0002-use-rest.md").write_text("# ADR-2: Use REST\n")
+    source, ids = detect._adrs(tmp_path)
+    assert source == adr_dir
+    assert ids == ("ADR-1", "ADR-2")
+
+
+def test_adrs_discovered_from_a_single_index_file(tmp_path: Path) -> None:
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    index = tmp_path / "docs" / "ADR.md"
+    index.parent.mkdir(parents=True)
+    index.write_text("# Decisions\n\n- ADR-1: Use Postgres\n- ADR-2: Use REST\n")
+    source, ids = detect._adrs(tmp_path)
+    assert source == index
+    assert ids == ("ADR-1", "ADR-2")
+
+
+def test_adr_ids_do_not_mismatch_on_zero_padded_filenames(tmp_path: Path) -> None:
+    # A file's zero-padded name ("0007-...") must never be read as the id --
+    # ids come from each file's own text content, never its filename. Here
+    # the filename says "7" but the body cites ADR-3; only ADR-3 is real.
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0007-use-grpc.md").write_text("# ADR-3: Use gRPC\n")
+    _source, ids = detect._adrs(tmp_path)
+    assert ids == ("ADR-3",)
+    assert "ADR-7" not in ids
+
+
 def test_dialect_detection_distinguishes_both_forms(repo: Path) -> None:
     harness = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     upstream = write_spec(repo, "c2", "cap2", GOOD_UPSTREAM)

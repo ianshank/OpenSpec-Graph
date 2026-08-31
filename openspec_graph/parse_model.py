@@ -76,6 +76,7 @@ class ParsedSpec:
     scenario_levels: tuple[int, ...] = ()
     suppressed: frozenset[str] = frozenset()
     waivers: tuple[Waiver, ...] = ()
+    adr_refs: tuple[str, ...] = ()
     raw: str = dataclasses.field(repr=False, default="")
 
     @property

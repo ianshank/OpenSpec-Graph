@@ -39,3 +39,11 @@ def test_diff_cards_reports_every_changed_field_independently() -> None:
     assert len(changes) == 2
     assert any("dialect" in c for c in changes)
     assert any("make_targets" in c for c in changes)
+
+
+def test_diff_cards_detects_an_adr_source_change() -> None:
+    old = {"schema_version": 1, "adr_source": None, "adr_ids": []}
+    new = {"schema_version": 1, "adr_source": "docs/adr", "adr_ids": ["ADR-1"]}
+    changes = dialect_card.diff_cards(old, new)
+    assert any("adr_source" in c for c in changes)
+    assert any("adr_ids" in c for c in changes)

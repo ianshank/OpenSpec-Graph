@@ -45,6 +45,10 @@ SUPPRESS = re.compile(r"<!--\s*specgraph:allow\s+([A-Z]\d{3}(?:\s*,\s*[A-Z]\d{3}
 # The \b anchors are redundant once a literal backtick forces the boundary.
 MAKE_REF = re.compile(r"`make\s+([a-z][a-z0-9_-]*)`")
 INV_REF = re.compile(r"\bINV-\d+\b")
+# Bare, no backtick-fencing -- same numeric-suffix shape as INV_REF, and
+# "ADR-42" doesn't collide with ordinary prose the way "make progress" does
+# (the reason MAKE_REF needed fencing).
+ADR_REF = re.compile(r"\bADR-\d+\b")
 PYTEST_SEL = re.compile(r"pytest\s+-k\s+(\S+)")
 
 # A bare percentage or >= NN in criterion text, which should come from config.

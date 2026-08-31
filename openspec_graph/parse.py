@@ -25,6 +25,7 @@ from pathlib import Path
 from .parse_harness import parse_harness as _parse_harness
 from .parse_model import Criterion, ParsedSpec, Requirement
 from .parse_semantics import (
+    ADR_REF,
     DELTA_HEADER,
     INV_REF,
     MAKE_REF,
@@ -93,6 +94,7 @@ def parse_spec(path: Path, dialect: str) -> ParsedSpec:
         scenario_levels=scenario_levels(text),
         suppressed=frozenset(w.rule for w in waivers),
         waivers=waivers,
+        adr_refs=tuple(sorted(set(ADR_REF.findall(text)))),
         raw=text,
     )
 

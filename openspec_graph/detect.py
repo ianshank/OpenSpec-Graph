@@ -33,8 +33,24 @@ INVARIANT_SOURCES: tuple[str, ...] = (
     "AGENTS.md",
 )
 
+# Where ADR (architecture decision record) files conventionally live, most
+# specific first. A directory candidate (the dominant real-world convention:
+# one numbered file per decision) is tried before a single-file index
+# fallback. Ids are still extracted by regex-scanning each file's own text
+# (mirroring _invariants()'s proven mechanism), never parsed from filenames --
+# avoids a zero-padding mismatch between a directory's "0007-title.md" and a
+# spec's bare "ADR-7" citation.
+ADR_SOURCES: tuple[str, ...] = (
+    "docs/adr",
+    "docs/architecture/decisions",
+    "docs/decisions",
+    "adr",
+    "docs/ADR.md",
+)
+
 _MAKE_TARGET = re.compile(r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", re.MULTILINE)
 _INV_ID = re.compile(r"\bINV-\d+\b")
+_ADR_ID = re.compile(r"\bADR-\d+\b")
 _FAIL_UNDER = re.compile(r"^\s*fail_under\s*=\s*(\d+)", re.MULTILINE)
 
 
@@ -63,6 +79,8 @@ class StackProfile:
     has_project_md: bool
     make_target_confidence: str = "high"
     make_unresolved_count: int = 0
+    adr_source: Path | None = None
+    adr_ids: tuple[str, ...] = ()
 
     @property
     def invariant_source_name(self) -> str:
@@ -70,6 +88,22 @@ class StackProfile:
         fallback when none is detected -- shared by G005 (rules_generic.py)
         and G006 (rules.py) so the two can't independently drift on wording."""
         return self.invariant_source.name if self.invariant_source else "the contract"
+
+    @property
+    def adr_source_name(self) -> str:
+        """Human-readable name of the ADR source, or a generic fallback when
+        none is detected -- shared by G008 (rules_generic.py) and G009
+        (rules.py) so the two can't independently drift on wording. Uses the
+        root-relative path, not invariant_source_name's bare .name, because
+        ADR candidates are nested directories (docs/adr,
+        docs/architecture/decisions) where a bare name is ambiguous in a way
+        CONTRACT.md's flat, near-root file candidates never were."""
+        if not self.adr_source:
+            return "the ADR log"
+        try:
+            return str(self.adr_source.relative_to(self.root))
+        except ValueError:
+            return self.adr_source.name
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -89,6 +123,10 @@ class StackProfile:
             "has_project_md": self.has_project_md,
             "make_target_confidence": self.make_target_confidence,
             "make_unresolved_count": self.make_unresolved_count,
+            "adr_source": (
+                str(self.adr_source.relative_to(self.root)) if self.adr_source else None
+            ),
+            "adr_ids": list(self.adr_ids),
         }
 
     def to_card(self) -> dict[str, object]:
@@ -117,6 +155,8 @@ class StackProfile:
             "has_project_md": base["has_project_md"],
             "make_target_confidence": base["make_target_confidence"],
             "make_unresolved_count": base["make_unresolved_count"],
+            "adr_source": base["adr_source"],
+            "adr_ids": base["adr_ids"],
         }
 
 
@@ -247,6 +287,32 @@ def _invariants(root: Path) -> tuple[Path | None, tuple[str, ...]]:
     return None, ()
 
 
+def _adrs(root: Path) -> tuple[Path | None, tuple[str, ...]]:
+    for rel in ADR_SOURCES:
+        path = root / rel
+        if path.is_dir():
+            # Flat, non-recursive: matches the dominant flat-file ADR
+            # convention. A nested docs/adr/superseded/ subfolder is a
+            # known, accepted coverage limitation (mirrors
+            # INVARIANT_SOURCES' own fixed-candidate-list limitation), not
+            # a bug.
+            texts = [
+                p.read_text(encoding="utf-8", errors="replace") for p in sorted(path.glob("*.md"))
+            ]
+            text = "\n".join(texts)
+        elif path.is_file():
+            text = path.read_text(encoding="utf-8", errors="replace")
+        else:
+            continue
+        ids = sorted(
+            set(_ADR_ID.findall(text)),
+            key=lambda s: (int(s.split("-")[1]), s),
+        )
+        if ids:
+            return path, tuple(ids)
+    return None, ()
+
+
 def detect_dialect(spec_paths: list[Path]) -> str:
     """Classify which OpenSpec spec dialect a repo writes.
 
@@ -319,6 +385,7 @@ def profile(root: Path) -> StackProfile:
         else ()
     )
     invariant_source, invariant_ids = _invariants(root)
+    adr_source, adr_ids = _adrs(root)
     make_facts = _make_target_facts(root)
     return StackProfile(
         root=root,
@@ -333,4 +400,6 @@ def profile(root: Path) -> StackProfile:
         has_project_md=(openspec_root / "project.md").exists() if has_openspec else False,
         make_target_confidence=make_facts.confidence,
         make_unresolved_count=make_facts.unresolved_count,
+        adr_source=adr_source,
+        adr_ids=adr_ids,
     )

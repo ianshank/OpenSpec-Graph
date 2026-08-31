@@ -29,6 +29,8 @@ _COMPARABLE_FIELDS = (
     "invariant_source",
     "invariant_ids",
     "has_project_md",
+    "adr_source",
+    "adr_ids",
 )
 
 __all__ = ["SCHEMA_VERSION", "diff_cards"]
