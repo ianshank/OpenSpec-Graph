@@ -28,7 +28,7 @@
   clean (self-dogfooding the same discipline this project applies to every
   target repo).
 
-## Milestone 2 — Prerequisite: fix the `verified_by` waiver-comment leak
+## Milestone 2 — Prerequisite: fix the `verified_by` waiver-comment leak [DONE]
 
 - `parse_harness.py`/`parse_upstream.py`: `Criterion.verified_by` built from
   waiver-comment-stripped text, matching the spec-wide `make_refs`/
@@ -37,7 +37,7 @@
   are never developed against a codebase with this gap open.
 - **Gate:** `make pre-pr` green; new regression tests for both dialects.
 
-## Milestone 3 — Data model
+## Milestone 3 — Data model [DONE]
 
 - New `openspec_graph/witness.py`: `Witness` schema, atomic `write_witness()`
   (temp file + `os.rename()`), `load_witnesses()` (schema-version +
@@ -51,7 +51,7 @@
   tests, `test_decomposition.py::_NEW_MODULES += "witness"`, a new static
   guard proving `detect.py` is the only module importing `subprocess`.
 
-## Milestone 4 — Rules + CLI wiring
+## Milestone 4 — Rules + CLI wiring [DONE]
 
 - New `openspec_graph/rules_witness.py`: `W001`/`W002`, staged diagnostic
   messages, an explicit `profile.threshold is None` guard on W002.
@@ -67,7 +67,7 @@
   `"graph"` hashes confirmed unchanged (empirically, not assumed) against the
   canonical fixture, which never passes `--require-witness`.
 
-## Milestone 5 — Doc-drift guard + doc sync
+## Milestone 5 — Doc-drift guard + doc sync [DONE]
 
 - `tests/test_rule_registry_docs.py`: `_FAMILIES` gains `("W", "rules_witness")`;
   README-table regex widened to also match `W\d{3}`.

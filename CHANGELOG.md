@@ -5,6 +5,51 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — witness mode / CP-WM (`add-witness-mode` change package)
+
+- **New rules `W001`/`W002`** (both ERROR, evaluated only under
+  `--require-witness`): `W001` — a spec's cited stage has no fresh, exit-0
+  witness, with a distinct message for "never witnessed," "witnessed but
+  not at the current commit," and "witnessed but failing" rather than one
+  generic message. `W002` — a witness that already clears W001's own bar
+  records coverage below the detected floor. Applies to both dialects,
+  including a scenario citing more than one stage (each requiring its own
+  witness). 22 rules total (was 20).
+- **`planlint witness --stage <name> --exit <code> [--coverage <pct>] --sha
+  <sha>`**: records one witness as a content-addressed file under
+  `.planlint/witnesses/` (new `openspec_graph/witness.py`, atomic write,
+  fail-closed load). Full boundary validation — a full 40-character sha
+  (an abbreviated one is rejected, never silently non-matching), a finite
+  in-range coverage, a valid stage identifier — before anything is
+  written, and a clean exit-2 message rather than a traceback on an
+  unwritable store.
+- **`validate --require-witness`**: fails closed on a repo with zero
+  witnesses; default `validate` behavior is completely unchanged without
+  the flag — the entire pre-existing test suite passes unmodified against
+  the new, defaulted `rules.evaluate(rule_set=...)` parameter. `graph`'s
+  `broken_links` and rendered output never include W001/W002 findings,
+  under any flag.
+- Two design rounds before any code was written: an initial re-grounding
+  pass found the committed roadmap sketch (`docs/differentiation-roadmap.md`'s
+  `CP-7` section) hadn't survived contact with the current codebase — a
+  flag collision with the global `--target`, an architecturally impossible
+  touch-map claim, an unspecified "signed" claim with no key-management
+  story anywhere. A dedicated adversarial peer review of the rewritten
+  design then found a real HIGH-severity bug introduced during that
+  rewrite itself — a short-commit-sha comparison that would have silently
+  defeated freshness checking for any CI script using an abbreviated sha —
+  plus a wider set of gaps, all resolved before implementation began.
+- **Fixed, found during that same adversarial review:** the pre-existing
+  `Criterion.verified_by` waiver-comment leak (open since before this
+  change, for both dialects) is wider for the upstream dialect than
+  harness — any waiver comment anywhere in a Scenario's block could leak a
+  spurious stage citation into `verified_by`. Fixed for both dialects,
+  landed before W001/W002 existed to consume it.
+- `tests/test_rule_registry_docs.py` extended to the new `W` family.
+  `docs/differentiation-roadmap.md`'s `CP-7` sketch replaced with a proper
+  "implemented" section, mirroring how CP-GV/CP-AD each got their own late
+  addition.
+
 ### Added — architecture drift lint / CP-AD (`add-architecture-drift-lint` change package)
 
 - **New rules `G008`/`G009`** (both WARN): `G008` — a spec cites an `ADR-n`

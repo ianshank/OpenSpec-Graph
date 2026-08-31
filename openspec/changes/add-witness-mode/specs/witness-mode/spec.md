@@ -317,120 +317,120 @@ W001/W002 exist. Both are resolved below, not silently carried forward.
 
 ## Acceptance Criteria
 
-- [ ] **AC-WM-1:** W001 fires when a criterion's cited stage has no witness
+- [x] **AC-WM-1:** W001 fires when a criterion's cited stage has no witness
   at all. (R-WM-1)
   _Verified by:_ `pytest -k test_w001_fires_when_a_cited_stage_has_no_matching_witness` · stage: `make test`
 
-- [ ] **AC-WM-2:** W001 fires when a witness exists for the cited stage but
+- [x] **AC-WM-2:** W001 fires when a witness exists for the cited stage but
   its recorded sha doesn't match the current commit. (R-WM-1, R-WM-11)
   _Verified by:_ `pytest -k test_w001_fires_when_the_witness_sha_does_not_match_current_sha` · stage: `make test`
 
-- [ ] **AC-WM-3:** W001 fires when the matching witness recorded a nonzero
+- [x] **AC-WM-3:** W001 fires when the matching witness recorded a nonzero
   exit code. (R-WM-1)
   _Verified by:_ `pytest -k test_w001_fires_when_the_matching_witness_recorded_a_nonzero_exit_code` · stage: `make test`
 
-- [ ] **AC-WM-4 (non-success):** W001 fires for every citation when the
+- [x] **AC-WM-4 (non-success):** W001 fires for every citation when the
   current commit sha can't be determined at all (e.g. no git available). (R-WM-1, R-WM-12)
   _Verified by:_ `pytest -k test_w001_fires_for_every_citation_when_current_sha_is_none` · stage: `make test`
 
-- [ ] **AC-WM-5 (non-success):** W001 does not fire once a fresh, exit-0
+- [x] **AC-WM-5 (non-success):** W001 does not fire once a fresh, exit-0
   witness exists for the cited stage. (R-WM-1)
   _Verified by:_ `pytest -k test_w001_does_not_fire_when_a_fresh_passing_witness_exists` · stage: `make test`
 
-- [ ] **AC-WM-6:** W002 fires when a witness matching a cited stage records
+- [x] **AC-WM-6:** W002 fires when a witness matching a cited stage records
   coverage below the detected floor. (R-WM-2)
   _Verified by:_ `pytest -k test_w002_fires_when_witness_coverage_is_below_the_detected_floor` · stage: `make test`
 
-- [ ] **AC-WM-7 (non-success):** W002 does not fire when coverage meets the
+- [x] **AC-WM-7 (non-success):** W002 does not fire when coverage meets the
   floor, when no coverage was recorded, when the repo has no detected
   coverage floor at all, or for a witness that already fails W001's own
   bar. (R-WM-2)
   _Verified by:_ `pytest -k "test_w002_does_not_fire"` · stage: `make test`
 
-- [ ] **AC-WM-8:** both rules apply under the upstream dialect too,
+- [x] **AC-WM-8:** both rules apply under the upstream dialect too,
   including a scenario citing more than one stage, each requiring its own
   witness. (R-WM-1, R-WM-2, R-WM-13, DEC-WM-005, DEC-WM-016)
   _Verified by:_ `pytest -k "test_witness_rules_apply_to_both_dialects or test_w001_fires_independently_for_each_stage_cited_in_one_upstream_scenario"` · stage: `make test`
 
-- [ ] **AC-WM-9 (non-success):** `validate --require-witness` fails closed
+- [x] **AC-WM-9 (non-success):** `validate --require-witness` fails closed
   on a repo with no witness store at all — zero witnesses never reads as
   "passed." (R-WM-3, R-WM-9)
   _Verified by:_ `pytest -k test_validate_require_witness_fails_closed_on_a_repo_with_no_witness_store` · stage: `make test`
 
-- [ ] **AC-WM-10 (non-success):** `validate` without `--require-witness`
+- [x] **AC-WM-10 (non-success):** `validate` without `--require-witness`
   never evaluates W001/W002 at all — default behavior is unchanged. (R-WM-3)
   _Verified by:_ `pytest -k test_validate_without_require_witness_never_evaluates_w001` · stage: `make test`
 
-- [ ] **AC-WM-11:** a real end-to-end round trip — record a witness for the
+- [x] **AC-WM-11:** a real end-to-end round trip — record a witness for the
   current commit, then `validate --require-witness` — exits 0. (R-WM-1, R-WM-2, R-WM-5)
   _Verified by:_ `pytest -k test_validate_require_witness_passes_once_a_matching_fresh_witness_is_recorded` · stage: `make test`
 
-- [ ] **AC-WM-12:** `witness`'s own stage-name flag and the global `--target`
+- [x] **AC-WM-12:** `witness`'s own stage-name flag and the global `--target`
   flag populate distinct values through one shared parser, without
   colliding. (R-WM-6)
   _Verified by:_ `pytest -k test_cli_witness_stage_flag_does_not_collide_with_global_target` · stage: `make test`
 
-- [ ] **AC-WM-13 (non-success):** an abbreviated (short) `--sha` is rejected
+- [x] **AC-WM-13 (non-success):** an abbreviated (short) `--sha` is rejected
   at the CLI boundary with exit 2. (R-WM-7)
   _Verified by:_ `pytest -k test_cli_witness_verb_rejects_an_abbreviated_sha` · stage: `make test`
 
-- [ ] **AC-WM-14 (non-success):** an out-of-range or non-finite `--coverage`
+- [x] **AC-WM-14 (non-success):** an out-of-range or non-finite `--coverage`
   is rejected at the CLI boundary with exit 2. (R-WM-8)
   _Verified by:_ `pytest -k "test_cli_witness_verb_rejects_an_out_of_range_coverage_value or test_cli_witness_verb_rejects_a_non_finite_coverage_value"` · stage: `make test`
 
-- [ ] **AC-WM-15 (non-success):** `--coverage 0` is recorded as `0.0`,
+- [x] **AC-WM-15 (non-success):** `--coverage 0` is recorded as `0.0`,
   distinct from "not given." (R-WM-8)
   _Verified by:_ `pytest -k test_cli_witness_records_a_zero_coverage_value_distinctly_from_none` · stage: `make test`
 
-- [ ] **AC-WM-16 (non-success):** `load_witnesses()` silently skips a
+- [x] **AC-WM-16 (non-success):** `load_witnesses()` silently skips a
   corrupt, malformed, hash-mismatched, or unrecognized-`schema_version`
   witness file rather than raising or treating it as a pass. (R-WM-9)
   _Verified by:_ `pytest -k "test_load_witnesses_skips"` · stage: `make test`
 
-- [ ] **AC-WM-17:** a concurrently-running reader never observes a
+- [x] **AC-WM-17:** a concurrently-running reader never observes a
   partially-written witness file. (R-WM-10)
   _Verified by:_ `pytest -k test_write_witness_is_atomic` · stage: `make test`
 
-- [ ] **AC-WM-18 (non-success):** an unwritable `.planlint/witnesses/`
+- [x] **AC-WM-18 (non-success):** an unwritable `.planlint/witnesses/`
   produces a clear exit-2 message, not a traceback. (R-WM-15)
   _Verified by:_ `pytest -k test_cli_witness_reports_a_clean_error_when_the_witness_directory_is_unwritable` · stage: `make test`
 
-- [ ] **AC-WM-19 (non-success):** the target repo's current commit sha is
+- [x] **AC-WM-19 (non-success):** the target repo's current commit sha is
   not computed at all when zero witnesses exist in the store. (R-WM-12)
   _Verified by:_ `pytest -k test_current_sha_is_not_invoked_when_no_witnesses_are_present` · stage: `make test`
 
-- [ ] **AC-WM-20 (non-success):** `detect.py` is the only module in
+- [x] **AC-WM-20 (non-success):** `detect.py` is the only module in
   `openspec_graph/` that imports `subprocess`. (R-WM-12)
   _Verified by:_ `pytest -k test_only_detect_imports_subprocess` · stage: `make test`
 
-- [ ] **AC-WM-21 (non-success):** `graph`'s `broken_links` count and
+- [x] **AC-WM-21 (non-success):** `graph`'s `broken_links` count and
   rendered output never include W001/W002 findings, even with a stale
   witness present. (R-WM-4)
   _Verified by:_ `pytest -k test_graph_never_includes_w001_or_w002_findings_even_with_a_stale_witness_present` · stage: `make test`
 
-- [ ] **AC-WM-22 (non-success):** a waiver's own reason text can no longer
+- [x] **AC-WM-22 (non-success):** a waiver's own reason text can no longer
   leak a spurious stage citation into a criterion's `verified_by`, for
   either dialect. (R-WM-14)
   _Verified by:_ `pytest -k "test_waiver_reason_text_is_not_scanned_as_a_stage_citation"` · stage: `make test`
 
-- [ ] **AC-WM-23:** README's rules table, `c4.md`'s rule count and
+- [x] **AC-WM-23:** README's rules table, `c4.md`'s rule count and
   per-family range comments, `docs/agents-skills-harness.md`,
   `docs/next-steps.md`, `docs/differentiation-roadmap.md`, and `rules.py`'s
   own module docstring all match `rules.RULES`'s real contents, including
   the new `W` family. (R-WM-16)
   _Verified by:_ `pytest tests/test_rule_registry_docs.py` · stage: `make test`
 
-- [ ] **AC-WM-24:** `StackProfile` still constructs via every existing
+- [x] **AC-WM-24:** `StackProfile` still constructs via every existing
   keyword-only call site without passing `witnesses`/`current_sha` — both
   default, so the new fields are additive, not breaking. (C-WM-1)
-  _Verified by:_ `pytest -k test_stack_profile_witnesses_and_current_sha_default_when_omitted` · stage: `make test`
+  _Verified by:_ `pytest -k test_stack_profile_construction_still_works_without_witness_fields` · stage: `make test`
 
-- [ ] **AC-WM-25 (non-success):** `witnesses`/`current_sha` are confirmed
+- [x] **AC-WM-25 (non-success):** `witnesses`/`current_sha` are confirmed
   absent from `StackProfile.to_card()`'s output and from
   `dialect_card._COMPARABLE_FIELDS`. (C-WM-2)
   _Verified by:_ `pytest -k test_to_card_excludes_witnesses_and_current_sha` · stage: `make test`
 
-- [ ] **AC-WM-26 (non-success):** the CLI verb surface is exactly the
+- [x] **AC-WM-26 (non-success):** the CLI verb surface is exactly the
   existing 7 verbs plus `witness` — no other new verb appears. (C-WM-3)
   _Verified by:_ `pytest -k test_cli_verbs_are_exactly_the_allow_list` · stage: `make test`
 
