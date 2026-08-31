@@ -12,6 +12,18 @@ from typing import cast
 
 __all__ = ["to_mermaid"]
 
+# Named (not inline literals, mirroring graph.py's own NODE_TEXT_LIMIT
+# precedent "so tests can reason about it"): an orphan node's stroke and a
+# broken edge's linkStyle intentionally share one color -- both flag
+# "something's wrong" -- so the two can't independently drift apart. A
+# missing node gets a distinct, non-alert gray + dash style instead (a
+# different fact: "not found," not "broken").
+ALERT_COLOR = "#c00"
+ORPHAN_FILL = "#fdd"
+ORPHAN_TEXT = "#900"
+MISSING_FILL = "#eee"
+MISSING_STROKE = "#999"
+
 
 def _label(node: dict[str, object]) -> str:
     # Real node ids (e.g. "spec:openspec/changes/x/specs/y/spec.md") contain
@@ -40,8 +52,8 @@ def to_mermaid(graph: dict[str, object]) -> str:
 
     lines = [
         "flowchart LR",
-        "    classDef orphan fill:#fdd,stroke:#c00,color:#900;",
-        "    classDef missing fill:#eee,stroke:#999,stroke-dasharray: 3 3;",
+        f"    classDef orphan fill:{ORPHAN_FILL},stroke:{ALERT_COLOR},color:{ORPHAN_TEXT};",
+        f"    classDef missing fill:{MISSING_FILL},stroke:{MISSING_STROKE},stroke-dasharray: 3 3;",
         "",
     ]
     for node in nodes:
@@ -59,7 +71,7 @@ def to_mermaid(graph: dict[str, object]) -> str:
         target = synthetic.get(edge["target"], edge["target"])
         lines.append(f"    {source} -->|{edge['type']}| {target}")
         if edge.get("broken") or edge.get("exists") is False:
-            link_styles.append(f"    linkStyle {i} stroke:#c00,stroke-width:2px;")
+            link_styles.append(f"    linkStyle {i} stroke:{ALERT_COLOR},stroke-width:2px;")
     lines.extend(link_styles)
 
     return "\n".join(lines) + "\n"

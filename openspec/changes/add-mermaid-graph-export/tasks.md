@@ -26,7 +26,7 @@
   `cmd_graph` (`DEC-GV-004`).
 - `cli.py`: `graph` gains `--change` and a `mermaid` `--format` choice;
   `--format dot`'s rejection is unrevised (`DEC-GV-003`).
-- 10 new tests in `tests/test_graph.py`: mermaid end-to-end, dot-rejection
+- 8 new tests in `tests/test_graph.py`: mermaid end-to-end, dot-rejection
   regression guard, `--change` rendering scope, the false-orphan regression
   guard, the genuine-orphan-still-surfaces guard, not-found/no-openspec-dir
   errors, and a pure `filter_by_change()` unit test.

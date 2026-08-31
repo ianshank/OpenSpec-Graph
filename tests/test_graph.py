@@ -289,6 +289,33 @@ def test_graph_change_scopes_which_specs_are_rendered(repo: Path, capsys) -> Non
     assert "c1" in spec_nodes[0]["path"]
 
 
+def test_graph_change_scoping_applies_identically_under_format_mermaid(repo: Path, capsys) -> None:
+    # Every other --change test in this file uses --format json; the only
+    # --format mermaid test has no --change -- this exact composition was
+    # previously untested.
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    write_spec(repo, "c2", "cap2", GOOD_HARNESS.replace("AC-DMO", "AC-DM2").replace("R-DMO", "R-DM2"))
+    exit_code = main(["--target", str(repo), "graph", "--change", "c1", "--format", "mermaid"])
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert out.startswith("flowchart LR")
+    assert "cap1" in out
+    assert "cap2" not in out
+
+
+def test_graph_change_prints_a_g006_unscoped_heads_up(repo: Path, capsys) -> None:
+    # Unlike `validate --change` (which skips G006 with its own INFO note),
+    # `graph --change` always includes G006 findings unscoped (DEC-GV-002) --
+    # flagged with its own heads-up so a nonzero broken_links count doesn't
+    # read as a problem specific to the rendered change (post-implementation
+    # adversarial review finding).
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    exit_code = main(["--target", str(repo), "graph", "--change", "c1", "--format", "json"])
+    assert exit_code == 0
+    err = capsys.readouterr().err
+    assert "INFO  G006 included unscoped" in err
+
+
 def test_graph_change_does_not_falsely_orphan_an_invariant_cited_outside_the_scope(
     repo: Path, capsys
 ) -> None:
@@ -339,6 +366,22 @@ def test_graph_change_with_no_openspec_dir(repo: Path, capsys) -> None:
     assert "no openspec/ directory" in capsys.readouterr().err
 
 
+def test_graph_format_mermaid_on_a_freshly_initialized_repo_with_no_changes(tmp_path: Path, capsys) -> None:
+    # Agent-review-flagged gap: no CLI-level test exercised `graph` against a
+    # real, valid openspec/ tree with zero change packages -- the reachable
+    # state right after `planlint init`, before the first `planlint new`.
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    (tmp_path / "pyproject.toml").write_text(PYPROJECT)
+    assert main(["--target", str(tmp_path), "init"]) == 0
+    capsys.readouterr()  # discard init's own stdout
+    exit_code = main(["--target", str(tmp_path), "graph", "--format", "mermaid"])
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert out.startswith("flowchart LR")
+    assert "n0" not in out
+    assert "-->|" not in out
+
+
 def test_filter_by_change_is_a_pure_path_filter() -> None:
     paths = [
         Path("openspec/changes/c1/specs/cap/spec.md"),
@@ -360,6 +403,21 @@ def test_filter_by_change_is_precise_against_a_change_name_that_collides_with_an
         Path("openspec/changes/c1/specs/cap/spec.md"),
     ]
     assert detect.filter_by_change(paths, "specs") == [paths[0]]
+
+
+def test_filter_by_change_is_precise_against_a_change_literally_named_changes() -> None:
+    # The symmetric case: a change literally named "changes" must not make
+    # its own name segment read as a second, bogus "changes" marker whose
+    # following (fixed) "specs" segment then spuriously satisfies a query
+    # for an unrelated change also named "specs" -- the exact bug a forward
+    # scan for the first/any "changes" occurrence (rather than the fixed
+    # structural position) reintroduced one level down from the fix above.
+    paths = [
+        Path("openspec/changes/changes/specs/cap/spec.md"),  # a change genuinely named "changes"
+        Path("openspec/changes/specs/specs/cap/spec.md"),  # a change genuinely named "specs"
+    ]
+    assert detect.filter_by_change(paths, "specs") == [paths[1]]
+    assert detect.filter_by_change(paths, "changes") == [paths[0]]
 
 
 # --- CLI branch coverage (closes the gap that kept total below 90%) -----------

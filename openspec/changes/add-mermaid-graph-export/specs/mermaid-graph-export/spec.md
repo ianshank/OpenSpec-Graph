@@ -57,7 +57,13 @@ exists anywhere in this repo.
   `graph --change` keeps running it, unscoped, and includes its results. An
   orphan invariant is, by definition, cited by no living spec anywhere — so
   surfacing it isn't leaking a different change's content into a scoped
-  picture; it's a fact about the invariant source itself.
+  picture; it's a fact about the invariant source itself. `graph --change`
+  prints its own `INFO` note alongside the rendered output (found missing
+  by post-implementation adversarial review: a nonzero `broken_links` count
+  under `--change` could otherwise read as "this change has a problem" when
+  it may be an unrelated, whole-tree fact) — so both commands are explicit
+  about how G006 was handled, even though what they each *do* with it
+  deliberately differs.
 - **DEC-GV-003:** `--format mermaid` does not revise `AC-GR-6`. That rejection
   is specifically about image-producing rendering, which requires an external
   engine (Graphviz) in every viewing context; Mermaid is text that GitHub/

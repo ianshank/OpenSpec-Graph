@@ -64,6 +64,13 @@ class StackProfile:
     make_target_confidence: str = "high"
     make_unresolved_count: int = 0
 
+    @property
+    def invariant_source_name(self) -> str:
+        """Human-readable name of the invariant source, or a generic
+        fallback when none is detected -- shared by G005 (rules_generic.py)
+        and G006 (rules.py) so the two can't independently drift on wording."""
+        return self.invariant_source.name if self.invariant_source else "the contract"
+
     def as_dict(self) -> dict[str, object]:
         return {
             "root": str(self.root),
@@ -278,20 +285,27 @@ def filter_by_change(spec_files: Sequence[Path], change: str) -> list[Path]:
     use this, rather than each carrying its own copy of the path filter to
     drift apart.
 
-    Matches structurally on ``Path.parts`` (mirroring ``ledger.owning_change``'s
-    own walk) rather than a ``str(p)`` substring: a substring check is
-    path-separator-dependent, and imprecise against a change name that
-    happens to collide with some other path segment (e.g. a change
-    literally named ``"specs"`` would substring-match every spec_files entry).
+    Anchors on the *fixed* structural position of the
+    ``changes/<name>/specs/<capability>/spec.md`` convention (exactly what
+    ``find_spec_files`` produces), rather than scanning for the first/any
+    ``"changes"`` segment: a forward scan that only stops once it finds a
+    "changes" segment *followed by the queried name* -- as an earlier
+    version of this function did -- is imprecise the moment a change's own
+    name is itself ``"changes"``. That name then reads as a second, bogus
+    marker, and the fixed ``"specs"`` segment one slot after it can
+    spuriously satisfy a query for an unrelated change also named
+    ``"specs"``. Matching a fixed position rather than a repeatable literal
+    closes that -- the same imprecision class a plain ``str(p)`` substring
+    check has, one level down.
     """
-    matched: list[Path] = []
-    for p in spec_files:
-        parts = p.parts
-        for i, part in enumerate(parts):
-            if part == "changes" and i + 1 < len(parts) and parts[i + 1] == change:
-                matched.append(p)
-                break
-    return matched
+    return [
+        p
+        for p in spec_files
+        if len(p.parts) >= 5
+        and p.parts[-5] == "changes"
+        and p.parts[-4] == change
+        and p.parts[-3] == "specs"
+    ]
 
 
 def profile(root: Path) -> StackProfile:

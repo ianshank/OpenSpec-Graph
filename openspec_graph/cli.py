@@ -251,6 +251,16 @@ def cmd_graph(args: argparse.Namespace) -> int:
         if not spec_files:
             print(f"no specs found for change {args.change!r}", file=sys.stderr)
             return 2
+        # Unlike `validate --change` (which skips G006 outright, DEC-WL-003),
+        # `graph --change` keeps evaluate_tree() running unscoped and folds
+        # its results into broken_links (DEC-GV-002) -- so a nonzero
+        # broken_links here can reflect an invariant issue entirely outside
+        # the rendered scope. Flagged so that is never a silent surprise.
+        print(
+            "INFO  G006 included unscoped (tree-wide check; may report an "
+            "invariant outside this --change scope)",
+            file=sys.stderr,
+        )
 
     try:
         graph = graph_module.build_graph(prof, spec_files=spec_files)

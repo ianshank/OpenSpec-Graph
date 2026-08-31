@@ -114,6 +114,17 @@ def test_a_rule_ident_edge_target_with_no_matching_node_is_used_verbatim() -> No
     assert "| G004" in out
 
 
+def test_a_hyphenated_ident_edge_target_with_no_matching_node_is_used_verbatim() -> None:
+    # Real requirement idents contain hyphens (e.g. "R-DMO-1"), unlike the
+    # rule idents (e.g. "G004") the sibling test above uses -- confirming
+    # the same verbatim fallback renders a hyphenated ident cleanly, not
+    # just a hyphen-free one.
+    nodes = [{"id": "AC-1", "type": "criterion"}]
+    edges = [{"source": "AC-1", "target": "R-DMO-1", "type": "traces-to"}]
+    out = mermaid.to_mermaid(_graph(nodes, edges))
+    assert "n0 -->|traces-to| R-DMO-1" in out
+
+
 def test_output_is_deterministic_across_repeated_calls() -> None:
     nodes = [{"id": "spec:x", "type": "spec", "path": "x"}, {"id": "AC-1", "type": "criterion", "text": "t"}]
     edges = [{"source": "spec:x", "target": "AC-1", "type": "declares", "exists": True}]
