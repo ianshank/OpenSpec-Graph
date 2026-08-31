@@ -98,5 +98,14 @@ def parse_spec(path: Path, dialect: str) -> ParsedSpec:
 
 
 def scenario_has_gwt(criterion: Criterion) -> bool:
+    """Is this scenario executable -- does it name a stimulus and an outcome?
+
+    ``WHEN`` and ``THEN`` are required: a scenario with no stimulus, or with no
+    asserted outcome, cannot be run. ``GIVEN`` is **optional** (DEC-UG-001).
+    Gherkin treats it as optional, and a scenario whose precondition is folded
+    into its ``WHEN`` is complete as written -- requiring it reported 66 of the
+    68 scenarios in an external upstream-dialect corpus, none of which was
+    actually unexecutable.
+    """
     blob = criterion.note.upper()
-    return all(token in blob for token in ("GIVEN", "WHEN", "THEN"))
+    return all(token in blob for token in ("WHEN", "THEN"))

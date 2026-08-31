@@ -30,8 +30,8 @@ def _scenario_without_gwt(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
     for crit in spec.criteria:
         if not scenario_has_gwt(crit):
             yield (
-                f"{crit.ident} ({crit.text[:50]}...) is missing one of "
-                "GIVEN/WHEN/THEN and is therefore not executable"
+                f"{crit.ident} ({crit.text[:50]}...) is missing WHEN or "
+                "THEN and is therefore not executable"
             )
 
 
@@ -48,7 +48,7 @@ def _requirement_without_modal(spec: ParsedSpec, _p: StackProfile) -> Iterable[s
 UPSTREAM_RULES: tuple[Rule, ...] = (
     Rule("U001", ERROR, ("upstream",), "delta header present", _missing_delta_header),
     Rule("U002", ERROR, ("upstream",), "every requirement has a scenario", _requirement_without_scenario),
-    Rule("U003", ERROR, ("upstream",), "scenarios are GIVEN/WHEN/THEN", _scenario_without_gwt),
+    Rule("U003", ERROR, ("upstream",), "scenarios state a stimulus and an outcome", _scenario_without_gwt),
     Rule("U004", WARN, ("upstream",), "requirements are normative", _requirement_without_modal),
     Rule("U005", WARN, ("upstream",), "heading levels match convention", _heading_drift),
 )
