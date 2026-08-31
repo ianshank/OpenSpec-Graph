@@ -45,5 +45,11 @@ spec-findings.json
 head.json
 base.json
 
+# Witness store (CP-WM): ephemeral, per-checkout proof a stage actually ran.
+# Never git-tracked -- freshness is enforced by comparing a witness's own
+# recorded commit sha against the checkout's real HEAD, not by persisting
+# history (DEC-WM-011).
+.planlint/
+
 # Docker / local builds
 # (Dockerfile and .dockerignore are tracked; build context artifacts are not)

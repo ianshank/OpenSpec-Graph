@@ -35,6 +35,7 @@ _NEW_MODULES = [
     "dialect_card",
     "ledger",
     "mermaid",
+    "witness",
 ]
 
 # Modules that must NOT import cli or graph (the orchestration/output layers).
@@ -196,6 +197,24 @@ def test_machinery_never_imports_subprocess() -> None:
     would not catch this, since subprocess IS stdlib."""
     forbidden = _imported_roots(PKG / "machinery.py") & {"subprocess", "os"}
     assert not forbidden, f"machinery.py must never import {forbidden} (DEC-MP-001)"
+
+
+def test_only_detect_imports_subprocess() -> None:
+    """DEC-WM-008/009: detect._current_sha() (`git rev-parse HEAD`, read-only
+    plumbing -- a different risk class from machinery.py's own, stronger,
+    non-negotiable ban on ever invoking `make`) is the ONE new `subprocess`
+    call site in `openspec_graph/`. No other module may import it without
+    the same kind of explicit safety argument detect.py's own docstring
+    makes. Globs dynamically (mirrors test_import_boundary_discipline), so
+    a future new module is automatically covered, not just today's set."""
+    offenders: dict[str, set[str]] = {}
+    for path in PKG.glob("*.py"):
+        if path.stem == "detect":
+            continue
+        forbidden = _imported_roots(path) & {"subprocess"}
+        if forbidden:
+            offenders[path.stem] = forbidden
+    assert not offenders, f"only detect.py may import subprocess (DEC-WM-009): {offenders}"
 
 
 # --- AC-DG-5: shared helper is not duplicated inline ------------------------

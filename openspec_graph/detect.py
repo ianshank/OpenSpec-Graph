@@ -10,10 +10,11 @@ import configparser
 import dataclasses
 import json
 import re
+import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 
-from . import dialect_card, machinery
+from . import dialect_card, machinery, witness
 
 MANIFESTS: dict[str, tuple[str, ...]] = {
     "python": ("pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"),
@@ -85,6 +86,8 @@ class StackProfile:
     make_unresolved_count: int = 0
     adr_source: Path | None = None
     adr_ids: tuple[str, ...] = ()
+    witnesses: tuple[witness.Witness, ...] = ()
+    current_sha: str | None = None
 
     @property
     def invariant_source_name(self) -> str:
@@ -434,6 +437,39 @@ def filter_by_change(spec_files: Sequence[Path], change: str) -> list[Path]:
     ]
 
 
+def _current_sha(root: Path) -> str | None:
+    """The target repo's current commit sha, or ``None`` if it can't be
+    determined -- the only place ``subprocess`` is used anywhere in
+    ``openspec_graph/`` (``DEC-WM-008``/``DEC-WM-009``).
+
+    ``git rev-parse HEAD`` is read-only plumbing that never evaluates
+    arbitrary content from the target repo's own tracked files, unlike
+    ``make`` (which evaluates ``$(shell ...)`` unconditionally at parse
+    time) -- ``DEC-MP-001``'s specific danger doesn't transfer to this call.
+    Every failure mode (not a git repo, git not installed, timeout, a
+    non-zero exit, unexpected stdout) folds uniformly to ``None`` rather
+    than raising -- callers treat "unavailable" as a single case, not a
+    grab-bag of exceptions to catch individually.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    sha = result.stdout.strip()
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", sha):
+        return None
+    return sha
+
+
 def profile(root: Path) -> StackProfile:
     root = root.resolve()
     openspec_root = root / "openspec"
@@ -447,6 +483,12 @@ def profile(root: Path) -> StackProfile:
     invariant_source, invariant_ids = _invariants(root)
     adr_source, adr_ids = _adrs(root)
     make_facts = _make_target_facts(root)
+    witnesses = witness.load_witnesses(root)
+    # Lazy: detect.profile() runs on every detect/validate/graph call
+    # (including this project's own 300+-test suite), and the current sha
+    # is meaningless with zero witnesses to compare against -- AC-WM-3
+    # fails closed regardless of its value in that case (DEC-WM-008).
+    current_sha = _current_sha(root) if witnesses else None
     return StackProfile(
         root=root,
         languages=_languages(root),
@@ -462,4 +504,6 @@ def profile(root: Path) -> StackProfile:
         make_unresolved_count=make_facts.unresolved_count,
         adr_source=adr_source,
         adr_ids=adr_ids,
+        witnesses=witnesses,
+        current_sha=current_sha,
     )

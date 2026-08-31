@@ -8,12 +8,13 @@ the rule fires on exactly that violation.
 from __future__ import annotations
 
 import json
+import subprocess
 import textwrap
 from pathlib import Path
 
 import pytest
 
-from openspec_graph import detect, dialect_card, rules, scaffold
+from openspec_graph import detect, dialect_card, rules, scaffold, witness
 from openspec_graph.cli import main
 from openspec_graph.parse import parse_spec
 
@@ -244,6 +245,17 @@ def test_to_card_excludes_absolute_paths(repo: Path) -> None:
 def test_to_card_reports_no_openspec_root_when_absent(repo: Path) -> None:
     card = detect.profile(repo).to_card()
     assert card["has_openspec_root"] is False
+
+
+def test_to_card_excludes_witnesses_and_current_sha(repo: Path) -> None:
+    # current_sha changes on every commit by design -- including it in the
+    # portable snapshot would manufacture constant false `detect --diff`
+    # drift (DEC-WM-014).
+    card = detect.profile(repo).to_card()
+    assert "witnesses" not in card
+    assert "current_sha" not in card
+    assert "witnesses" not in dialect_card._COMPARABLE_FIELDS
+    assert "current_sha" not in dialect_card._COMPARABLE_FIELDS
 
 
 def test_detect_format_json_emits_a_dialect_card_with_schema_version(
@@ -1455,3 +1467,101 @@ def test_cli_waivers_text_output_says_none_found_when_empty(repo: Path, capsys) 
     exit_code = main(["--target", str(repo), "waivers"])
     assert exit_code == 0
     assert "no waivers found" in capsys.readouterr().out
+
+
+# --- witness mode data model (CP-WM) ----------------------------------------
+
+
+def _git_init_and_commit(repo: Path) -> None:
+    for args in (
+        ["git", "init", "-q"],
+        ["git", "config", "user.email", "test@example.com"],
+        ["git", "config", "user.name", "Test"],
+        ["git", "add", "-A"],
+        ["git", "commit", "-q", "-m", "init"],
+    ):
+        subprocess.run(args, cwd=repo, check=True)
+
+
+def test_stack_profile_construction_still_works_without_witness_fields(repo: Path) -> None:
+    # New StackProfile fields must be additive (C-WM-1) -- a caller building
+    # a StackProfile without knowing about witnesses/current_sha (every
+    # field predating CP-WM) still gets sane defaults.
+    prof = detect.StackProfile(
+        root=repo,
+        languages=(),
+        make_targets=(),
+        openspec_root=None,
+        change_dirs=(),
+        dialect="harness",
+        threshold=None,
+        invariant_source=None,
+        invariant_ids=(),
+        has_project_md=False,
+    )
+    assert prof.witnesses == ()
+    assert prof.current_sha is None
+
+
+def test_current_sha_returns_none_outside_a_git_repo(repo: Path) -> None:
+    assert detect._current_sha(repo) is None
+
+
+def test_current_sha_reads_head_inside_a_real_git_repo(repo: Path) -> None:
+    _git_init_and_commit(repo)
+    sha = detect._current_sha(repo)
+    real = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert sha == real
+    assert sha is not None and len(sha) == 40
+
+
+def test_current_sha_is_not_invoked_when_no_witnesses_are_present(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # detect.profile() runs on every detect/validate/graph call -- computing
+    # the current sha is meaningless with zero witnesses to compare against,
+    # so it must be skipped entirely, not just discarded (DEC-WM-008).
+    calls: list[object] = []
+    original_run = subprocess.run
+
+    def spy(*args: object, **kwargs: object) -> object:
+        calls.append(args)
+        return original_run(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(detect.subprocess, "run", spy)
+    prof = detect.profile(repo)
+    assert calls == []
+    assert prof.current_sha is None
+
+
+def test_profile_witnesses_field_reads_the_planlint_witnesses_directory(repo: Path) -> None:
+    w = witness.Witness(
+        schema_version=witness.WITNESS_SCHEMA_VERSION,
+        stage="test",
+        exit_code=0,
+        coverage=97.0,
+        sha="a" * 40,
+        recorded_at="2026-01-01T00:00:00Z",
+    )
+    witness.write_witness(repo, w)
+    assert detect.profile(repo).witnesses == (w,)
+
+
+def test_profile_current_sha_is_populated_once_a_witness_exists_in_a_git_repo(repo: Path) -> None:
+    _git_init_and_commit(repo)
+    witness.write_witness(
+        repo,
+        witness.Witness(
+            schema_version=witness.WITNESS_SCHEMA_VERSION,
+            stage="test",
+            exit_code=0,
+            coverage=None,
+            sha="a" * 40,
+            recorded_at="2026-01-01T00:00:00Z",
+        ),
+    )
+    prof = detect.profile(repo)
+    assert prof.current_sha is not None
+    assert len(prof.current_sha) == 40
