@@ -609,6 +609,46 @@ def test_waiver_reason_text_is_not_scanned_as_a_citation(repo: Path) -> None:
     assert "INV-77" not in spec.invariant_refs
 
 
+def test_waiver_reason_text_is_not_scanned_as_a_stage_citation_harness(repo: Path) -> None:
+    # The identical bug as test_waiver_reason_text_is_not_scanned_as_a_citation,
+    # but for Criterion.verified_by specifically -- parse_spec()'s citation_text
+    # fix only ever covered the spec-wide make_refs/invariant_refs/adr_refs
+    # fields; VERIFIED_BY.search() still ran on raw text (found designing
+    # CP-WM: this citation gates a build under --require-witness, not just a
+    # cosmetic graph edge). VERIFIED_BY has no re.DOTALL, so the leak needs
+    # the waiver comment on the same line as _Verified by:_.
+    body = GOOD_HARNESS.replace(
+        "_Verified by:_ `pytest -k test_attested_write` · stage: `make regression`",
+        "_Verified by:_ `pytest -k test_attested_write` · stage: `make regression` "
+        "<!-- specgraph:allow G004 mentions `make bogus` only to prove waiver "
+        "text is never scanned as a citation -->",
+    )
+    path = write_spec(repo, "demo-change", "demo-cap", body)
+    spec = parse_spec(path, "harness")
+    crit = next(c for c in spec.criteria if c.ident == "AC-DMO-1")
+    assert "bogus" not in crit.verified_by
+    assert "regression" in crit.verified_by
+
+
+def test_waiver_reason_text_is_not_scanned_as_a_stage_citation_upstream(repo: Path) -> None:
+    # Same bug, upstream dialect: Criterion.verified_by is the *entire*
+    # Scenario block, so a waiver comment anywhere within it leaks -- not
+    # just on one line, unlike harness's narrower exposure. This is the
+    # wider, gate-defeating half of the bug adversarial review found while
+    # designing CP-WM.
+    body = GOOD_UPSTREAM.replace(
+        "- **THEN** an evidence id is recorded",
+        "- **THEN** an evidence id is recorded\n\n"
+        "<!-- specgraph:allow G004 mentions `make bogus` only to prove waiver "
+        "text is never scanned as a citation -->",
+    )
+    path = write_spec(repo, "demo-change", "demo-cap", body)
+    spec = parse_spec(path, "upstream")
+    crit = next(c for c in spec.criteria if c.ident == "SCEN-1")
+    assert "bogus" not in crit.verified_by
+    assert "regression" in crit.verified_by
+
+
 def test_dialect_detection_distinguishes_both_forms(repo: Path) -> None:
     harness = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     upstream = write_spec(repo, "c2", "cap2", GOOD_UPSTREAM)

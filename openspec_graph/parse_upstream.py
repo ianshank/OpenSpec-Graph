@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .parse_model import Criterion, Requirement
-from .parse_semantics import REQUIREMENT, SCENARIO, line_of
+from .parse_semantics import REQUIREMENT, SCENARIO, line_of, strip_waiver_comments
 
 __all__ = ["parse_upstream"]
 
@@ -30,12 +30,19 @@ def parse_upstream(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion,
         for i, rm in enumerate(req_matches):
             if rm.start() < match.start():
                 owning = f"REQ-{i + 1}"
+        # A waiver comment's own reason text must never leak a spurious
+        # `make X` citation into verified_by -- see parse_harness.py's
+        # identical fix for the same bug class. The Scenario block is much
+        # wider than harness's single _Verified by:_ line, so a waiver
+        # comment anywhere in the block (e.g. right after THEN, a natural
+        # place to justify a nearby rule exception) was previously exposed.
+        verified_by = strip_waiver_comments(block)
         criteria.append(
             Criterion(
                 ident=f"SCEN-{idx + 1}",
                 text=match.group(2),
                 note=block,
-                verified_by=block,
+                verified_by=verified_by,
                 requirement_refs=(owning,),
                 line=line_of(text, match.start()),
             )
