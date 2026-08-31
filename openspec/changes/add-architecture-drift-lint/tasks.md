@@ -15,7 +15,7 @@
   test replacing the C4 rule pair entirely — both resolved as named
   decisions in the spec, not silently dropped.
 
-## Milestone 1 — Data model + discovery
+## Milestone 1 — Data model + discovery [DONE]
 
 - New `openspec_graph/parse_semantics.py::ADR_REF` regex, `ParsedSpec.adr_refs`
   field (additive/defaulted, `DEC-AD-001`), wired in `parse.py::parse_spec()`.
@@ -28,7 +28,7 @@
   shapes, empty-repo fallback, the zero-padding-mismatch regression, and a
   dialect-card diff round-trip.
 
-## Milestone 2 — G008/G009 + `evaluate_tree()` + `--change` wiring
+## Milestone 2 — G008/G009 + `evaluate_tree()` + `--change` wiring [DONE]
 
 - `rules_generic.py`: `_unknown_adr` (G008), `orphan_adr_ids` +
   `_orphan_adr_registry_stub` (G009), both added to `GENERIC_RULES`. Module
@@ -43,7 +43,7 @@
   1:1. `tests/baseline_rules.json` regenerated (20 rules);
   `test_decomposition.py::_EXPECTED_HASHES["rules"]` regenerated.
 
-## Milestone 3 — Graph representation
+## Milestone 3 — Graph representation [DONE]
 
 - `graph.py`: new `_add_adr_edges()` (mirrors `_add_invariant_edges()`);
   `_add_tree_finding_edges()` becomes rule-aware via a 2-entry
@@ -59,7 +59,7 @@
   new `adr_source: null` key changes the hash on the canonical fixture —
   expected, not a regression).
 
-## Milestone 4 — Doc-drift guard + fix the live drift + doc sync
+## Milestone 4 — Doc-drift guard + fix the live drift + doc sync [DONE]
 
 - New `tests/test_rule_registry_docs.py`: computes ground truth once from
   `rules.RULES`, checks it against README's rules table, `c4.md`'s count and
@@ -71,11 +71,15 @@
 - **Gate:** `make pre-pr` green; the new test file passes against the
   now-corrected docs.
 
-## Milestone 5 — Change package + roadmap section + full verification
+## Milestone 5 — Change package + roadmap section + full verification [DONE]
 
 - This change package (`proposal.md`, `tasks.md`, this `spec.md`) with all
-  15 ACs flipped to `[x]` as each is actually implemented and verified — not
-  written retroactively as already-true.
+  16 ACs flipped to `[x]` as each was actually implemented and verified —
+  not written retroactively as already-true. (AC-AD-16 was added during
+  self-validation, after `planlint validate` itself caught two of this
+  package's own H002/H003 findings against its first draft: AC-AD-13 traced
+  to no requirement, and C-AD-2 had no verifying AC. R-AD-9 and AC-AD-16
+  were added to close both.)
 - `docs/differentiation-roadmap.md` gains a proper `add-architecture-drift-lint`
   section (mirroring how CP-GV got its own late addition), replacing the
   current bare blockquote mention.

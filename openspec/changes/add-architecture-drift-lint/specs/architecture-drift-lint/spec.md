@@ -19,10 +19,12 @@ with what any spec still references, and neither is caught.
 zero existing citation convention anywhere in this codebase.
 
 This capability's original motivation — `docs/architecture/c4.md` stating a
-stale rule count and G-range — no longer holds; both were already fixed by
-prior commits on this branch (component table now correctly says "18
-deterministic rules"; module map now correctly says "G001–G007"). A fresh
-investigation before this design began found the *identical* defect shape
+stale rule count and G-range — no longer held by the time this design began;
+both had already been fixed by prior commits on this branch (component table
+correctly said "18 deterministic rules" at the time; module map correctly
+said "G001–G007" — both now further updated to 20/G001-G009 by this very
+change, once G008/G009 exist). A fresh investigation before this design began
+found the *identical* defect shape
 alive elsewhere instead: `openspec_graph/rules.py`'s own module docstring
 still read "universal rules G001-G005" — untouched by any commit on this
 branch, and the third independent recurrence of this exact drift class in
@@ -139,73 +141,73 @@ for adding protection — resolved here as a single test, not new tooling
 
 ## Acceptance Criteria
 
-- [ ] **AC-AD-1:** A spec citing an ADR id not declared in the detected ADR
+- [x] **AC-AD-1:** A spec citing an ADR id not declared in the detected ADR
   source is reported by G008. (R-AD-1)
   _Verified by:_ `pytest -k test_g008_fires_on_an_undeclared_adr` · stage: `make test`
 
-- [ ] **AC-AD-2:** A declared ADR cited by no living spec, and not waived,
+- [x] **AC-AD-2:** A declared ADR cited by no living spec, and not waived,
   is reported by G009. (R-AD-2)
   _Verified by:_ `pytest -k test_g009_fires_for_a_declared_adr_no_spec_cites` · stage: `make test`
 
-- [ ] **AC-AD-3 (non-success):** G009 does not fire once the ADR is cited
+- [x] **AC-AD-3 (non-success):** G009 does not fire once the ADR is cited
   anywhere in the tree. (R-AD-2)
   _Verified by:_ `pytest -k test_g009_does_not_fire_once_cited_anywhere_in_the_tree` · stage: `make test`
 
-- [ ] **AC-AD-4:** G009 downgrades to INFO when waived anywhere in the tree.
+- [x] **AC-AD-4:** G009 downgrades to INFO when waived anywhere in the tree.
   (R-AD-2)
   _Verified by:_ `pytest -k test_g009_is_downgraded_to_info_when_waived_anywhere_in_the_tree` · stage: `make test`
 
-- [ ] **AC-AD-5 (non-success):** G009 is skipped, with an INFO note, under
+- [x] **AC-AD-5 (non-success):** G009 is skipped, with an INFO note, under
   `validate --change`. (R-AD-5, DEC-AD-004)
   _Verified by:_ `pytest -k test_g009_is_skipped_under_change_scoping` · stage: `make test`
 
-- [ ] **AC-AD-6:** `graph --change` keeps G009 unscoped, includes its
+- [x] **AC-AD-6:** `graph --change` keeps G009 unscoped, includes its
   results, and prints its own INFO note. (R-AD-6, DEC-AD-004)
   _Verified by:_ `pytest -k test_graph_change_prints_a_g009_unscoped_heads_up` · stage: `make test`
 
-- [ ] **AC-AD-7:** ADR ids are discovered from a directory of numbered
+- [x] **AC-AD-7:** ADR ids are discovered from a directory of numbered
   per-decision files. (R-AD-3, DEC-AD-002)
   _Verified by:_ `pytest -k test_adrs_discovered_from_a_directory_of_numbered_files` · stage: `make test`
 
-- [ ] **AC-AD-8:** ADR ids are discovered from a single index file when no
+- [x] **AC-AD-8:** ADR ids are discovered from a single index file when no
   directory candidate exists. (R-AD-3, DEC-AD-002)
   _Verified by:_ `pytest -k test_adrs_discovered_from_a_single_index_file` · stage: `make test`
 
-- [ ] **AC-AD-9 (non-success):** a zero-padded ADR filename does not cause a
+- [x] **AC-AD-9 (non-success):** a zero-padded ADR filename does not cause a
   mismatch against a spec's bare citation. (R-AD-4, DEC-AD-002)
   _Verified by:_ `pytest -k test_adr_ids_do_not_mismatch_on_zero_padded_filenames` · stage: `make test`
 
-- [ ] **AC-AD-10:** `graph --format json`'s `broken_links` count still equals
+- [x] **AC-AD-10:** `graph --format json`'s `broken_links` count still equals
   the total finding count with G008/G009 present — the AC-GR-4 invariant
   holds. (R-AD-7)
   _Verified by:_ `pytest -k test_graph_matches_validate_findings_with_an_orphan_adr` · stage: `make test`
 
-- [ ] **AC-AD-11 (non-success):** an ADR cited only by a spec outside a
+- [x] **AC-AD-11 (non-success):** an ADR cited only by a spec outside a
   `--change`-rendered scope is not falsely reported as orphaned. (R-AD-6, DEC-AD-004)
   _Verified by:_ `pytest -k test_graph_change_does_not_falsely_orphan_an_adr_cited_outside_the_scope` · stage: `make test`
 
-- [ ] **AC-AD-12:** a genuinely orphaned ADR still surfaces as a node and
+- [x] **AC-AD-12:** a genuinely orphaned ADR still surfaces as a node and
   finding under `--change` scoping. (R-AD-6, DEC-AD-004)
   _Verified by:_ `pytest -k test_graph_change_still_surfaces_a_genuinely_orphaned_adr` · stage: `make test`
 
-- [ ] **AC-AD-13:** an orphaned ADR renders in Mermaid output with the same
+- [x] **AC-AD-13:** an orphaned ADR renders in Mermaid output with the same
   `orphan` styling as any other orphan node type, with zero changes to
   `mermaid.py`. (R-AD-9, DEC-AD-005)
   _Verified by:_ `pytest -k test_orphan_adr_node_gets_the_orphan_class` · stage: `make test`
 
-- [ ] **AC-AD-16 (non-success):** `planlint rules --json` lists exactly
+- [x] **AC-AD-16 (non-success):** `planlint rules --json` lists exactly
   `G008`/`G009` as this change's new rule idents — no `OPENAPI-`/`EVENT-`-
   prefixed or otherwise reserved-but-unbuilt ident appears anywhere in the
   registry. (C-AD-2)
   _Verified by:_ `pytest -k test_no_openapi_or_event_schema_idents_are_reserved` · stage: `make test`
 
-- [ ] **AC-AD-14:** README's rules table, `c4.md`'s rule count and per-family
+- [x] **AC-AD-14:** README's rules table, `c4.md`'s rule count and per-family
   range comments, `docs/agents-skills-harness.md`, `docs/next-steps.md`, and
   `rules.py`'s own module docstring all match `rules.RULES`'s real contents,
   mechanically verified. (R-AD-8, DEC-AD-006)
   _Verified by:_ `pytest tests/test_rule_registry_docs.py` · stage: `make test`
 
-- [ ] **AC-AD-15:** a change to `adr_source`/`adr_ids` is detected by
+- [x] **AC-AD-15:** a change to `adr_source`/`adr_ids` is detected by
   `dialect_card.diff_cards()` — the new fields are threaded into both
   `to_card()` and `_COMPARABLE_FIELDS`. (C-AD-1)
   _Verified by:_ `pytest -k test_diff_cards_detects_an_adr_source_change` · stage: `make test`

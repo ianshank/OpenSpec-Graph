@@ -761,6 +761,15 @@ def test_g009_is_skipped_under_change_scoping(repo: Path, capsys) -> None:
     assert "G009 skipped" in out.err
 
 
+def test_no_openapi_or_event_schema_idents_are_reserved() -> None:
+    # C-AD-2: this change explicitly reserves no rule ident for the
+    # deferred OpenAPI/event-schema citation-checking work (DEC-AD-007) --
+    # mirrors DEC-MP-003's own precedent for not pre-reserving an id for
+    # unbuilt work.
+    idents = {r.ident for r in rules.RULES}
+    assert not any(i.startswith(("OPENAPI", "EVENT")) for i in idents), idents
+
+
 def test_h001_fires_when_an_ac_has_no_verification(repo: Path) -> None:
     body = GOOD_HARNESS.replace(
         "  _Verified by:_ `pytest -k test_attested_write` · stage: `make regression`\n",
