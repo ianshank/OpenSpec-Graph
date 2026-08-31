@@ -10,6 +10,7 @@ from .parse_semantics import (
     VERIFIED_BY,
     line_of,
     section_body,
+    strip_waiver_comments,
 )
 
 __all__ = ["parse_harness"]
@@ -31,7 +32,14 @@ def parse_harness(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion, 
     for idx, match in enumerate(matches):
         stop = matches[idx + 1].start() if idx + 1 < len(matches) else len(ac_body)
         block = ac_body[match.start() : stop]
-        verified = VERIFIED_BY.search(block)
+        # A waiver comment's own reason text must never leak a spurious
+        # `make X` citation into verified_by -- the same bug class already
+        # fixed for the spec-wide make_refs/invariant_refs/adr_refs fields
+        # (parse.py's citation_text), now closed at the per-criterion level
+        # too (found by adversarial review while designing CP-WM: W001/W002
+        # turn this citation into a build-gating verdict, not just a
+        # cosmetic graph edge).
+        verified = VERIFIED_BY.search(strip_waiver_comments(block))
         criteria.append(
             Criterion(
                 ident=match.group(2),

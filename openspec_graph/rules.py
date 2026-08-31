@@ -6,10 +6,13 @@ Decomposed into focused modules; this file is the facade/registry:
 - :mod:`rules_generic` — universal rules G001-G009.
 - :mod:`rules_harness` — harness-dialect rules H001-H006.
 - :mod:`rules_upstream` — upstream-dialect rules U001-U005.
+- :mod:`rules_witness` — witness-mode rules W001-W002, evaluated only under
+  ``--require-witness`` (``NON_WITNESS_RULES``/``evaluate(rule_set=...)``).
 
 Public surface (``Finding``, ``Rule``, ``evaluate``, ``rule_table``, ``RULES``,
-``ERROR``/``WARN``/``INFO``) is re-exported here so existing
-``from openspec_graph.rules import ...`` imports keep working (R-DG-1).
+``NON_WITNESS_RULES``, ``ERROR``/``WARN``/``INFO``) is re-exported here so
+existing ``from openspec_graph.rules import ...`` imports keep working
+(R-DG-1).
 
 Severity contract:
   ERROR -- blocks the gate. The document makes an unverifiable or false claim.
@@ -28,10 +31,12 @@ from .rule_types import ERROR, INFO, WARN, Finding, Rule
 from .rules_generic import GENERIC_RULES
 from .rules_harness import HARNESS_RULES
 from .rules_upstream import UPSTREAM_RULES
+from .rules_witness import WITNESS_RULES
 
 __all__ = [
     "ERROR",
     "INFO",
+    "NON_WITNESS_RULES",
     "RULES",
     "WARN",
     "Finding",
@@ -41,7 +46,12 @@ __all__ = [
     "rule_table",
 ]
 
-RULES: tuple[Rule, ...] = GENERIC_RULES + HARNESS_RULES + UPSTREAM_RULES
+# Every rule except W001/W002 -- the set graph.py always evaluates against
+# (witnesses get no graph representation and no broken_links contribution,
+# ever, DEC-WM-013) and cmd_validate falls back to when --require-witness
+# isn't set (DEC-WM-007). Declared before RULES so RULES can build on it.
+NON_WITNESS_RULES: tuple[Rule, ...] = GENERIC_RULES + HARNESS_RULES + UPSTREAM_RULES
+RULES: tuple[Rule, ...] = NON_WITNESS_RULES + WITNESS_RULES
 
 # G007 (a waiver must state a reason) cannot be silenced by naming itself in
 # a reason-less waiver -- that would let the enforcement rule trivially
@@ -49,15 +59,23 @@ RULES: tuple[Rule, ...] = GENERIC_RULES + HARNESS_RULES + UPSTREAM_RULES
 _NON_WAIVABLE = frozenset({"G007"})
 
 
-def evaluate(spec: ParsedSpec, profile: StackProfile) -> list[Finding]:
-    """Run every applicable rule.
+def evaluate(spec: ParsedSpec, profile: StackProfile, rule_set: Sequence[Rule] = NON_WITNESS_RULES) -> list[Finding]:
+    """Run every applicable rule in ``rule_set``.
 
-    A spec may waive a rule with an inline ``<!-- specgraph:allow G003 reason -->``
-    comment. Waivers are downgraded to INFO rather than dropped, so a suppression
-    stays visible in the report and in CI logs. G007 is exempt (_NON_WAIVABLE).
+    ``rule_set`` defaults to ``NON_WITNESS_RULES`` -- W001/W002 are opt-in
+    (``--require-witness``), so a caller that doesn't know or care about
+    witness mode (every pre-CP-WM call site, most of this project's own
+    test suite) gets exactly its old behavior unchanged, not a new,
+    unrequested ERROR finding sprung on it. Pass ``RULES`` explicitly to
+    also evaluate W001/W002 -- the mechanism ``cmd_validate``'s
+    ``--require-witness`` gate uses (``DEC-WM-007``). A spec may waive a
+    rule with an inline ``<!-- specgraph:allow G003 reason -->`` comment.
+    Waivers are downgraded to INFO rather than dropped, so a suppression
+    stays visible in the report and in CI logs. G007 is exempt
+    (_NON_WAIVABLE).
     """
     findings: list[Finding] = []
-    for rule in RULES:
+    for rule in rule_set:
         if not rule.applies(spec.dialect):
             continue
         suppressed = rule.ident in spec.suppressed and rule.ident not in _NON_WAIVABLE

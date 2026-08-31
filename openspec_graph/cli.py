@@ -14,6 +14,7 @@ Verbs:
   graph     emit the spec dependency graph as JSON or Mermaid (pure projection of validate)
   rules     print the rule table
   waivers   list every waived rule across the tree, with file, line, reason, change
+  witness   record proof a stage actually ran (CI-side; see validate --require-witness)
 
 Exit codes: 0 clean, 1 findings at or above the fail level, 2 usage error.
 """
@@ -24,13 +25,22 @@ import argparse
 import importlib.metadata
 import json
 import logging
+import math
+import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
-from . import detect, dialect_card, ledger, mermaid, rules, scaffold
+from . import detect, dialect_card, ledger, mermaid, rules, scaffold, witness
 from . import graph as graph_module
 from .log import configure as configure_logging
 from .parse import ParsedSpec, parse_spec
+
+# A make-target identifier -- the same shape MAKE_REF accepts, so a
+# malformed --stage can never match a citation anyway (fail fast instead
+# of silently recording a witness nothing can ever find).
+_STAGE_PATTERN = re.compile(r"[a-z][a-z0-9_-]*")
+_SHA_PATTERN = re.compile(r"[0-9a-fA-F]{40}")
 
 SEVERITY_ORDER = {"INFO": 0, "WARN": 1, "ERROR": 2}
 
@@ -166,13 +176,28 @@ def cmd_validate(args: argparse.Namespace) -> int:
             print(f"no specs found for change {args.change!r}", file=sys.stderr)
             return 2
 
+    # W001/W002 are evaluated only under --require-witness -- this rule_set
+    # swap is the single mechanism that both gates them here and excludes
+    # them from graph.py's output (rules.NON_WITNESS_RULES, DEC-WM-007).
+    # Default validate behavior is unchanged: the rules aren't evaluated at
+    # all when the flag is absent, not computed and silently discarded --
+    # and, unlike the --change-scoped skips below (a real coverage caveat
+    # on an unusual path, worth flagging every time), no stderr line either:
+    # this is the default path every existing caller already runs, and
+    # printing on it would be new, permanent noise on the common case, not
+    # a warning about a narrowed result.
+    if args.require_witness:
+        rule_set: tuple[rules.Rule, ...] = rules.RULES
+    else:
+        rule_set = rules.NON_WITNESS_RULES
+
     findings: list[rules.Finding] = []
     specs: list[ParsedSpec] = []
     for path in spec_files:
         logger.debug("evaluating %s", path)
         spec = parse_spec(path, args.dialect or prof.dialect)
         specs.append(spec)
-        findings.extend(rules.evaluate(spec, prof))
+        findings.extend(rules.evaluate(spec, prof, rule_set))
 
     if args.change:
         # G006/G009 are whole-tree properties (DEC-WL-001/DEC-AD-003);
@@ -308,6 +333,50 @@ def cmd_waivers(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_witness(args: argparse.Namespace) -> int:
+    """Record one witness -- proof `--stage` actually ran, at `--sha`, with
+    this outcome -- as a content-addressed file under `.planlint/witnesses/`
+    (see `openspec_graph.witness`). All boundary validation happens here,
+    before anything is written, so a malformed input fails fast with a
+    clear message rather than silently recording a witness nothing can
+    ever match (DEC-WM-003/DEC-WM-020)."""
+    root = Path(args.target).resolve()
+    if not root.is_dir():
+        print(f"ERROR target is not a directory: {root}", file=sys.stderr)
+        return 2
+
+    if not _STAGE_PATTERN.fullmatch(args.stage):
+        print(f"ERROR --stage {args.stage!r} is not a valid make-target identifier", file=sys.stderr)
+        return 2
+    if not _SHA_PATTERN.fullmatch(args.sha):
+        print(
+            f"ERROR --sha must be the full 40-character commit sha, got {args.sha!r} "
+            "(an abbreviated sha will never match `git rev-parse HEAD` at validate time)",
+            file=sys.stderr,
+        )
+        return 2
+    coverage: float | None = args.coverage
+    if coverage is not None and (not math.isfinite(coverage) or not (0.0 <= coverage <= 100.0)):
+        print(f"ERROR --coverage must be a finite number in [0, 100], got {args.coverage!r}", file=sys.stderr)
+        return 2
+
+    record = witness.Witness(
+        schema_version=witness.WITNESS_SCHEMA_VERSION,
+        stage=args.stage,
+        exit_code=args.exit_code,
+        coverage=coverage,
+        sha=args.sha,
+        recorded_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    )
+    try:
+        path = witness.write_witness(root, record)
+    except OSError as exc:
+        print(f"ERROR cannot write to the witness store: {exc}", file=sys.stderr)
+        return 2
+    print(f"witness recorded: {path.relative_to(root)}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="planlint", description="The CI gate that fails when a spec cites a gate this repo does not have."
@@ -361,6 +430,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_val.add_argument("--dialect", choices=["harness", "upstream", "auto"])
     p_val.add_argument("--fail-on", choices=["INFO", "WARN", "ERROR"], default="ERROR")
     p_val.add_argument("--json", action="store_true")
+    p_val.add_argument(
+        "--require-witness", action="store_true",
+        help="also enforce W001/W002: every cited stage needs a fresh, passing "
+        "`planlint witness` record at the current commit; default validate "
+        "behavior is unchanged without this flag",
+    )
     p_val.set_defaults(func=cmd_validate)
 
     p_rules = sub.add_parser("rules", help="print the rule table")
@@ -379,6 +454,27 @@ def build_parser() -> argparse.ArgumentParser:
     p_waivers.add_argument("--dialect", choices=["harness", "upstream", "auto"])
     p_waivers.add_argument("--format", choices=["text", "json"], default="text")
     p_waivers.set_defaults(func=cmd_waivers)
+
+    p_witness = sub.add_parser("witness", help="record proof a stage actually ran")
+    p_witness.add_argument(
+        "--stage", required=True,
+        help="the make target this witness proves ran, e.g. 'test' (not --target, "
+        "which is the global flag naming the repo path)",
+    )
+    p_witness.add_argument(
+        "--exit", type=int, required=True, dest="exit_code",
+        help="the exit code the verifying command actually observed",
+    )
+    p_witness.add_argument(
+        "--coverage", type=float, default=None,
+        help="coverage percentage observed (0-100), if this stage produces one",
+    )
+    p_witness.add_argument(
+        "--sha", required=True,
+        help="the full 40-character commit sha this witness applies to (never "
+        "abbreviated -- e.g. `git rev-parse HEAD`, not `--short`)",
+    )
+    p_witness.set_defaults(func=cmd_witness)
 
     return parser
 

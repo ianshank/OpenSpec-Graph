@@ -249,8 +249,8 @@ spec, or explicitly waived." Orphan invariants are the other lie.
 > (`AC-GV-1..9`). Not part of the original CP-1..8 numbering above — added
 > from a later planning round covering four capabilities together
 > (architecture drift detection, witness mode, policy packs, visualization).
-> `add-architecture-drift-lint` (CP-AD, below) has since also shipped;
-> `add-witness-mode` (CP-7 above) and `add-rule-pack-plugins`/
+> `add-architecture-drift-lint` (CP-AD, below) and `add-witness-mode` (CP-7,
+> below) have since also shipped; `add-rule-pack-plugins`/
 > `add-security-policy-pack` remain designed but not yet implemented.
 
 `graph --format json` computed the full dependency graph with no way to see
@@ -294,7 +294,8 @@ stays rejected; this doesn't reopen that non-goal, only adds to it.
 undeclared `INV-n`, or a declared invariant no living spec cites (G005/G006).
 Nothing extended that discipline to architecture decision records. New rules
 `G008` (cited-must-exist) and `G009` (declared-must-be-cited) mirror
-G005/G006 exactly; 20 rules total (was 18).
+G005/G006 exactly; 22 rules total (18 before this change, 20 after — see
+CP-7 below for the next increment, to 22).
 
 - **AC-AD-1..9:** ADR ids are discovered from either a directory of
   per-decision files or a single index file, extracted by scanning each
@@ -365,30 +366,92 @@ under five minutes.
   the supported subset rather than dropping findings — every ERROR must survive
   the round-trip.
 
-### CP-7: `add-witness-mode` (v2, the line competitors can't cross)
+### CP-7: `add-witness-mode` (v2, the line competitors can't cross) — implemented
 
-`validate --require-witness` fails unless CI uploaded a witness stub for each
-cited gate: target name, exit code, coverage number read from the detected
-locator, commit SHA. Specs stop being fan fiction.
+> Status: implemented. See the approved spec at
+> `openspec/changes/add-witness-mode/specs/witness-mode/spec.md`
+> (`AC-WM-1..26`). Re-grounded through two rounds before any code was
+> written: an initial pass (3 parallel Explore agents + 1 Plan agent) found
+> this section's own original sketch hadn't survived contact with the
+> current codebase — its `witness record --target test` flag collided with
+> the global `--target` every verb already uses, its "H001 verifies witness
+> when flag set" touch-map note was architecturally impossible
+> (`Rule.check()` has no access to CLI flags), its "signed (hash-chained)"
+> claim named no key-management story, and it said nothing about
+> `--change`/graph-parity or where a new rule family should live. A
+> dedicated adversarial peer review of the rewritten design (2 independent
+> reviewers) then found a real HIGH-severity bug introduced during that
+> rewrite itself — a short-commit-sha comparison that would have silently
+> defeated freshness checking for any CI script using an abbreviated sha —
+> plus a wider set of gaps, all resolved as `DEC-WM-001` through
+> `DEC-WM-020` before implementation began.
 
-- **AC-WM-1:** `planlint witness record --target test --exit 0 --coverage 97
-  --sha <sha>` writes a signed (hash-chained) witness stub to
-  `.planlint/witnesses/`; `validate --require-witness` fails if any cited
-  `_Verified by:` target lacks a matching stub.
-- **AC-WM-2:** A witness whose coverage number is below the detected
-  `fail_under` floor fails `validate`, even with exit code 0 — the witness
-  proves the gate ran *and* that its number was real.
-- **AC-WM-3 (non-success):** `validate --require-witness` fails closed if the
-  witness store is absent or untrusted; it never silently treats "no witness"
-  as "passed." A repo with zero witnesses and `--require-witness` exits
-  non-zero.
-- **Touch map:** new `openspec_graph/witness.py` (schema, hash-chain, verify),
-  `openspec_graph/cli.py` (`witness` verb + `--require-witness` flag on
-  `validate`), `openspec_graph/rules_harness.py` (H001 verifies witness when
-  flag set). New rules `W001`/`W002` (missing witness, witness below floor).
-- **Cutline:** witness mode is opt-in (`--require-witness`); default `validate`
-  behavior is unchanged so the tool stays useful without CI integration. This
-  is the v2 line — do not let it destabilize v1.
+`validate --require-witness` fails unless CI recorded a witness for each
+cited stage: stage name, exit code, optional coverage, commit sha, written
+as a content-addressed file under `.planlint/witnesses/`. A spec citing
+`` `make test` `` no longer just has to *name* a real target (H001) — under
+`--require-witness` it has to prove that target actually ran, at the current
+commit, and passed. New rules `W001` (missing/stale/failing witness) and
+`W002` (witness coverage below the detected floor); 22 rules total (20
+before this change).
+
+- **AC-WM-1..5, AC-WM-8:** W001 fires with a distinct message for "never
+  witnessed," "witnessed but not at the current commit," and "witnessed but
+  failing" — never one generic message — and fires for every citation when
+  the current commit sha can't be determined at all. Applies to both
+  dialects, including a scenario citing more than one stage, each requiring
+  its own witness (`DEC-WM-005`, `DEC-WM-016`).
+- **AC-WM-6..11:** W002 fires only on a witness that already clears W001's
+  own bar and whose coverage is below the detected floor; `validate
+  --require-witness` fails closed with zero witnesses in the store and
+  never evaluates W001/W002 at all without the flag — a real `git init` +
+  `witness` + `validate --require-witness` round trip exits 0.
+- **AC-WM-12..18:** CLI boundary validation, all before anything is
+  written — `--stage` doesn't collide with the global `--target`
+  (`DEC-WM-001`); an abbreviated `--sha` is rejected rather than silently
+  never matching (`DEC-WM-003`); malformed `--coverage` is rejected;
+  `--coverage 0` records distinctly from "not given"; a corrupt or
+  wrong-`schema_version` witness file is skipped, never raised or treated
+  as a pass (`DEC-WM-018`); `write_witness()` is atomic, so a concurrent
+  reader never observes a partial file (`DEC-WM-012`); an unwritable
+  `.planlint/witnesses/` produces a clean exit-2 message, not a traceback.
+- **AC-WM-19..21:** the current commit sha is computed lazily — never at all
+  with zero witnesses in the store (`DEC-WM-008`); `detect.py` stays the
+  only module importing `subprocess` (`DEC-WM-009`); `graph`'s
+  `broken_links` and rendered output never include W001/W002 findings,
+  under any flag — a *stronger* exclusion than the H/U-family precedent,
+  which still contributes ordinary findings to `broken_links` with no
+  dedicated node/edge type (`DEC-WM-013`).
+- **AC-WM-22:** a prerequisite fix, landed before W001/W002 existed to
+  consume it — the pre-existing `Criterion.verified_by` waiver-comment leak
+  (open since before this change, for both dialects) is wider for the
+  upstream dialect than harness, found during this change's own adversarial
+  review of its own design.
+- **AC-WM-23:** `tests/test_rule_registry_docs.py` extended to the new `W`
+  family — every doc claiming a rule count or family range is checked
+  against `rules.RULES` mechanically, not by convention.
+- **AC-WM-24..26:** `witnesses`/`current_sha` are additive-only
+  `StackProfile` fields, confirmed absent from
+  `to_card()`/`dialect_card._COMPARABLE_FIELDS` — `current_sha` changes on
+  every commit by design and would otherwise manufacture false
+  `detect --diff` drift; the CLI verb surface stays exactly the prior 7
+  verbs plus the new flat `witness` verb, no nested sub-actions.
+- **Touch map:** new `openspec_graph/witness.py` (schema, atomic write,
+  fail-closed load) and `openspec_graph/rules_witness.py` (`W001`/`W002`,
+  its own module — `DEC-WM-004` — not `rules_harness.py`, the original
+  sketch's own now-corrected touch-map claim); `openspec_graph/detect.py`
+  (`_current_sha()`, the sole new `subprocess` call site);
+  `openspec_graph/rules.py` (`NON_WITNESS_RULES`, `evaluate(rule_set=...)`);
+  `openspec_graph/cli.py` (`witness` verb, `--require-witness`);
+  `openspec_graph/graph.py` (one-line `NON_WITNESS_RULES` pin). New
+  `tests/test_witness.py`.
+- **Cutline held:** witness mode is opt-in (`--require-witness`); default
+  `validate` behavior is unchanged — the entire pre-existing test suite
+  passes unmodified against the new, defaulted `evaluate(rule_set=...)`
+  parameter. No signing or hash-chaining (`DEC-WM-010` — an ephemeral,
+  gitignored store has no persistent history to chain); `--coverage` is
+  trusted as CI-reported, not independently re-derived (`DEC-WM-020`), the
+  same trust model as the no-signing decision.
 
 ### CP-8: `add-agent-threat-corpus` (v4, the eval + the marketing)
 
@@ -428,7 +491,7 @@ eval suite, plus a two-repo comparison table as the homepage.
 | CP-GV mermaid export | `cli.py`, `graph.py`, `detect.py` | `mermaid.py`, `tools/render_mermaid.py` |
 | CP-5 delta lint | `detect.py`, `cli.py` | `delta.py` |
 | CP-6 SARIF + actions | `cli.py`, `.github/workflows/` | `sarif.py`, `.github/actions/planlint/` |
-| CP-7 witness mode | `cli.py`, `rules_harness.py` | `witness.py` |
+| CP-7 witness mode | `cli.py`, `rules.py`, `detect.py`, `graph.py`, `parse_harness.py`, `parse_upstream.py` | `witness.py`, `rules_witness.py` |
 | CP-8 agent corpus | `rules_harness.py`, `rules.py`, `README.md` | `tests/agent_corpus/`, `tools/run_agent_corpus.py` |
 
 All new modules must remain stdlib-only (enforced by the existing AC-DG-4

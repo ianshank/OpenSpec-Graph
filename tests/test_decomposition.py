@@ -35,6 +35,8 @@ _NEW_MODULES = [
     "dialect_card",
     "ledger",
     "mermaid",
+    "witness",
+    "rules_witness",
 ]
 
 # Modules that must NOT import cli or graph (the orchestration/output layers).
@@ -45,14 +47,17 @@ _BOUNDARY_EXEMPT = {"cli", "__init__"}
 # for the canonical fixture repo (tests/fixtures/). Captured before the split;
 # any drift after decomposition fails AC-DG-2.
 #
-# The "rules" hash was re-pinned once, by `fix-u003-mandatory-given`, which
-# reworded U003's summary (GIVEN became optional). "validate" and "graph" were
-# byte-identical across that change -- the fixture corpus has no scenario that
-# omits GIVEN, so no finding moved; only the rule's advertised summary did.
+# The "rules" hash has been re-pinned twice: once by `fix-u003-mandatory-given`
+# (reworded U003's summary -- GIVEN became optional), once by `add-witness-mode`
+# (W001/W002 added to RULES, listed by `rules --json` for discoverability even
+# though neither is evaluated without --require-witness). "validate" and
+# "graph" stayed byte-identical across both changes -- the canonical fixture
+# never passes --require-witness, and `graph` never evaluates W001/W002 at
+# all (DEC-WM-013), so neither pathway's output shape moved.
 _EXPECTED_HASHES = {
     "validate": "0a810b4f791fa5684dbf384df7ab626ddf96c3b62fcd9d8299dc8d774a3b82e0",
     "graph": "23eea4b474ff9d6d5c4f89dbb86acaac53562544a551d79bceb5c984d2015482",
-    "rules": "23e303bff7262a05a9542e0ca7d58945f80fbe61044066593a4a381108a26c44",
+    "rules": "add77deda2a87edae3346278ced2633828b4bf5d0ae50d4d9c200f8c7e5d06de",
 }
 
 
@@ -196,6 +201,24 @@ def test_machinery_never_imports_subprocess() -> None:
     would not catch this, since subprocess IS stdlib."""
     forbidden = _imported_roots(PKG / "machinery.py") & {"subprocess", "os"}
     assert not forbidden, f"machinery.py must never import {forbidden} (DEC-MP-001)"
+
+
+def test_only_detect_imports_subprocess() -> None:
+    """DEC-WM-008/009: detect._current_sha() (`git rev-parse HEAD`, read-only
+    plumbing -- a different risk class from machinery.py's own, stronger,
+    non-negotiable ban on ever invoking `make`) is the ONE new `subprocess`
+    call site in `openspec_graph/`. No other module may import it without
+    the same kind of explicit safety argument detect.py's own docstring
+    makes. Globs dynamically (mirrors test_import_boundary_discipline), so
+    a future new module is automatically covered, not just today's set."""
+    offenders: dict[str, set[str]] = {}
+    for path in PKG.glob("*.py"):
+        if path.stem == "detect":
+            continue
+        forbidden = _imported_roots(path) & {"subprocess"}
+        if forbidden:
+            offenders[path.stem] = forbidden
+    assert not offenders, f"only detect.py may import subprocess (DEC-WM-009): {offenders}"
 
 
 # --- AC-DG-5: shared helper is not duplicated inline ------------------------

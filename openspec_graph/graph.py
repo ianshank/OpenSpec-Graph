@@ -3,13 +3,19 @@
 This is a pure projection, not a second analysis. The graph is built from the
 same `detect.profile` and `parse.parse_spec` calls `validate` uses, and its
 broken-link count is the finding count from `rules.evaluate`. The two can never
-disagree by construction (R-GR-1, AC-GR-4).
+disagree by construction (R-GR-1, AC-GR-4) for a default (no `--require-witness`)
+run -- `graph` always evaluates `rules.NON_WITNESS_RULES`, never W001/W002, under
+any flag (`graph` has no `--require-witness` of its own), so `validate
+--require-witness`'s finding count can legitimately exceed `graph`'s
+`broken_links`, a documented exception mirroring the existing `--change`
+one for G006/G009 (`DEC-WM-013`).
 
 Node types: ``spec``, ``requirement``, ``criterion``, ``stage``,
 ``invariant``, ``adr``. Edge types: ``traces-to`` (criterion -> requirement),
 ``verified-by`` (criterion -> stage), ``declares`` (spec -> invariant or
 spec -> adr), ``finding`` (spec -> rule, or entity -> rule for a tree-scoped
-finding -- a broken link recorded from `validate`).
+finding -- a broken link recorded from `validate`). Witnesses (CP-WM) get no
+node/edge type at all, ever.
 """
 
 from __future__ import annotations
@@ -256,7 +262,12 @@ def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None)
         _add_criterion_nodes(nodes, edges, seen_nodes, spec, spec_node, known_stages)
         _add_invariant_edges(nodes, edges, seen_nodes, spec, spec_node, known_invariants)
         _add_adr_edges(nodes, edges, seen_nodes, spec, spec_node, known_adrs)
-        broken_links += _add_finding_edges(edges, spec_node, rules.evaluate(spec, profile))
+        # Witness findings (W001/W002) never get graph representation and
+        # never contribute to broken_links, under any flag -- NON_WITNESS_RULES
+        # is the same mechanism cmd_validate's --require-witness gate uses,
+        # not a second one to maintain (DEC-WM-007/DEC-WM-013).
+        witness_free = rules.evaluate(spec, profile, rules.NON_WITNESS_RULES)
+        broken_links += _add_finding_edges(edges, spec_node, witness_free)
 
     broken_links += _add_tree_finding_edges(
         nodes, edges, seen_nodes, rules.evaluate_tree(all_specs, profile)

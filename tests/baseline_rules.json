@@ -118,5 +118,17 @@
     "severity": "WARN",
     "dialects": "upstream",
     "summary": "heading levels match convention"
+  },
+  {
+    "id": "W001",
+    "severity": "ERROR",
+    "dialects": "*",
+    "summary": "every cited stage has a fresh, passing witness"
+  },
+  {
+    "id": "W002",
+    "severity": "ERROR",
+    "dialects": "*",
+    "summary": "a witness's recorded coverage meets the detected floor"
   }
 ]
