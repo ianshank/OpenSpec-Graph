@@ -5,6 +5,36 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — architecture drift lint / CP-AD (`add-architecture-drift-lint` change package)
+
+- **New rules `G008`/`G009`** (both WARN): `G008` — a spec cites an `ADR-n`
+  id not declared in the detected ADR source. `G009` — a declared ADR cited
+  by no living spec anywhere, and not waived. Mirrors G005/G006 exactly. 20
+  rules total (was 18).
+- ADR discovery (`detect._adrs()`): tries a fixed, most-specific-first
+  candidate list (`docs/adr`, `docs/architecture/decisions`,
+  `docs/decisions`, `adr`, `docs/ADR.md`), supporting either a directory of
+  per-decision files or a single index file — unlike the single-file
+  `_invariants()` template, matching real-world ADR practice. Ids come from
+  scanning each candidate's own text, never filenames, so a zero-padded
+  filename can't silently mismatch a spec's bare citation.
+  `StackProfile.adr_source`/`adr_ids` threaded into both `to_card()` and
+  `dialect_card._COMPARABLE_FIELDS`.
+- `graph.py` gains its first new node type since the original five: `adr`,
+  reusing the existing `declares` edge type. An orphaned ADR gets graph
+  representation the same way an orphaned invariant already does.
+- New `tests/test_rule_registry_docs.py`: a single pytest test guarding
+  every prose claim about the rule registry's count or per-family id range
+  (README's table, `c4.md`, `docs/agents-skills-harness.md`,
+  `docs/next-steps.md`, `rules.py`'s own module docstring) against
+  `rules.RULES` itself — added after the third independent recurrence of
+  this exact drift class in this codebase's history (`c4.md` twice, then
+  `rules.py`'s own docstring, found live during this change's own design).
+- **Scoped to ADR only.** OpenAPI operationId and event-schema id
+  citation-checking, and a `c4.md`-doc-freshness rule pair, are explicit
+  non-goals this round — not partial or stubbed work. See the change
+  package's own Non-Goals and Decisions for the full reasoning.
+
 ### Added — Mermaid graph export / CP-GV (`add-mermaid-graph-export` change package)
 
 - **`planlint graph --format mermaid`**: renders the dependency graph as a

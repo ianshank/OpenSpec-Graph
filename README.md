@@ -126,6 +126,8 @@ quality without making the document wrong.
 | G005 | WARN | any | Every cited `INV-n` is declared in the invariant source |
 | G006 | WARN | any | Every declared invariant is cited by a living spec, or waived |
 | G007 | ERROR | any | Every waiver (`specgraph:allow`) states a reason |
+| G008 | WARN | any | Every cited `ADR-n` is declared in the ADR source |
+| G009 | WARN | any | Every declared ADR is cited by a living spec, or waived |
 | H001 | ERROR | harness | Every AC has `_Verified by:_` naming a runnable stage |
 | H002 | WARN | harness | Every AC traces to an `R-`/`C-` requirement |
 | H003 | WARN | harness | No orphan requirements (every one is verified by some AC) |
