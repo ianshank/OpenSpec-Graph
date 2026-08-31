@@ -84,8 +84,9 @@ it is not cargo-culted into the v0.1 surface.
 12. **Pre-push hook** — `make pre-pr` is the one-command gate; a `.git/hooks/
     pre-push` that calls it would catch a broken push before CI. Documented as
     optional in `docs/hooks.md` rather than forced, because the full suite
-    (coverage included) is slower than the commit-time lint+typecheck+validate
-    hook and most pushes are already covered by pre-commit + CI.
+    (coverage included) is slower than the six commit-time hooks (lint,
+    typecheck, security, validate, docs-check, thresholds) and most pushes
+    are already covered by pre-commit + CI.
 
 ## Skills / agents
 
