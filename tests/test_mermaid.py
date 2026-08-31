@@ -58,6 +58,14 @@ def test_orphan_node_gets_the_orphan_class() -> None:
     assert "class n0 orphan" in out
 
 
+def test_orphan_adr_node_gets_the_orphan_class() -> None:
+    # Proves the CP-AD "adr" node type needs zero production changes to
+    # mermaid.py -- styling is purely by the generic orphan/exists flags.
+    node = {"id": "adr:ADR-9", "type": "adr", "name": "ADR-9", "orphan": True}
+    out = mermaid.to_mermaid(_graph([node], []))
+    assert "class n0 orphan" in out
+
+
 def test_missing_node_gets_the_missing_class() -> None:
     node = {"id": "stage:nope", "type": "stage", "name": "nope", "exists": False}
     out = mermaid.to_mermaid(_graph([node], []))
