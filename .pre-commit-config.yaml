@@ -33,3 +33,15 @@ repos:
         entry: make validate
         language: system
         pass_filenames: false
+
+      - id: specgraph-docs-check
+        name: make docs-check (required docs present + linked)
+        entry: make docs-check
+        language: system
+        pass_filenames: false
+
+      - id: specgraph-thresholds
+        name: make thresholds (no hard-coded thresholds)
+        entry: make thresholds
+        language: system
+        pass_filenames: false

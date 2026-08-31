@@ -42,6 +42,12 @@ Rule-engine and CLI JSON output is deterministic (AC-EH-4):
 - Findings are appended in rule-then-file order; `validate --json` preserves
   that stable order.
 - `graph --format json` builds nodes/edges in deterministic iteration order.
+- `graph --format mermaid` (`mermaid.py`, CP-GV) holds to the same contract:
+  pure over `build_graph()`'s own dict, so it inherits that determinism
+  directly. Proven at both the pure-function level
+  (`test_output_is_deterministic_across_repeated_calls`) and the CLI level
+  (`test_graph_format_mermaid_is_deterministic`), the same two-level
+  coverage `--format json` gets.
 
 Tests (`tests/test_enterprise.py`, `*_deterministic`) assert that re-evaluating
 the same fixture tree yields **byte-identical** JSON, so a future change that

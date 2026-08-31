@@ -87,9 +87,8 @@ def evaluate_tree(specs: Sequence[ParsedSpec], profile: StackProfile) -> list[Fi
     """
     findings: list[Finding] = []
     waived = any("G006" in spec.suppressed for spec in specs)
-    src = profile.invariant_source.name if profile.invariant_source else "the contract"
     for inv_id in rules_generic.orphan_invariant_ids(specs, profile):
-        message = f"{inv_id} is declared in {src} but cited by no living spec"
+        message = f"{inv_id} is declared in {profile.invariant_source_name} but cited by no living spec"
         findings.append(
             Finding(
                 rule="G006",

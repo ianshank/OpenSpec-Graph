@@ -19,15 +19,17 @@ tool-version pins to drift from the dev extras:
 - `make typecheck` (mypy) across `openspec_graph/`, `tools/`
 - `make security` (gitleaks or fallback)
 - `planlint validate` (self-dogfooding: the tool validates its own specs)
+- `make docs-check` (required docs present + linked from README)
+- `make thresholds` (no hard-coded thresholds in the Makefile or workflow YAML)
 
 Every hook is fail-closed: a violation blocks the commit.
 
 ## Optional pre-push hook
 
-The commit-time hook runs lint + typecheck + security + validate. If you also
-want to block a broken **push** (catching what CI would catch, including the
-full test suite + coverage floor) before it leaves your machine, install a
-pre-push hook that runs the one-command gate:
+The commit-time hooks run lint + typecheck + security + validate + docs-check +
+thresholds. If you also want to block a broken **push** (catching what CI
+would catch, including the full test suite + coverage floor) before it leaves
+your machine, install a pre-push hook that runs the one-command gate:
 
 ```bash
 cat > .git/hooks/pre-push <<'EOF'
@@ -73,3 +75,28 @@ planlint rules --json > tests/baseline_rules.json
 …then add a deterministic test to `tests/`. The baseline test
 (`test_rule_set_matches_baseline`) fails if the rule set changes without the
 baseline being updated — a conscious decision, not an accident (C-CH-1).
+
+## Adding a new pure derived-output module
+
+`dialect_card.py`, `ledger.py`, and `mermaid.py` are all the same shape: a
+pure, stdlib-only module that projects a data structure some other module
+already computed (a `StackProfile`, a `ParsedSpec` tree, `build_graph()`'s
+dict) into a derived output — a diffable snapshot, a ledger, a diagram —
+without registering a `Rule` or doing its own filesystem/network I/O. None of
+the three imports another sibling module beyond the data types it consumes.
+
+Follow the same shape for a new one:
+
+1. One public function, `to_<thing>(data) -> <output>`, taking a shape the
+   caller already has in hand rather than recomputing it.
+2. Stdlib-only — no new dependency (`dependencies = []` in `pyproject.toml`
+   is a load-bearing product boundary; see `docs/architecture/c4.md`).
+3. Deterministic: same input, byte-identical output, every call. Add a
+   `test_*_is_deterministic` test alongside the module's other pure-function
+   unit tests, and — if the module is reachable from a CLI verb — a second,
+   subprocess-level determinism test in `tests/test_enterprise.py` (see
+   `test_graph_format_mermaid_is_deterministic` for the pattern).
+4. Register the module in `tests/test_decomposition.py::_NEW_MODULES` so the
+   decomposition/import-boundary tests cover it.
+5. If the module renders a CLI-visible format, wire the dispatch in `cli.py`
+   only — the module itself never calls `print`/`sys.exit`/`argparse`.

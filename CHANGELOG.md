@@ -22,11 +22,59 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   whole-tree orphan-invariant check always still runs unscoped regardless
   of what's rendered — scoping both would have reproduced the exact
   false-positive-orphan bug `validate --change` already guards against.
+  Prints its own `INFO` note (mirroring `validate --change`'s own G006
+  note) since a nonzero `broken_links` count under `--change` can reflect
+  an invariant issue entirely outside the rendered scope.
 - New `openspec_graph/mermaid.py` (pure, stdlib-only) and companion
   `tools/render_mermaid.py` (renders a previously-saved `graph --format
   json` artifact without re-running `planlint`).
 - `detect.filter_by_change()`: the `--change` path filter, previously
   inline only in `cmd_validate`, extracted and now shared by `graph` too.
+  Matches the fixed structural position of the
+  `changes/<name>/specs/<capability>/spec.md` convention rather than
+  scanning for the first/any `"changes"` path segment, which was imprecise
+  against a change name colliding with another path segment (found and
+  fixed twice over during review — first for a change named `"specs"`,
+  then again, one level down, for a change named `"changes"` itself).
+
+### Fixed — repo hygiene sweep (gitleaks, tooling parity, doc/code drift)
+
+- **`.gitleaks.toml` was silently disabling real secret detection.** A
+  gitleaks `--config` file replaces its entire built-in ruleset unless it
+  explicitly extends it; this file had no `[extend]` block, so `make
+  security` had been running gitleaks with effectively zero detection rules
+  (an allowlist with nothing to check against) since gitleaks was
+  introduced. Verified experimentally with the real binary, before and
+  after: a planted example secret went from "no leaks found" to "leaks
+  found: 1" once `[extend]\nuseDefault = true` was added.
+- `.dockerignore` brought into parity with `.gitignore`'s coverage (`env`,
+  `.dmypy.json`/`dmypy.json`, `.coverage.*`, `*.cover`, `*.egg`, the
+  CI-produced JSON artifacts, editor/OS cruft) — previously narrower, so a
+  stale local artifact could leak into a Docker build context.
+- `Makefile`: the `python tools/check_no_hardcoded_thresholds.py` call that
+  previously lived only inline inside `pre-pr`'s recipe is now its own
+  named `.PHONY` target (`thresholds`), matching every other gate's shape
+  and making it wireable into a pre-commit hook. New `graph-mermaid`
+  target.
+- `.pre-commit-config.yaml`: two new local hooks, `make docs-check` and
+  `make thresholds`, closing the gap where those two CI-hard gates could
+  previously fail only at push/CI time, never at commit time.
+- `StackProfile.invariant_source_name`: a new computed property shared by
+  G005 (`rules_generic.py`) and G006 (`rules.py`), replacing two
+  independent copies of the same "real file name, or 'the contract' as a
+  fallback" logic that could otherwise silently drift apart.
+- `docs/architecture/c4.md`: two `broken_links == validate findings`
+  invariant claims corrected — both were stated unconditionally, but
+  `graph --change` and `validate --change` deliberately disagree on this by
+  design (`DEC-GV-002`); the claims now state the unscoped-run scope they
+  actually hold under.
+- `openspec/changes/add-mermaid-graph-export/tasks.md`: corrected a stale
+  test-count claim ("10 new tests" in `tests/test_graph.py`; the commit
+  that shipped actually added 8, confirmed against the real diff).
+- `docs/hooks.md`: documented the two new pre-commit hooks, and added an
+  "Adding a new pure derived-output module" recipe naming the
+  `dialect_card.py`/`ledger.py`/`mermaid.py` pattern — previously only
+  "Adding a custom rule" had a documented extension recipe.
 
 ### Added — waiver ledger and invariant lints / CP-4 (`add-waiver-ledger-and-inv-lints` change package)
 

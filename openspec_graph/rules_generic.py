@@ -79,12 +79,7 @@ def _unknown_invariant(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]
     known = set(profile.invariant_ids)
     for ref in spec.invariant_refs:
         if ref not in known:
-            src = (
-                profile.invariant_source.name
-                if profile.invariant_source
-                else "the contract"
-            )
-            yield f"references {ref}, which is not declared in {src}"
+            yield f"references {ref}, which is not declared in {profile.invariant_source_name}"
 
 
 def _unjustified_waiver(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:

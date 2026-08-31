@@ -421,6 +421,21 @@ def test_detect_collects_invariant_ids(repo: Path) -> None:
     assert prof.invariant_ids == ("INV-1", "INV-2")
 
 
+def test_invariant_source_name_uses_the_real_file_name_when_present(repo: Path) -> None:
+    # Shared by G005 (rules_generic.py) and G006 (rules.py) so the two
+    # can't independently drift on this fallback wording.
+    prof = detect.profile(repo)
+    assert prof.invariant_source_name == "CONTRACT.md"
+
+
+def test_invariant_source_name_falls_back_when_no_source_is_declared(tmp_path: Path) -> None:
+    # repo has no CONTRACT.md/HARNESS_SPEC.md/etc -- no invariant source at all.
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    prof = detect.profile(tmp_path)
+    assert prof.invariant_source is None
+    assert prof.invariant_source_name == "the contract"
+
+
 def test_dialect_detection_distinguishes_both_forms(repo: Path) -> None:
     harness = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     upstream = write_spec(repo, "c2", "cap2", GOOD_UPSTREAM)
@@ -629,6 +644,47 @@ def test_h001_fires_when_verification_names_no_stage(repo: Path) -> None:
     )
     found = findings_for(repo, body, "harness")
     assert "H001" in rule_ids(found)
+
+
+def test_h002_fires_when_an_ac_traces_to_no_requirement(repo: Path) -> None:
+    body = GOOD_HARNESS.replace(
+        "**AC-DMO-1:** An attested write records an evidence id. (R-DMO-1)",
+        "**AC-DMO-1:** An attested write records an evidence id.",
+    )
+    found = findings_for(repo, body, "harness")
+    assert "H002" in rule_ids(found)
+    assert any("AC-DMO-1" in f.message and "traces to no" in f.message for f in found)
+
+
+def test_h002_does_not_fire_when_the_spec_declares_no_requirements_at_all(repo: Path) -> None:
+    # _ac_missing_requirement's own guard: `if not spec.requirements: return`
+    # -- G001 is the rule that names "no requirements at all," not H002.
+    body = textwrap.dedent(
+        """\
+        # Spec: Demo Capability
+
+        > **Status:** DRAFT
+
+        ## Problem Statement
+
+        **Evidence:** `demo/mod.py::run` writes without attestation.
+
+        ## Acceptance Criteria
+
+        - [ ] **AC-DMO-1:** An attested write records an evidence id.
+          _Verified by:_ `pytest -k test_attested_write` · stage: `make regression`
+
+        - [ ] **AC-DMO-2 (non-success):** An unattested write is denied.
+          _Verified by:_ `pytest -k test_unattested_denied` · stage: `make regression`
+
+        ## Validation Matrix
+
+        | Stage | Make Target | Pass Criteria |
+        |---|---|---|
+        | Focused | `make regression` | AC-DMO-1..2 |
+        """
+    )
+    assert "H002" not in rule_ids(findings_for(repo, body, "harness"))
 
 
 def test_h003_fires_on_an_orphan_requirement(repo: Path) -> None:
