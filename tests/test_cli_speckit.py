@@ -33,13 +33,13 @@ GOOD_SPECKIT = textwrap.dedent(
 
     1. **Given** an unattested write, **When** validation runs, **Then** the write is rejected.
 
-    ## Requirements
+    ## Requirements *(mandatory)*
 
     ### Functional Requirements
 
     - **FR-001**: The system MUST attest every write.
 
-    ## Success Criteria
+    ## Success Criteria *(mandatory)*
 
     - **SC-001**: Every write is attested before acknowledgment.
     """

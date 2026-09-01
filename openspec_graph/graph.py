@@ -212,11 +212,14 @@ def _mark_orphan_requirements(nodes: list[dict[str, object]], edges: list[dict[s
 
 
 def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None) -> dict[str, object]:
-    """Build the dependency graph for every change package under ``openspec/``.
+    """Build the dependency graph for every change package under ``openspec/``
+    and/or every feature under a SpecKit ``specs/`` tree — whichever root(s)
+    the profile has.
 
-    Raises ``NoOpenSpecTreeError`` if the target has no ``openspec/`` tree
-    (AC-GR-2): the caller exits non-zero with a message naming the missing
-    directory rather than emitting an empty graph.
+    Raises ``NoOpenSpecTreeError`` if the target has neither an ``openspec/``
+    tree nor a SpecKit ``specs/`` tree (AC-GR-2/AC-SK-21): the caller exits
+    non-zero with a message naming the missing director(y/ies) rather than
+    emitting an empty graph.
 
     ``spec_files``, if given (e.g. ``--change``-filtered), scopes which specs
     get rendered as nodes/edges -- but never what feeds

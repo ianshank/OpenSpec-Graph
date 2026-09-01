@@ -168,6 +168,42 @@ def section_body(text: str, name: str) -> str:
     return ""
 
 
+# Strips a trailing markdown-emphasized parenthetical off a heading title,
+# e.g. "*(mandatory)*", "*(include if feature involves data)*".
+_TRAILING_ANNOTATION = re.compile(r"[\s*_]*\(.*?\)[\s*_]*$")
+
+
+def speckit_section_body(text: str, name: str) -> str:
+    """Like :func:`section_body`, but tolerates a trailing annotation on the
+    heading.
+
+    The canonical SpecKit template suffixes its mandatory H2 headings --
+    ``## Requirements *(mandatory)*``, ``## Success Criteria *(mandatory)*``
+    -- so :func:`section_body`'s exact-title match silently finds nothing
+    against real SpecKit output (confirmed directly against the live
+    ``github/spec-kit`` template, not assumed): every FR-/SC- bullet a real,
+    correctly-formatted spec declares would go unextracted, and G003's
+    Success-Criteria exemption (R-SK-19) would never find its span to
+    blank, defeating the fix it exists to apply. Strips a trailing
+    parenthetical (optionally wrapped in markdown emphasis) before
+    comparing, rather than a loose prefix match, so "Success Criteria"
+    still doesn't spuriously match an unrelated "Success Metrics" heading.
+    A separate function, not a change to :func:`section_body` itself --
+    that function is shared with harness/upstream, whose headings carry no
+    such annotations today, and this repo has an explicit
+    zero-behavior-change commitment for both (C-SK-8).
+    """
+    bounds = [(m.group(1), m.start(), m.end()) for m in SECTION.finditer(text)]
+    name_lower = name.lower()
+    for idx, (title, _start, end) in enumerate(bounds):
+        normalized = _TRAILING_ANNOTATION.sub("", title.strip()).strip().lower()
+        if normalized != name_lower:
+            continue
+        stop = bounds[idx + 1][1] if idx + 1 < len(bounds) else len(text)
+        return text[end:stop]
+    return ""
+
+
 def line_of(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
@@ -181,17 +217,21 @@ def hard_coded(text: str, dialect: str = "") -> tuple[str, ...]:
     users complete onboarding in under 5 minutes`` is a completely
     legitimate bare-percentage bullet, not a hard-coded value that should
     instead come from the repo's coverage/governance config -- the
-    intent this check exists to enforce for harness/upstream. Blanks the
-    section span rather than skipping it structurally, preserving length
-    (and therefore line numbers), the same technique
-    ``strip_waiver_comments()`` uses for the identical reason. Zero
-    behavior change for harness/upstream: neither existing fixture has a
-    ``Success Criteria`` heading, and the default ``dialect=""`` never
-    triggers this branch.
+    intent this check exists to enforce for harness/upstream. Uses
+    :func:`speckit_section_body`, not :func:`section_body`, to find the
+    span -- the canonical SpecKit template's heading is
+    ``## Success Criteria *(mandatory)*``, and an exact-title lookup would
+    silently find nothing against it, defeating this exemption entirely
+    against real SpecKit output. Blanks the section span rather than
+    skipping it structurally, preserving length (and therefore line
+    numbers), the same technique ``strip_waiver_comments()`` uses for the
+    identical reason. Zero behavior change for harness/upstream: neither
+    existing fixture has a ``Success Criteria`` heading, and the default
+    ``dialect=""`` never triggers this branch.
     """
     scan_text = text
     if dialect == "speckit":
-        span = section_body(text, "Success Criteria")
+        span = speckit_section_body(text, "Success Criteria")
         if span:
             start = text.index(span)
             scan_text = text[:start] + " " * len(span) + text[start + len(span) :]

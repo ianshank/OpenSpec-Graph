@@ -618,11 +618,11 @@ a dedicated fix.
   replacement of any existing family. (R-SK-17)
   _Verified by:_ `pytest -k test_rules_py_registers_speckit_rules_additively` · stage: `make test`
 
-- [ ] **AC-SK-43 (non-success):** `inspect.getsource(parse.parse_spec)`
+- [x] **AC-SK-43 (non-success):** `inspect.getsource(parse.parse_spec)`
   still shows explicit `if`/`elif` comparisons against the three dialect
   string literals — no dict/mapping keyed by dialect name backs the
   dispatch. (C-SK-2)
-  _Verified by:_ `pytest -k test_parse_spec_dispatch_is_not_dict_based` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_parse_spec_dispatch_is_not_dict_based` · stage: `make test`
 
 - [x] **AC-SK-44 (non-success):** `find_speckit_spec_files()`'s glob
   matches `spec.md` only; a `plan.md`/`tasks.md` sibling in the same

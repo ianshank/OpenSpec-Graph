@@ -60,14 +60,14 @@ MULTI_STORY_SPECKIT = textwrap.dedent(
 
     1. **Given** a shopper whose card has expired, **When** they submit payment, **Then** the payment is declined.
 
-    ## Requirements
+    ## Requirements *(mandatory)*
 
     ### Functional Requirements
 
     - **FR-001**: The system MUST confirm every successful order.
     - **FR-002**: The system MUST decline an expired payment method.
 
-    ## Success Criteria
+    ## Success Criteria *(mandatory)*
 
     - **SC-001**: Checkout completes in under 3 seconds for 99% of orders.
     """
@@ -89,13 +89,13 @@ DRAFT_WITH_OPEN_QUESTION = textwrap.dedent(
 
     1. **Given** a completed order, **When** a refund is requested, **Then** the refund is issued.
 
-    ## Requirements
+    ## Requirements *(mandatory)*
 
     ### Functional Requirements
 
     - **FR-001**: The system MUST issue a refund within [NEEDS CLARIFICATION: what SLA?] of the request.
 
-    ## Success Criteria
+    ## Success Criteria *(mandatory)*
 
     - **SC-001**: Refunds are traceable to their originating order.
     """

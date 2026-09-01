@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import inspect
+import re
 import textwrap
 from pathlib import Path
 
@@ -25,6 +27,33 @@ def spec_path(tmp_path: Path) -> Path:
     return path
 
 
+# --- Canonical SpecKit heading annotations ("*(mandatory)*") ---------------
+
+
+def test_parse_speckit_extracts_fr_and_sc_from_canonically_annotated_headings() -> None:
+    # The real github/spec-kit template suffixes its mandatory H2 headings:
+    # "## Requirements *(mandatory)*", "## Success Criteria *(mandatory)*"
+    # (confirmed directly against the live template, not assumed). An
+    # exact-title section lookup would silently find nothing against this
+    # -- reproduces that gap and proves the fix.
+    text = textwrap.dedent(
+        """\
+        ## Requirements *(mandatory)*
+
+        ### Functional Requirements
+
+        - **FR-001**: The system MUST attest every write.
+
+        ## Success Criteria *(mandatory)*
+
+        - **SC-001**: 95% of writes are attested within 1 second.
+        """
+    )
+    reqs, criteria = parse_speckit(text)
+    assert {r.ident for r in reqs} == {"FR-001"}
+    assert {c.ident for c in criteria} == {"SC-001"}
+
+
 # --- AC-SK-14: FR-/SC- mapping ----------------------------------------------
 
 
@@ -40,7 +69,7 @@ def test_parse_speckit_maps_fr_and_sc_ids() -> None:
 def test_parse_speckit_fr_decl_does_not_match_a_sibling_nfr_bullet() -> None:
     text = textwrap.dedent(
         """\
-        ## Requirements
+        ## Requirements *(mandatory)*
 
         ### Functional Requirements
 
@@ -80,7 +109,7 @@ def test_parse_speckit_synthesizes_a_multi_line_gwt_scenario() -> None:
            **When** a write occurs
            **Then** an evidence id is recorded
 
-        ## Requirements
+        ## Requirements *(mandatory)*
 
         ### Functional Requirements
 
@@ -107,7 +136,7 @@ def test_parse_speckit_bounds_each_story_block_at_the_next_story_heading() -> No
 
         1. **Given** another precondition, **When** another action, **Then** another outcome.
 
-        ## Requirements
+        ## Requirements *(mandatory)*
 
         ### Functional Requirements
 
@@ -134,7 +163,7 @@ def test_parse_speckit_bounds_a_trailing_story_block_at_the_next_h2_section() ->
 
         1. **Given** a precondition, **When** an action, **Then** an outcome.
 
-        ## Requirements
+        ## Requirements *(mandatory)*
 
         ### Functional Requirements
 
@@ -218,3 +247,17 @@ def test_no_reciprocal_speckit_rescue_hatch_for_harness(tmp_path: Path) -> None:
 def test_parse_py_uses_shared_marker_predicates_not_local_copies() -> None:
     assert parse.is_upstream_marked is parse_semantics.is_upstream_marked
     assert parse.is_speckit_marked is parse_semantics.is_speckit_marked
+
+
+# --- AC-SK-43 (non-success): dispatch stays if/elif, not dict/registry-based
+
+
+def test_parse_spec_dispatch_is_not_dict_based() -> None:
+    # C-SK-2: parse.py::parse_spec()'s three-way dispatch must not be
+    # refactored into a dict/mapping keyed by dialect name -- confirmed by
+    # inspecting the actual source, not just behavior, so a future refactor
+    # that happens to preserve today's outputs still gets caught.
+    source = inspect.getsource(parse.parse_spec)
+    assert 'if resolved == "upstream"' in source
+    assert 'elif resolved == "speckit"' in source
+    assert re.search(r"\bdialect\s*[:=]\s*\{", source) is None

@@ -32,13 +32,13 @@ GOOD_SPECKIT = textwrap.dedent(
 
     1. **Given** an unattested write, **When** validation runs, **Then** the write is rejected.
 
-    ## Requirements
+    ## Requirements *(mandatory)*
 
     ### Functional Requirements
 
     - **FR-001**: The system MUST attest every write.
 
-    ## Success Criteria
+    ## Success Criteria *(mandatory)*
 
     - **SC-001**: Every write is attested before acknowledgment.
     """
@@ -202,6 +202,18 @@ def test_g003_does_not_fire_on_a_success_criteria_percentage(repo: Path) -> None
     assert "G003" not in rule_ids(findings_for(repo, body))
 
 
+def test_g003_does_not_fire_with_the_canonical_annotated_heading(repo: Path) -> None:
+    # The real github/spec-kit template writes "## Success Criteria
+    # *(mandatory)*", not the bare heading -- reproduces the gap an
+    # exact-title section lookup would have here and proves the fix.
+    body = GOOD_SPECKIT.replace(
+        "## Success Criteria\n\n- **SC-001**: Every write is attested before acknowledgment.",
+        "## Success Criteria *(mandatory)*\n\n"
+        "- **SC-001**: 95% of new users complete onboarding in under 5 minutes.",
+    )
+    assert "G003" not in rule_ids(findings_for(repo, body))
+
+
 def test_g003_still_fires_on_a_speckit_threshold_outside_success_criteria(repo: Path) -> None:
     # The exemption is scoped to the Success Criteria section body only --
     # a bare percentage anywhere else in a speckit spec is still a real
@@ -220,7 +232,8 @@ def test_g003_hard_coded_threshold_scan_unaffected_when_no_success_criteria_head
     # heading at all -- the blanking branch must be a no-op, not a crash,
     # and the full text is still scanned as normal.
     body = GOOD_SPECKIT.replace(
-        "\n## Success Criteria\n\n- **SC-001**: Every write is attested before acknowledgment.\n",
+        "\n## Success Criteria *(mandatory)*\n\n"
+        "- **SC-001**: Every write is attested before acknowledgment.\n",
         "\n",
     ).replace(
         "- **FR-001**: The system MUST attest every write.",

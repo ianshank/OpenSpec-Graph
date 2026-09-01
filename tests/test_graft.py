@@ -150,14 +150,14 @@ GOOD_SPECKIT = textwrap.dedent(
 
     1. **Given** an attested writer, **When** a write occurs, **Then** an evidence id is recorded.
 
-    ## Requirements
+    ## Requirements *(mandatory)*
 
     ### Functional Requirements
 
     - **FR-001**: The system MUST attest every write.
     - **FR-002**: The system MUST record an evidence id for every attested write.
 
-    ## Success Criteria
+    ## Success Criteria *(mandatory)*
 
     - **SC-001**: 95% of writes are attested within 1 second.
     """

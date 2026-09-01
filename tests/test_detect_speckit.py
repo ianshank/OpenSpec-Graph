@@ -28,13 +28,13 @@ GOOD_SPECKIT = textwrap.dedent(
     **Feature Branch**: `001-demo-capability`
     **Status**: Draft
 
-    ## Requirements
+    ## Requirements *(mandatory)*
 
     ### Functional Requirements
 
     - **FR-001**: The system MUST attest every write.
 
-    ## Success Criteria
+    ## Success Criteria *(mandatory)*
 
     - **SC-001**: 95% of writes are attested within 1 second.
     """
@@ -127,11 +127,24 @@ def test_profile_sets_speckit_root_and_unions_spec_files(repo: Path) -> None:
 
 
 def test_profile_supports_both_openspec_root_and_speckit_root_together(repo: Path) -> None:
-    write_spec(repo, "c1", "cap1", "# Spec: Demo\n\n## Requirements\n\n- R-DMO-1: x MUST y.\n")
+    # Both fields being populated isn't enough to prove R-SK-5's actual
+    # claim -- that profile() unions the two roots' files *before* calling
+    # detect_dialect() -- since a profile() that accidentally detected from
+    # only one list would still populate both root fields correctly. Using
+    # a genuinely harness-marked openspec spec here (not just any content)
+    # means the union is only provably exercised if the resulting dialect
+    # is "mixed": a profile() that dropped one root's files on the floor
+    # would report "harness" or "speckit" alone instead.
+    write_spec(
+        repo, "c1", "cap1",
+        "# Spec: Demo\n\n## Acceptance Criteria\n\n- [ ] **AC-DMO-1:** z is verified.\n"
+        "  _Verified by:_ `pytest -k test_z`\n",
+    )
     write_speckit_spec(repo, "001-demo-capability", GOOD_SPECKIT)
     prof = detect.profile(repo)
     assert prof.openspec_root == repo / "openspec"
     assert prof.speckit_root == repo / "specs"
+    assert prof.dialect == "mixed"
 
 
 # --- AC-SK-47: feature_dirs derives from content-gated results only --------
@@ -150,7 +163,7 @@ def test_feature_dirs_derives_from_content_gated_spec_files_only(repo: Path) -> 
 def test_detect_dialect_classifies_speckit_markers(repo: Path) -> None:
     fr_only = textwrap.dedent(
         """\
-        ## Requirements
+        ## Requirements *(mandatory)*
 
         ### Functional Requirements
 
@@ -159,7 +172,7 @@ def test_detect_dialect_classifies_speckit_markers(repo: Path) -> None:
     )
     sc_only = textwrap.dedent(
         """\
-        ## Success Criteria
+        ## Success Criteria *(mandatory)*
 
         - **SC-001**: 95% of users do Y.
         """

@@ -15,18 +15,19 @@ from .parse_semantics import (
     SECTION,
     USER_STORY_HEADING,
     line_of,
-    section_body,
+    speckit_section_body,
 )
 
 __all__ = ["parse_speckit"]
 
 
 def parse_speckit(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion, ...]]:
-    # "## Requirements" (H2) contains the nested "### Functional
-    # Requirements" (H3) subheading + FR bullets; section_body only
-    # recognizes H2, but its "everything until the next H2" span still
-    # correctly includes the H3 content within it.
-    req_body = section_body(text, "Requirements")
+    # "## Requirements *(mandatory)*" (H2, canonical SpecKit template)
+    # contains the nested "### Functional Requirements" (H3) subheading +
+    # FR bullets; speckit_section_body only recognizes H2, but its
+    # "everything until the next H2" span still correctly includes the H3
+    # content within it.
+    req_body = speckit_section_body(text, "Requirements")
     reqs = tuple(
         Requirement(ident=m.group(1), text=m.group(2), kind="functional")
         for m in FR_DECL.finditer(req_body)
@@ -34,14 +35,14 @@ def parse_speckit(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion, 
 
     criteria: list[Criterion] = []
 
-    # SC-00N bullets under "## Success Criteria" -- SpecKit's closest
-    # analogue to harness's ACs. note stays "" (the default): these are
-    # measurable outcomes, not Given/When/Then scenarios, so
+    # SC-00N bullets under "## Success Criteria *(mandatory)*" -- SpecKit's
+    # closest analogue to harness's ACs. note stays "" (the default): these
+    # are measurable outcomes, not Given/When/Then scenarios, so
     # scenario_has_gwt() must not be run against them (S004's own check
     # function guards on `crit.note` being non-empty for exactly this
     # reason -- every SC bullet would otherwise report as "missing
     # WHEN/THEN", which was never a claim it made).
-    sc_body = section_body(text, "Success Criteria")
+    sc_body = speckit_section_body(text, "Success Criteria")
     for m in SC_DECL.finditer(sc_body):
         criteria.append(
             Criterion(
