@@ -79,7 +79,15 @@ def _run_cli(root: Path, *args: str) -> str:
         capture_output=True, text=True, check=False,
     )
     assert r.returncode == 0, f"{' '.join(args)} failed: {r.stderr}"
-    return r.stdout.replace(str(root), "<ROOT>")
+    out = r.stdout.replace(str(root), "<ROOT>")
+    # On Windows, the absolute --target root is deliberately left
+    # native-separator (backslash) in JSON output (e.g. validate --json's
+    # "target" field), and json.dumps then escapes each backslash as "\\" --
+    # so the raw-form replace above never matches inside JSON. Also try the
+    # JSON-escaped form so this stays path-normalized on every OS, not just
+    # POSIX ones where a path never needs escaping in the first place.
+    out = out.replace(str(root).replace("\\", "\\\\"), "<ROOT>")
+    return out
 
 
 def _outputs(root: Path) -> dict[str, str]:
@@ -225,18 +233,25 @@ def test_only_detect_imports_subprocess() -> None:
 
 
 def test_helpers_not_duplicated_inline() -> None:
-    # _write_spec must be imported from tests.support, not redeclared.
-    for fname in ("test_enterprise.py", "test_ci_hardening.py"):
-        path = REPO_ROOT / "tests" / fname
+    # write_spec (imported as-is or aliased _write_spec) must come from
+    # tests.support, never be redeclared -- a redeclaration silently drifts
+    # from the shared version's own fixes (e.g. tests/test_graft.py's own
+    # copy was missing support.py's encoding="utf-8", added specifically to
+    # write non-ASCII spec content safely on Windows). Scans every test
+    # module, not a fixed short list, so a future new test file is covered
+    # automatically rather than needing to be added here by hand.
+    offenders: dict[str, list[str]] = {}
+    for path in sorted((REPO_ROOT / "tests").glob("test_*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         redeclared = [
             n.name for n in ast.walk(tree)
-            if isinstance(n, ast.FunctionDef) and n.name == "_write_spec"
+            if isinstance(n, ast.FunctionDef) and n.name in {"write_spec", "_write_spec"}
         ]
-        assert not redeclared, (
-            f"{fname} redeclares _write_spec inline; import it from tests.support "
-            "instead (R-DG-4)"
-        )
+        if redeclared:
+            offenders[path.name] = redeclared
+    assert not offenders, (
+        f"redeclares write_spec inline instead of importing tests.support's (R-DG-4): {offenders}"
+    )
 
 
 # --- AC-DG-8 (non-success): detect.py and cli.py stay unsplit --------------

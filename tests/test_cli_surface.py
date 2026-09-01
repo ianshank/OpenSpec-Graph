@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -236,6 +237,128 @@ def test_planlint_log_level_env_var_works(repo: Path, fixtures: dict[str, Path])
     assert result.returncode == 0
     assert "planlint" in result.stderr.lower(), "DEBUG must surface the planlint logger"
     json.loads(result.stdout), "stdout stays parseable even with debug logging"
+
+
+# --- Defect D: stdout/stderr forced to UTF-8 (fixes UnicodeEncodeError) ----
+
+
+def test_common_verbs_do_not_crash_under_ascii_stdout_encoding(
+    repo: Path, fixtures: dict[str, Path]
+) -> None:
+    """Confirmed reproducible pre-fix: PYTHONIOENCODING=ascii planlint
+    validate raised UnicodeEncodeError from the summary line's "*" separator.
+    Every verb that prints one of this package's hardcoded non-ASCII
+    characters must survive stdout being forced to ASCII."""
+    ascii_env = {**os.environ, "PYTHONIOENCODING": "ascii"}
+
+    assert run_cli(repo, "detect", env=ascii_env).returncode == 0
+
+    (repo / "Makefile").write_text((fixtures["makefile"]).read_text())
+    assert run_cli(repo, "init", "--dry-run", env=ascii_env).returncode == 0
+    assert (
+        run_cli(
+            repo, "new", "add-thing", "--capability", "thing-cap", "--dry-run", env=ascii_env
+        ).returncode
+        == 0
+    )
+
+    write_spec(repo, "c1", "cap", (fixtures["good_harness"]).read_text())
+    pass_result = run_cli(repo, "validate", env=ascii_env)
+    assert pass_result.returncode == 0, pass_result.stderr
+
+    bad = (fixtures["good_harness"]).read_text().replace("make regression", "make nope")
+    write_spec(repo, "c1", "cap", bad)
+    fail_result = run_cli(repo, "validate", env=ascii_env)
+    assert fail_result.returncode == 1, fail_result.stderr
+
+
+def test_arbitrary_non_ascii_spec_content_survives_graph_mermaid_under_ascii_encoding(
+    repo: Path, fixtures: dict[str, Path]
+) -> None:
+    """Not just this package's own literals: arbitrary non-ASCII text a user
+    writes into a criterion flows verbatim into `graph --format mermaid`'s
+    printed node text -- and must come through intact, not just non-crashing."""
+    (repo / "Makefile").write_text((fixtures["makefile"]).read_text())
+    body = (fixtures["good_harness"]).read_text().replace(
+        "An attested write records an evidence id.",
+        "An attested write records an évidence id (café, 日本語).",
+    )
+    write_spec(repo, "c1", "cap", body)
+    result = run_cli(
+        repo, "graph", "--format", "mermaid",
+        env={**os.environ, "PYTHONIOENCODING": "ascii"},
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Traceback" not in result.stderr
+    assert "évidence id (café, 日本語)" in result.stdout
+
+
+def test_non_ascii_target_path_error_survives_ascii_stdout_encoding(tmp_path: Path) -> None:
+    """A non-ASCII absolute path embedded in an error message (not a
+    hardcoded literal) must not crash stderr either. The target directory
+    never needs to exist for this error path, so this is fully deterministic
+    and does not depend on the OS username itself containing non-ASCII
+    characters."""
+    nonexistent = tmp_path / "café-does-not-exist"
+    result = run_cli(nonexistent, "detect", env={**os.environ, "PYTHONIOENCODING": "ascii"})
+    assert result.returncode == 1
+    assert "café-does-not-exist" in result.stderr
+
+
+def test_json_output_is_unaffected_by_the_stdout_encoding_fix(
+    repo: Path, fixtures: dict[str, Path]
+) -> None:
+    """validate --json already ASCII-escapes via json.dumps(ensure_ascii=True)
+    by default -- confirm the encoding fix changes nothing about JSON mode."""
+    (repo / "Makefile").write_text((fixtures["makefile"]).read_text())
+    write_spec(repo, "c1", "cap", (fixtures["good_harness"]).read_text())
+    normal = run_cli(repo, "validate", "--json")
+    ascii_env_result = run_cli(
+        repo, "validate", "--json", env={**os.environ, "PYTHONIOENCODING": "ascii"}
+    )
+    assert normal.returncode == ascii_env_result.returncode == 0
+    assert json.loads(normal.stdout) == json.loads(ascii_env_result.stdout)
+
+
+class _ReconfigureRaises:
+    """A minimal stdout replacement whose reconfigure() always raises with
+    a caller-chosen exception type -- ``main()``'s guard catches both
+    ``ValueError`` (a real already-closed ``TextIOWrapper``'s genuine
+    behavior -- verified directly) and ``OSError`` (a stream that simply
+    doesn't support reconfiguration). Writing/flushing still work
+    normally, isolating "reconfigure failed" from "the stream is
+    unusable"."""
+
+    def __init__(self, exc_type: type[Exception]) -> None:
+        self.chunks: list[str] = []
+        self._exc_type = exc_type
+
+    def write(self, s: str) -> int:
+        self.chunks.append(s)
+        return len(s)
+
+    def flush(self) -> None:
+        pass
+
+    def reconfigure(self, **_kwargs: object) -> None:
+        raise self._exc_type("reconfiguration not supported by this test double")
+
+
+@pytest.mark.parametrize("exc_type", [ValueError, OSError])
+def test_main_tolerates_a_stream_whose_reconfigure_raises(
+    exc_type: type[Exception],
+    monkeypatch: pytest.MonkeyPatch, repo: Path, fixtures: dict[str, Path]
+) -> None:
+    """R-SE-3/DEC-SE-004: main() must not crash before any subcommand runs
+    just because reconfiguring stdout's encoding itself failed -- covering
+    both exception types the guard's except clause names."""
+    (repo / "Makefile").write_text((fixtures["makefile"]).read_text())
+    write_spec(repo, "c1", "cap", (fixtures["good_harness"]).read_text())
+    fake_stdout = _ReconfigureRaises(exc_type)
+    monkeypatch.setattr(sys, "stdout", fake_stdout)
+
+    assert main(["--target", str(repo), "validate"]) == 0
+    assert "".join(fake_stdout.chunks), "the command must still print through the fallback stream"
 
 
 # --- fixtures ---------------------------------------------------------------

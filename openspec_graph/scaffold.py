@@ -14,7 +14,7 @@ import dataclasses
 import json
 from pathlib import Path
 
-from .detect import StackProfile
+from .detect import StackProfile, to_posix_relative
 from .scaffold_templates import (
     proposal as _proposal,
 )
@@ -114,7 +114,7 @@ def plan_init(profile: StackProfile) -> list[WritePlan]:
         "focused_stage": pick_stage(profile),
         "full_stage": pick_stage(profile, _FULL_PREFS),
         "invariant_source": (
-            str(profile.invariant_source.relative_to(profile.root))
+            to_posix_relative(profile.invariant_source, profile.root)
             if profile.invariant_source
             else None
         ),

@@ -139,7 +139,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     prof = _profile(args)
     plans = scaffold.plan_init(prof)
     for item in plans:
-        print(f"{item.action:15s} {item.path.relative_to(prof.root)}")
+        print(f"{item.action:15s} {detect.to_posix_relative(item.path, prof.root)}")
     if args.dry_run:
         print("\ndry run — nothing written")
         return 0
@@ -152,7 +152,7 @@ def cmd_new(args: argparse.Namespace) -> int:
     prof = _profile(args)
     plans = scaffold.plan_change(prof, args.name, args.capability, args.dialect)
     for item in plans:
-        print(f"{item.action:15s} {item.path.relative_to(prof.root)}")
+        print(f"{item.action:15s} {detect.to_posix_relative(item.path, prof.root)}")
     if args.dry_run:
         print("\ndry run — nothing written")
         return 0
@@ -228,7 +228,20 @@ def cmd_validate(args: argparse.Namespace) -> int:
         )
         return 1 if blocking else 0
 
-    for finding in sorted(findings, key=lambda f: (str(f.path), f.rule)):
+    def _sort_key(f: rules.Finding) -> tuple[str, str]:
+        # detect.to_posix_relative (not str(f.path)) so two findings at
+        # different paths sort in the same relative order on every OS --
+        # "\\" sorts after digits/uppercase letters while "/" sorts before
+        # them, so e.g. sibling change dirs "add-thing"/"add-thing2" could
+        # otherwise render in opposite order on Windows vs. POSIX for an
+        # identical repo. `f.path` is None only in principle (G006/G009
+        # always set a real path instead, DEC-WL-004) -- str(None) == "None"
+        # preserved verbatim as the fallback so that guarantee isn't relied
+        # on silently.
+        path_str = detect.to_posix_relative(f.path, prof.root) if f.path else "None"
+        return (path_str, f.rule)
+
+    for finding in sorted(findings, key=_sort_key):
         print(finding.render(prof.root))
 
     counts = {sev: sum(1 for f in findings if f.severity == sev) for sev in SEVERITY_ORDER}
@@ -373,7 +386,7 @@ def cmd_witness(args: argparse.Namespace) -> int:
     except OSError as exc:
         print(f"ERROR cannot write to the witness store: {exc}", file=sys.stderr)
         return 2
-    print(f"witness recorded: {path.relative_to(root)}")
+    print(f"witness recorded: {detect.to_posix_relative(path, root)}")
     return 0
 
 
@@ -480,6 +493,32 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the `planlint` CLI and return its exit code.
+
+    Note for embedders calling this in-process rather than via the console
+    script/subprocess (the only way this project's own tests do it, always
+    wrapped in `capsys`/`monkeypatch`, which independently restore
+    `sys.stdout`/`stderr` regardless): the stdout/stderr UTF-8 reconfigure
+    below is a permanent mutation of process-global state with no
+    restore-after-return, since a CLI process exits right after anyway.
+    """
+    # Force UTF-8 on both streams before any verb runs. Every print() in this
+    # package funnels through here (both the `planlint` and deprecated
+    # `specgraph` entry points call main()) -- ambient stdout/stderr encoding
+    # is otherwise locale/console-codepage-dependent, and this package's own
+    # non-ASCII output (the validate summary's "·", arbitrary spec text echoed
+    # into graph --format mermaid or a G003 message, a non-ASCII path in an
+    # error message) can raise UnicodeEncodeError under a narrow but real
+    # ambient encoding (PYTHONIOENCODING=ascii; some Windows console
+    # codepages) -- reproduced directly against `validate`. try/except guards
+    # a stream that is already closed (.reconfigure() itself raises
+    # ValueError there), not just one missing the attribute entirely.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+            except (ValueError, OSError):
+                pass
     args = build_parser().parse_args(argv)
     configure_logging(verbose=getattr(args, "verbose", False))
     return int(args.func(args))

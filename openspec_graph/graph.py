@@ -232,7 +232,7 @@ def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None)
     """
     if not profile.openspec_root or not profile.openspec_root.is_dir():
         raise NoOpenSpecTreeError(
-            f"no openspec/ directory found at {profile.root}/openspec; "
+            f"no openspec/ directory found at {profile.root / 'openspec'}; "
             "run `planlint init` first"
         )
 
@@ -284,18 +284,21 @@ def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None)
         "broken_links": broken_links,
         "threshold_locator": profile.threshold.locator if profile.threshold else None,
         "invariant_source": (
-            str(profile.invariant_source.relative_to(profile.root))
+            detect.to_posix_relative(profile.invariant_source, profile.root)
             if profile.invariant_source
             else None
         ),
         "adr_source": (
-            str(profile.adr_source.relative_to(profile.root)) if profile.adr_source else None
+            detect.to_posix_relative(profile.adr_source, profile.root)
+            if profile.adr_source
+            else None
         ),
     }
 
 
 def _relative_to(path: Path, root: Path) -> str:
-    try:
-        return str(path.relative_to(root))
-    except ValueError:
-        return str(path)
+    # Thin wrapper kept so this name stays importable (tests/test_enterprise.py
+    # imports it directly) -- the real, shared logic lives in
+    # detect.to_posix_relative, which every other module with this exact
+    # pattern also calls.
+    return detect.to_posix_relative(path, root)

@@ -5,6 +5,49 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed — stdout encoding crash under a non-UTF-8 console (`fix-stdout-encoding-crash` change package)
+
+- **`cli.py`'s `main()`**: `print()` calls — hardcoded punctuation
+  (`·`/`—`) and arbitrary non-ASCII content echoed from a user's own spec
+  files (e.g. `graph --format mermaid` node text) — relied on the ambient
+  `sys.stdout`/`sys.stderr` encoding with no explicit configuration,
+  reproducibly raising `UnicodeEncodeError` under `PYTHONIOENCODING=ascii`
+  on `validate`, the single most common command. Fixed by forcing UTF-8
+  on both streams once, at the CLI's one entry point, ahead of every
+  subcommand — covers the open-ended user-content case, not just the two
+  hardcoded characters, and degrades gracefully (`try`/`except`) rather
+  than raising if a stream cannot be reconfigured (e.g. already closed).
+  JSON output was already unaffected (`json.dumps(..., ensure_ascii=True)`
+  by default).
+
+### Fixed — Windows path separator leak (`fix-windows-path-separator-leak` change package)
+
+- **Cross-platform relative-path output**: twelve sites across `graph.py`,
+  `ledger.py`, `rule_types.py`, `detect.py`, `scaffold.py`, and `cli.py`
+  computed a repo-relative path for display/JSON via
+  `str(path.relative_to(root))` (or an f-string interpolating a `Path`
+  directly) instead of `.as_posix()`, so every Windows run of
+  `validate`/`graph`/`waivers`, and the G008/G009 rule messages, emitted
+  backslash-separated paths — and `init` persisted a backslash-separated
+  `invariant_source` into `openspec/specgraph.json`/`project.md` (an
+  informational snapshot, never read back by `planlint` itself — Windows
+  users who ran `init` before this fix can regenerate both files with
+  corrected paths via `planlint init --force`). Never caught because
+  `.github/workflows/ci.yml` only ran on `ubuntu-latest`. Fixed by a
+  single new function, `detect.to_posix_relative(path, root)`, applied at
+  every call site; absolute paths (`StackProfile.root`/`openspec_root`,
+  `validate --json`'s `target` field, and `Finding.as_dict()`'s `path`
+  field) are deliberately left in native form, since none of them is ever
+  portable or cross-machine-comparable regardless of separator — so
+  `validate --json`'s `"path"` field is the one output this fix does
+  *not* change on Windows.
+- **`validate`'s plain-text finding order is now OS-independent**: the
+  findings sort key also moved off `str(f.path)` onto the same shared
+  function, since `\` sorts after digits/uppercase letters while `/`
+  sorts before them — two sibling change directories (e.g. `add-thing`/
+  `add-thing2`) could otherwise render in opposite order on Windows vs.
+  POSIX for an identical repo.
+
 ### Added — witness mode / CP-WM (`add-witness-mode` change package)
 
 - **New rules `W001`/`W002`** (both ERROR, evaluated only under

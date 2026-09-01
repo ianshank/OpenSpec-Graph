@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -219,6 +220,7 @@ def test_mypy_fails_on_a_type_error(tmp_path: Path) -> None:
     assert "broken.py" in result.stdout, "mypy must name the offending file"
 
 
+@pytest.mark.skipif(shutil.which("make") is None, reason="make not on PATH")
 def test_typecheck_passes_on_clean_repo() -> None:
     result = subprocess.run(
         ["make", "typecheck"], capture_output=True, text=True, check=False,
@@ -329,9 +331,10 @@ def test_log_level_from_unknown_env_returns_default() -> None:
 
 def test_graph_relative_to_outside_root_falls_back() -> None:
     # Closes graph.py:160-161 — a spec path not under the repo root must fall
-    # back to its absolute string rather than raising ValueError.
+    # back to its own posix-formatted string (never a native-separator one)
+    # rather than raising ValueError (see detect.to_posix_relative).
     outside = Path("/elsewhere/not/under/root/spec.md")
-    assert graph_mod._relative_to(outside, Path("/repo")) == str(outside)
+    assert graph_mod._relative_to(outside, Path("/repo")) == outside.as_posix()
     # And a path under root still resolves relatively.
     assert graph_mod._relative_to(Path("/repo/openspec/x.md"), Path("/repo")) == "openspec/x.md"
 
@@ -349,6 +352,22 @@ def test_finding_render_when_path_outside_root() -> None:
     rendered = f.render(root=Path("/repo"))
     assert "/elsewhere/spec.md:12" in rendered
     assert "G004" in rendered
+
+
+def test_finding_as_dict_path_field_stays_absolute_and_native() -> None:
+    # Deliberate, not an oversight (DEC-PS-002): Finding.path is always
+    # absolute (every construction site derives it from a resolved
+    # openspec_root), the same category as StackProfile.root/openspec_root
+    # and validate --json's top-level "target" field -- none of which this
+    # fix posix-ifies, since an absolute path is never portable across
+    # machines regardless of separator. Unlike render()'s root-relative
+    # text, as_dict()'s "path" field has no normally-relative case to stay
+    # consistent with, so there is nothing for the separator to be
+    # inconsistent *within*.
+    f = Finding(
+        rule="G004", severity="ERROR", message="x", path=Path("/elsewhere/spec.md"), line=1
+    )
+    assert f.as_dict()["path"] == str(Path("/elsewhere/spec.md"))
 
 
 def test_init_dry_run_writes_nothing(repo: Path) -> None:

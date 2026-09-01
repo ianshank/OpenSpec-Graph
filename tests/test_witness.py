@@ -17,6 +17,13 @@ import pytest
 
 from openspec_graph import witness
 from openspec_graph.witness import Witness
+from tests import support
+
+# Windows needs Administrator rights or Developer Mode to create any symlink
+# at all -- probed once, at this module's import time, not assumed from
+# sys.platform, so a Windows box that does have one of those enabled still
+# runs this test.
+_CAN_SYMLINK = support.supports_symlinks()
 
 SHA = "a" * 40
 
@@ -106,6 +113,7 @@ def test_load_witnesses_returns_empty_tuple_when_the_directory_is_absent(tmp_pat
     assert witness.load_witnesses(tmp_path) == ()
 
 
+@pytest.mark.skipif(not _CAN_SYMLINK, reason="platform/user lacks symlink-creation privilege")
 def test_load_witnesses_skips_a_dangling_symlink_without_raising(tmp_path: Path) -> None:
     # glob("*.json") lists directory entries by name pattern only, not
     # readability -- mirrors the exact class of bug fixed for ADR discovery
