@@ -15,6 +15,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from . import dialect_card, machinery, witness
+from .parse_semantics import is_harness_marked, is_speckit_marked, is_upstream_marked
 
 MANIFESTS: dict[str, tuple[str, ...]] = {
     "python": ("pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"),
@@ -109,6 +110,8 @@ class StackProfile:
     adr_ids: tuple[str, ...] = ()
     witnesses: tuple[witness.Witness, ...] = ()
     current_sha: str | None = None
+    speckit_root: Path | None = None
+    feature_dirs: tuple[Path, ...] = ()
 
     @property
     def invariant_source_name(self) -> str:
@@ -152,19 +155,22 @@ class StackProfile:
                 to_posix_relative(self.adr_source, self.root) if self.adr_source else None
             ),
             "adr_ids": list(self.adr_ids),
+            "speckit_root": str(self.speckit_root) if self.speckit_root else None,
+            "feature_dirs": [d.name for d in self.feature_dirs],
         }
 
     def to_card(self) -> dict[str, object]:
         """A stable, portable snapshot for CP-2's `detect --format json`/`--diff`.
 
         Deliberately narrower than as_dict(): excludes every absolute-path
-        field (`root`, and `openspec_root` -- always exactly `root /
+        field (`root`, `openspec_root` -- always exactly `root /
         "openspec"` when set, so its presence/absence survives as
-        `has_openspec_root` without losing information), since an absolute
-        path differs across every checkout/machine/CI run and would make a
-        `--diff` report constant false "drift" rather than real convention
-        drift. An explicit dict literal, not as_dict() with keys deleted,
-        so the exact field set is self-documenting here.
+        `has_openspec_root` without losing information -- and `speckit_root`
+        likewise as `has_speckit_root`, always exactly `root / "specs"` when
+        set), since an absolute path differs across every checkout/machine/CI
+        run and would make a `--diff` report constant false "drift" rather
+        than real convention drift. An explicit dict literal, not as_dict()
+        with keys deleted, so the exact field set is self-documenting here.
         """
         base = self.as_dict()
         return {
@@ -182,6 +188,8 @@ class StackProfile:
             "make_unresolved_count": base["make_unresolved_count"],
             "adr_source": base["adr_source"],
             "adr_ids": base["adr_ids"],
+            "has_speckit_root": base["speckit_root"] is not None,
+            "feature_dirs": base["feature_dirs"],
         }
 
 
@@ -401,30 +409,84 @@ def detect_dialect(spec_paths: list[Path]) -> str:
 
     ``upstream``  -- ``## ADDED Requirements`` + ``#### Scenario:`` GIVEN/WHEN/THEN.
     ``harness``   -- ``## Acceptance Criteria`` with ``AC-<AREA>-<n>`` + ``_Verified by:_``.
-    ``mixed``     -- both appear across the repo, which is itself a finding.
-    ``unknown``   -- no spec files, or neither marker present.
+    ``speckit``   -- ``### Functional Requirements`` + ``FR-<n>``, or
+                     ``## Success Criteria`` + ``SC-<n>``.
+    ``mixed``     -- more than one of the three predicates matches across the
+                     repo, which is itself a finding (not an enumerated set of
+                     pairwise/triple combinations -- nothing downstream needs
+                     finer granularity than "more than one dialect present").
+    ``unknown``   -- no spec files, or none of the three predicates matches.
+
+    Marker predicates live in :mod:`parse_semantics`, shared with
+    :func:`parse.parse_spec`'s own ``mixed``/``unknown``/``auto``
+    pre-resolution -- previously two independently duplicated copies of the
+    same marker strings, unified so they can never drift apart.
     """
-    upstream = harness = 0
+    upstream = harness = speckit = 0
     for path in spec_paths:
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        if "## ADDED Requirements" in text or "#### Scenario:" in text:
+        if is_upstream_marked(text):
             upstream += 1
-        if "## Acceptance Criteria" in text and re.search(r"\bAC-[A-Z]{2,}-\d+\b", text):
+        if is_harness_marked(text):
             harness += 1
-    if upstream and harness:
+        if is_speckit_marked(text):
+            speckit += 1
+    present = sum(1 for count in (upstream, harness, speckit) if count)
+    if present > 1:
         return "mixed"
     if upstream:
         return "upstream"
     if harness:
         return "harness"
+    if speckit:
+        return "speckit"
     return "unknown"
 
 
 def find_spec_files(openspec_root: Path) -> list[Path]:
     return sorted(openspec_root.glob("changes/*/specs/*/spec.md"))
+
+
+def find_speckit_spec_files(speckit_root: Path) -> list[Path]:
+    """``specs/<feature>/spec.md`` -- one segment shallower than
+    ``find_spec_files``'s ``changes/*/specs/*/spec.md``, since SpecKit has no
+    ``changes/`` nesting at all.
+
+    Content-gated per file, unlike ``find_spec_files``, which is purely
+    structural: each candidate must also match ``is_speckit_marked()``.
+    ``specs/`` is too common a directory name (OpenAPI, RSpec, JSON-schema
+    conventions all use it) to trust structurally alone -- an unrelated
+    ``specs/<name>/spec.md`` (a documentation pointer, say) sitting under a
+    repo-root ``specs/`` dir must not be swept into discovery and
+    force-parsed under the repo's prevailing dialect, where it would fail
+    ``validate`` for content it was never meant to be linted as.
+    """
+    found: list[Path] = []
+    for path in sorted(speckit_root.glob("*/spec.md")):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if is_speckit_marked(text):
+            found.append(path)
+    return found
+
+
+def filter_speckit_by_feature(spec_files: Sequence[Path], feature: str) -> list[Path]:
+    """Narrow a SpecKit spec-file list to one feature's own ``spec.md``.
+
+    Mirrors ``filter_by_change``'s fixed-position anchor, one level
+    shallower: ``specs/<feature>/spec.md`` has no ``changes/`` segment to
+    anchor past.
+    """
+    return [
+        p
+        for p in spec_files
+        if len(p.parts) >= 3 and p.parts[-3] == "specs" and p.parts[-2] == feature
+    ]
 
 
 def filter_by_change(spec_files: Sequence[Path], change: str) -> list[Path]:
@@ -494,12 +556,25 @@ def profile(root: Path) -> StackProfile:
     root = root.resolve()
     openspec_root = root / "openspec"
     has_openspec = openspec_root.is_dir()
-    spec_files = find_spec_files(openspec_root) if has_openspec else []
+    openspec_spec_files = find_spec_files(openspec_root) if has_openspec else []
     change_dirs = (
         tuple(sorted(p for p in (openspec_root / "changes").glob("*") if p.is_dir()))
         if has_openspec and (openspec_root / "changes").is_dir()
         else ()
     )
+
+    speckit_root_candidate = root / "specs"
+    speckit_spec_files = (
+        find_speckit_spec_files(speckit_root_candidate)
+        if speckit_root_candidate.is_dir()
+        else []
+    )
+    has_speckit = bool(speckit_spec_files)
+    # Distinct, sorted parent directories of the content-gated spec files --
+    # not every structural subdirectory of speckit_root/DEC-SK-002's
+    # per-file gate would be undone by falling back to an ungated glob here.
+    feature_dirs = tuple(sorted({p.parent for p in speckit_spec_files}))
+
     invariant_source, invariant_ids = _invariants(root)
     adr_source, adr_ids = _adrs(root)
     make_facts = _make_target_facts(root)
@@ -516,7 +591,7 @@ def profile(root: Path) -> StackProfile:
         make_targets=make_facts.targets,
         openspec_root=openspec_root if has_openspec else None,
         change_dirs=change_dirs,
-        dialect=detect_dialect(spec_files),
+        dialect=detect_dialect(list(openspec_spec_files) + speckit_spec_files),
         threshold=_threshold(root),
         invariant_source=invariant_source,
         invariant_ids=invariant_ids,
@@ -527,4 +602,6 @@ def profile(root: Path) -> StackProfile:
         adr_ids=adr_ids,
         witnesses=witnesses,
         current_sha=current_sha,
+        speckit_root=speckit_root_candidate if has_speckit else None,
+        feature_dirs=feature_dirs,
     )

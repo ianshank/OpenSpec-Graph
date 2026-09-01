@@ -37,6 +37,33 @@ CANONICAL_SCEN_LEVEL = 4
 
 SUPPRESS = re.compile(r"<!--\s*specgraph:allow\s+([A-Z]\d{3}(?:\s*,\s*[A-Z]\d{3})*)\s*(.*?)-->")
 
+# --- speckit dialect ---------------------------------------------------------
+FR_ID = re.compile(r"\bFR-\d+\b")
+SC_ID = re.compile(r"\bSC-\d+\b")
+
+# --- dialect classification (shared between detect.py and parse.py) --------
+# Single source of truth for "does this text look like dialect X". Previously
+# duplicated independently in detect.py's detect_dialect() and parse.py's
+# parse_spec() pre-resolution branch; unified here so the two can never
+# silently drift apart, rather than adding a third, naively-duplicated copy
+# for speckit.
+AC_ID = re.compile(r"\bAC-[A-Z]{2,}-\d+\b")
+
+
+def is_upstream_marked(text: str) -> bool:
+    return "## ADDED Requirements" in text or "#### Scenario:" in text
+
+
+def is_harness_marked(text: str) -> bool:
+    return "## Acceptance Criteria" in text and bool(AC_ID.search(text))
+
+
+def is_speckit_marked(text: str) -> bool:
+    return ("### Functional Requirements" in text and bool(FR_ID.search(text))) or (
+        "## Success Criteria" in text and bool(SC_ID.search(text))
+    )
+
+
 # --- shared references -----------------------------------------------------
 # Backtick-fencing is required: a bare "make sure"/"make progress" in
 # ordinary English prose is not a stage citation. Every real citation in

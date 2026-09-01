@@ -55,6 +55,15 @@ def write_spec(repo: Path, change: str, capability: str, body: str) -> Path:
     return path
 
 
+def write_speckit_spec(repo: Path, feature: str, body: str) -> Path:
+    """Write a spec body into ``specs/<feature>/spec.md`` (SpecKit layout --
+    no ``changes/`` nesting, no ``openspec/`` ancestor)."""
+    path = repo / "specs" / feature / "spec.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
 def run_cli(repo: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     """Run the planlint CLI against ``repo`` and return the completed process.
 

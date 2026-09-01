@@ -1,6 +1,6 @@
 # Milestones
 
-## Milestone 1 — Discovery + 3-way dialect detection
+## Milestone 1 — Discovery + 3-way dialect detection [DONE]
 
 - `openspec_graph/parse_semantics.py`: new marker predicates
   (`is_upstream_marked`, `is_harness_marked`, `is_speckit_marked`) and

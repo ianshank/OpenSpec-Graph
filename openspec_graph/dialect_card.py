@@ -31,6 +31,8 @@ _COMPARABLE_FIELDS = (
     "has_project_md",
     "adr_source",
     "adr_ids",
+    "has_speckit_root",
+    "feature_dirs",
 )
 
 __all__ = ["SCHEMA_VERSION", "diff_cards"]

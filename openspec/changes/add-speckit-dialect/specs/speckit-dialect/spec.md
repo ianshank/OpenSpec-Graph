@@ -384,27 +384,27 @@ a dedicated fix.
 
 ## Acceptance Criteria
 
-- [ ] **AC-SK-1:** `StackProfile` still constructs via every existing
+- [x] **AC-SK-1:** `StackProfile` still constructs via every existing
   keyword-only call site without passing `speckit_root`/`feature_dirs` —
   both default, so the new fields are additive, not breaking. (R-SK-1)
-  _Verified by:_ `pytest -k test_stack_profile_construction_still_works_without_speckit_fields` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_stack_profile_construction_still_works_without_speckit_fields` · stage: `make test`
 
-- [ ] **AC-SK-2:** `find_speckit_spec_files()` discovers every
+- [x] **AC-SK-2:** `find_speckit_spec_files()` discovers every
   `specs/<feature>/spec.md` file directly under a `speckit_root` whose
   content matches `is_speckit_marked()`, ignoring any `changes/` nesting.
   (R-SK-2)
-  _Verified by:_ `pytest -k test_find_speckit_spec_files_discovers_feature_spec_files` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_find_speckit_spec_files_discovers_feature_spec_files` · stage: `make test`
 
-- [ ] **AC-SK-3:** `filter_speckit_by_feature()` narrows a SpecKit spec-file
+- [x] **AC-SK-3:** `filter_speckit_by_feature()` narrows a SpecKit spec-file
   list to exactly one feature's own `spec.md`. (R-SK-3)
-  _Verified by:_ `pytest -k test_filter_speckit_by_feature_narrows_to_one_feature` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_filter_speckit_by_feature_narrows_to_one_feature` · stage: `make test`
 
-- [ ] **AC-SK-4 (non-success):** a repo whose only `specs/` directory is an
+- [x] **AC-SK-4 (non-success):** a repo whose only `specs/` directory is an
   OpenAPI/RSpec/JSON-schema layout (a `specs/` dir with no `*/spec.md`
   beneath it) does not get `speckit_root` set. (R-SK-4)
-  _Verified by:_ `pytest -k test_profile_does_not_set_speckit_root_for_a_specs_dir_with_no_spec_md` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_profile_does_not_set_speckit_root_for_a_specs_dir_with_no_spec_md` · stage: `make test`
 
-- [ ] **AC-SK-45 (non-success):** a `specs/<name>/spec.md` file that exists
+- [x] **AC-SK-45 (non-success):** a `specs/<name>/spec.md` file that exists
   but whose content does not match `is_speckit_marked()` (an
   OpenAPI/RSpec/JSON-schema pointer doc, say) is excluded from
   `find_speckit_spec_files()`'s results and never reaches `validate`/
@@ -412,50 +412,50 @@ a dedicated fix.
   genuinely-marked files exist alongside it. Reproduces the exact
   false-positive `spec-adversary` demonstrated by constructing this fixture
   against the real (pre-fix) discovery pipeline. (R-SK-2, DEC-SK-002)
-  _Verified by:_ `pytest -k test_find_speckit_spec_files_excludes_unmarked_spec_md_even_alongside_genuine_ones` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_find_speckit_spec_files_excludes_unmarked_spec_md_even_alongside_genuine_ones` · stage: `make test`
 
-- [ ] **AC-SK-5:** a repo with a genuine `specs/<feature>/spec.md` tree gets
+- [x] **AC-SK-5:** a repo with a genuine `specs/<feature>/spec.md` tree gets
   `speckit_root` populated and its spec files unioned with any
   openspec-discovered ones. (R-SK-4, R-SK-5)
-  _Verified by:_ `pytest -k test_profile_sets_speckit_root_and_unions_spec_files` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_profile_sets_speckit_root_and_unions_spec_files` · stage: `make test`
 
-- [ ] **AC-SK-6:** a repo with both an `openspec/` tree and a `specs/`
+- [x] **AC-SK-6:** a repo with both an `openspec/` tree and a `specs/`
   SpecKit tree populates both roots simultaneously (the mid-migration
   case). (R-SK-5, DEC-SK-003)
-  _Verified by:_ `pytest -k test_profile_supports_both_openspec_root_and_speckit_root_together` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_profile_supports_both_openspec_root_and_speckit_root_together` · stage: `make test`
 
-- [ ] **AC-SK-7:** `detect_dialect()` classifies a spec file as speckit
+- [x] **AC-SK-7:** `detect_dialect()` classifies a spec file as speckit
   given `### Functional Requirements` + an `FR-\d+` id, or
   `## Success Criteria` + an `SC-\d+` id. (R-SK-8)
-  _Verified by:_ `pytest -k test_detect_dialect_classifies_speckit_markers` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_detect_dialect_classifies_speckit_markers` · stage: `make test`
 
-- [ ] **AC-SK-8:** `detect_dialect()` reports `"mixed"` when a tree contains
+- [x] **AC-SK-8:** `detect_dialect()` reports `"mixed"` when a tree contains
   files matching more than one of the three dialect predicates, including
   a genuine three-way case. (R-SK-9, DEC-SK-011)
-  _Verified by:_ `pytest -k test_detect_dialect_reports_mixed_for_more_than_one_dialect_present` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_detect_dialect_reports_mixed_for_more_than_one_dialect_present` · stage: `make test`
 
-- [ ] **AC-SK-9:** `detect_dialect()` is byte-identical on the existing
+- [x] **AC-SK-9:** `detect_dialect()` is byte-identical on the existing
   two-dialect golden fixture after the 3-way rewrite. (R-SK-10, DEC-SK-012)
-  _Verified by:_ `pytest tests/test_decomposition.py::test_output_byte_identical` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest tests/test_decomposition.py::test_output_byte_identical` · stage: `make test`
 
-- [ ] **AC-SK-10 (non-success):** a spec with `[NEEDS CLARIFICATION]`
+- [x] **AC-SK-10 (non-success):** a spec with `[NEEDS CLARIFICATION]`
   markers but none of the other speckit markers is not classified as
   speckit. (C-SK-1, DEC-SK-010)
-  _Verified by:_ `pytest -k test_needs_clarification_alone_does_not_classify_as_speckit` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_needs_clarification_alone_does_not_classify_as_speckit` · stage: `make test`
 
-- [ ] **AC-SK-11:** a change to `speckit_root` presence or `feature_dirs` is
+- [x] **AC-SK-11:** a change to `speckit_root` presence or `feature_dirs` is
   detected by `dialect_card.diff_cards()` via `has_speckit_root`/
   `feature_dirs` in `_COMPARABLE_FIELDS`, with no `SCHEMA_VERSION` bump.
   (R-SK-6, DEC-SK-004)
-  _Verified by:_ `pytest -k test_diff_cards_detects_a_speckit_root_change` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_diff_cards_detects_a_speckit_root_change` · stage: `make test`
 
-- [ ] **AC-SK-46 (non-success):** `to_card()`'s output for a repo with
+- [x] **AC-SK-46 (non-success):** `to_card()`'s output for a repo with
   `speckit_root` set never contains the raw absolute path — only
   `has_speckit_root: true` and `feature_dirs` as bare directory names.
   Confirms the same byte-identical-across-checkout-paths contract
   `add-dialect-cards`' `AC-DC-4` established still holds. (R-SK-6,
   DEC-SK-004)
-  _Verified by:_ `pytest -k test_to_card_never_exposes_raw_speckit_root_path` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_to_card_never_exposes_raw_speckit_root_path` · stage: `make test`
 
 - [ ] **AC-SK-12:** `parse_spec()` dispatches `dialect == "speckit"` to
   `parse_speckit()` via its own explicit branch. (R-SK-11)
@@ -614,17 +614,17 @@ a dedicated fix.
   dispatch. (C-SK-2)
   _Verified by:_ `pytest -k test_parse_spec_dispatch_is_not_dict_based` · stage: `make test` (test not yet written)
 
-- [ ] **AC-SK-44 (non-success):** `find_speckit_spec_files()`'s glob
+- [x] **AC-SK-44 (non-success):** `find_speckit_spec_files()`'s glob
   matches `spec.md` only; a `plan.md`/`tasks.md` sibling in the same
   feature directory is never returned by discovery and never reaches a
   parser. (C-SK-10)
-  _Verified by:_ `pytest -k test_speckit_discovery_never_returns_plan_or_tasks_md` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_speckit_discovery_never_returns_plan_or_tasks_md` · stage: `make test`
 
-- [ ] **AC-SK-47:** `feature_dirs` contains exactly the distinct, sorted
+- [x] **AC-SK-47:** `feature_dirs` contains exactly the distinct, sorted
   parent directories of `find_speckit_spec_files()`'s (content-gated)
   results — a `specs/<name>/` subdirectory holding only an unmarked
   `spec.md` (per AC-SK-45) does not appear in `feature_dirs`. (R-SK-28)
-  _Verified by:_ `pytest -k test_feature_dirs_derives_from_content_gated_spec_files_only` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_feature_dirs_derives_from_content_gated_spec_files_only` · stage: `make test`
 
 ---
 
