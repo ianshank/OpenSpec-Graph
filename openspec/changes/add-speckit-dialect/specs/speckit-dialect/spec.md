@@ -33,7 +33,7 @@ independently hard-codes the identical `openspec_root`-only assumption a
 second time. Separately, `openspec_graph/parse_semantics.py`'s
 `HARD_THRESHOLD` regex (`r"(?:≥|>=|>)\s*\d{2,3}\s*%?|\b\d{2,3}\s*%"`) matches
 the `95%` in a completely conventional SpecKit Success Criterion bullet
-(`SC-001: 95% of new users complete onboarding without contacting support`),
+(`SC-001: 95% of new users complete onboarding in under 5 minutes`),
 and `THRESHOLD_ALLOWLIST` has no token that exempts it — confirmed by direct
 inspection of both, not assumed — so G003 (ERROR, default `--fail-on` level)
 would fail nearly every real SpecKit spec's Success Criteria section without
@@ -48,22 +48,38 @@ a dedicated fix.
   `current_sha` (the current last field) — never inserted earlier, per this
   module's own positional-dataclass append-only discipline.
 - R-SK-2: `find_speckit_spec_files(speckit_root)` MUST discover every
-  `specs/<feature>/spec.md` file directly under `speckit_root`, one segment
-  shallower than `find_spec_files`'s `changes/*/specs/*/spec.md`.
+  `specs/<feature>/spec.md` file directly under `speckit_root` whose
+  content also matches `is_speckit_marked()` — one segment shallower than
+  `find_spec_files`'s `changes/*/specs/*/spec.md`, and content-gated per
+  file (unlike `find_spec_files`, which is purely structural). This
+  per-file content gate exists because `specs/` is a common,
+  non-distinctive directory name: an unrelated `specs/<name>/spec.md` (an
+  OpenAPI/RSpec/JSON-schema pointer doc, say) that happens to sit under a
+  repo-root `specs/` dir must not be swept into discovery and force-parsed
+  under the repo's prevailing dialect, where it would fail `validate` for
+  content it was never meant to be linted as.
 - R-SK-3: `filter_speckit_by_feature(spec_files, feature)` MUST narrow a
   SpecKit spec-file list to one feature's own `spec.md`, mirroring
   `filter_by_change`'s fixed-position anchor one level shallower.
 - R-SK-4: `profile()` MUST set `speckit_root` only when `root / "specs"` is a
-  directory **and** `find_speckit_spec_files()` finds at least one
-  `*/spec.md` beneath it; a bare `specs/` directory with no `spec.md` files
-  MUST NOT set `speckit_root`.
+  directory **and** `find_speckit_spec_files()` (content-gated per R-SK-2)
+  finds at least one qualifying file beneath it; a bare `specs/` directory
+  with no qualifying `spec.md` files MUST NOT set `speckit_root`.
 - R-SK-5: `profile()` MUST union every spec file discovered under
   `openspec_root` and `speckit_root` before calling `detect_dialect()`, and
   both roots MUST be able to coexist on the same `StackProfile`
   simultaneously.
-- R-SK-6: `StackProfile.as_dict()`/`to_card()` and
-  `dialect_card._COMPARABLE_FIELDS` MUST expose `speckit_root`/
-  `feature_dirs` so a change in either is caught by `detect --diff`.
+- R-SK-6: `StackProfile.as_dict()` MUST expose `speckit_root` as an
+  absolute-path string (mirroring `openspec_root`, line 138) and
+  `feature_dirs` as `[d.name for d in self.feature_dirs]` (mirroring
+  `change_dirs`, line 139). `StackProfile.to_card()` MUST NOT re-expose the
+  raw `speckit_root` path — it MUST derive `has_speckit_root: bool`
+  (`base["speckit_root"] is not None`, mirroring `has_openspec_root`, line
+  174) and pass `feature_dirs` through as the already-relative name list
+  (mirroring `change_dirs`, line 175). `dialect_card._COMPARABLE_FIELDS`
+  MUST gain `"has_speckit_root"` and `"feature_dirs"` — not
+  `"speckit_root"` — so a change in either is caught by `detect --diff`
+  without ever comparing an absolute path.
 - R-SK-7: `parse_semantics.py` MUST expose shared marker predicates
   (`is_upstream_marked`, `is_harness_marked`, `is_speckit_marked`) that both
   `detect.detect_dialect()` and `parse.parse_spec()`'s pre-resolution branch
@@ -102,14 +118,32 @@ a dedicated fix.
   `[NEEDS CLARIFICATION]` marker is present), S002 (ERROR: a duplicate
   `FR-`/`SC-` identifier), S003 (WARN: a requirement with no SHALL/MUST, via
   `Requirement.is_normative`), and S004 (WARN: a scenario missing
-  WHEN/THEN, via `scenario_has_gwt()`).
+  WHEN/THEN, via `scenario_has_gwt()`). S001 MUST scan
+  `strip_waiver_comments(spec.raw)` (`parse_semantics.py:172`), not
+  `spec.raw` directly — a waiver's own free-text reason quoting the literal
+  marker while explaining why S001 is being waived MUST NOT itself count as
+  an unresolved marker.
 - R-SK-17: `rules.py` MUST register `SPECKIT_RULES` additively:
   `NON_WITNESS_RULES = GENERIC_RULES + HARNESS_RULES + UPSTREAM_RULES + SPECKIT_RULES`.
 - R-SK-18 (mandatory fix): G002's `dialects` tuple MUST narrow from
   `("*",)` to `("harness", "upstream")`.
-- R-SK-19 (mandatory fix): G003 MUST exempt the `## Success Criteria`
-  section body from the hard-coded-threshold scan when
-  `dialect == "speckit"`.
+- R-SK-19 (mandatory fix): the hard-coded-threshold scan MUST exempt the
+  `## Success Criteria` section body when `dialect == "speckit"`. This is
+  NOT a change to `rules_generic.py`'s `_hard_coded_threshold` check
+  function — `HARD_THRESHOLD`, `THRESHOLD_ALLOWLIST`, and the scanning
+  function itself all live in `parse_semantics.py::hard_coded(text)`
+  (lines 46-65, 116-128), and `ParsedSpec.hard_coded_thresholds` is
+  computed once, at parse time, in `parse.py::parse_spec()` (line 99:
+  `hard_coded_thresholds=hard_coded(text)`) from raw, dialect-agnostic
+  text — the rule function only ever sees the already-extracted,
+  already-truncated offending-line strings, with no section metadata left
+  to reconstruct after the fact. The fix MUST therefore: (a) give
+  `hard_coded()` a `dialect: str = ""` parameter that blanks the `##
+  Success Criteria` section span (same blank-the-span-preserve-line-numbers
+  technique `strip_waiver_comments()` uses) before scanning when
+  `dialect == "speckit"`, and (b) update `parse.py::parse_spec()`'s one
+  call site to pass the resolved dialect through:
+  `hard_coded_thresholds=hard_coded(text, resolved)`.
 - R-SK-20: `cmd_validate`'s and `cmd_waivers`'s guard clauses MUST only fail
   (exit 2) when both `prof.openspec_root` and `prof.speckit_root` are
   absent; both commands' spec-file gathering MUST union
@@ -141,6 +175,13 @@ a dedicated fix.
   stay at WARN severity until validated against a real/representative
   SpecKit corpus (Milestone 5); no dependent check MAY be promoted to
   ERROR as part of this change.
+- R-SK-28: `feature_dirs` MUST be the distinct, sorted set of parent
+  directories of `find_speckit_spec_files()`'s (content-gated, per R-SK-2)
+  results — not every structural subdirectory of `speckit_root`. Mirroring
+  `change_dirs`'s ungated definition would be wrong here: an untrusted,
+  generic `specs/` folder may hold unrelated subdirectories with no real
+  SpecKit spec in them, and `feature_dirs` MUST report only genuine
+  SpecKit features.
 - C-SK-1: `[NEEDS CLARIFICATION]` MUST NOT be used as part of the SpecKit
   dialect fingerprint (`detect_dialect()`'s speckit predicate).
 - C-SK-2: `parse.py::parse_spec()`'s three-way dispatch MUST NOT be
@@ -174,25 +215,42 @@ a dedicated fix.
   a positional dataclass's new fields must go after *every* existing field,
   not just after the ones added most recently, or an existing keyword-only
   (or positional) call site could silently shift.
-- **DEC-SK-002:** the SpecKit fingerprint is content-gated
-  (`root / "specs"` is a directory **and** `find_speckit_spec_files()`
-  finds ≥1 `*/spec.md`), not a bare `is_dir()` check like `openspec_root`'s.
+- **DEC-SK-002:** the SpecKit fingerprint is content-gated **per file**, not
+  just at the root: `root / "specs"` must be a directory **and**
+  `find_speckit_spec_files()` — which itself only returns files whose
+  content matches `is_speckit_marked()` — must find ≥1 qualifying file.
   `specs/` alone is too common a directory name (OpenAPI, RSpec,
-  JSON-schema conventions all use it) to trust structurally — an
-  `is_dir()`-only fingerprint would set `speckit_root` on any repo with an
-  unrelated `specs/` directory and misreport its dialect.
+  JSON-schema conventions all use it) to trust structurally at either
+  granularity: a root-only gate (`find_speckit_spec_files()` finds ≥1 file
+  of any content) would still sweep an unrelated `specs/<name>/spec.md`
+  (an OpenAPI/RSpec pointer doc, say) into discovery and force-parse it
+  under the repo's prevailing dialect, failing `validate` on content never
+  meant to be linted — confirmed directly by constructing exactly that
+  fixture and running it through the real discovery/parse/rules pipeline.
 - **DEC-SK-003:** `openspec_root` and `speckit_root` can coexist on the same
   profile; `profile()` unions both roots' discovered spec files before
   calling `detect_dialect()` rather than picking one exclusively. This
   supports a mid-migration repo (one still carrying legacy `openspec/`
   packages while adopting SpecKit) without forcing an either/or choice
   neither this tool nor the target repo's own migration state actually has.
-- **DEC-SK-004:** `speckit_root`/`feature_dirs` are added to
-  `dialect_card._COMPARABLE_FIELDS`/`to_card()`/`as_dict()` with no
-  `SCHEMA_VERSION` bump — mirrors the `adr_source`/`adr_ids` precedent
-  (`DEC-AD-009`): `diff_cards()`'s existing absent-key skip already treats a
-  field missing from an older card as a schema addition, not drift, so an
-  old card simply doesn't compare a field it predates.
+- **DEC-SK-004:** `speckit_root` is exposed on the diff-comparable card as
+  `has_speckit_root: bool`, not the raw path — mirroring `openspec_root`'s
+  own precedent (`has_openspec_root`, `detect.py:174`), not
+  `adr_source`'s (which is already a relative string by the time it
+  reaches `to_card()`). `speckit_root` is a `Path | None` exactly like
+  `openspec_root`, so it gets the identical treatment: `as_dict()` may
+  carry the raw absolute path (mirrors `openspec_root`, line 138), but
+  `to_card()` — the representation `diff_cards()` actually compares —
+  never does, matching the tested contract `add-dialect-cards`'
+  `AC-DC-4`/`DEC-AD-009` established: a card must be byte-identical for
+  the same logical repo checked out at two different absolute paths.
+  `feature_dirs` is exposed as `[d.name for d in self.feature_dirs]` in
+  both `as_dict()` and `to_card()`, mirroring `change_dirs` exactly (line
+  139/175). `dialect_card._COMPARABLE_FIELDS` gains `"has_speckit_root"`
+  and `"feature_dirs"` — never `"speckit_root"`. No `SCHEMA_VERSION` bump
+  needed either way: `diff_cards()`'s existing absent-key skip already
+  treats a field missing from an older card as a schema addition, not
+  drift.
 - **DEC-SK-005:** `graph.py:233-239` gets the identical union fix as
   `cli.py`'s three guards, both in its `NoOpenSpecTreeError` raise and in
   its own internal `detect.find_spec_files(profile.openspec_root)` gather
@@ -303,7 +361,18 @@ a dedicated fix.
   positive-phrasing heuristic. Narrowing scope is simpler and more honest
   than inventing a new detection heuristic this design has no validated
   corpus to build from yet (the same caution behind holding S004 at WARN,
-  `DEC-SK-019`).
+  `DEC-SK-019`). Confirmed against `NEGATIVE_PATTERNS`
+  (`parse_semantics.py:72-87`) directly: a conventional, purely
+  positive-phrased Success Criterion such as `SC-001: 95% of new users
+  complete onboarding in under 5 minutes` matches none of the negative
+  patterns and would trip G002 (requires ≥1 negative-phrased criterion
+  repo-wide) without this fix. (This proposal's own earlier example —
+  "...without contacting support" — was a poor illustration of G002's
+  failure mode: `without` itself matches `NEGATIVE_PATTERNS`, so that
+  particular phrasing would not have tripped G002. The regex-verified
+  example above replaces it. G003's failure mode is unaffected — the
+  same bare-percentage bullet trips `HARD_THRESHOLD` regardless of
+  phrasing.)
 - **DEC-SK-022:** G003's fix exempts only the `## Success Criteria` section
   body, using the same blank-the-span-preserve-line-numbers technique
   `strip_waiver_comments()` already uses in `parse_semantics.py`, when
@@ -321,8 +390,9 @@ a dedicated fix.
   _Verified by:_ `pytest -k test_stack_profile_construction_still_works_without_speckit_fields` · stage: `make test` (test not yet written)
 
 - [ ] **AC-SK-2:** `find_speckit_spec_files()` discovers every
-  `specs/<feature>/spec.md` file directly under a `speckit_root`, ignoring
-  any `changes/` nesting. (R-SK-2)
+  `specs/<feature>/spec.md` file directly under a `speckit_root` whose
+  content matches `is_speckit_marked()`, ignoring any `changes/` nesting.
+  (R-SK-2)
   _Verified by:_ `pytest -k test_find_speckit_spec_files_discovers_feature_spec_files` · stage: `make test` (test not yet written)
 
 - [ ] **AC-SK-3:** `filter_speckit_by_feature()` narrows a SpecKit spec-file
@@ -333,6 +403,16 @@ a dedicated fix.
   OpenAPI/RSpec/JSON-schema layout (a `specs/` dir with no `*/spec.md`
   beneath it) does not get `speckit_root` set. (R-SK-4)
   _Verified by:_ `pytest -k test_profile_does_not_set_speckit_root_for_a_specs_dir_with_no_spec_md` · stage: `make test` (test not yet written)
+
+- [ ] **AC-SK-45 (non-success):** a `specs/<name>/spec.md` file that exists
+  but whose content does not match `is_speckit_marked()` (an
+  OpenAPI/RSpec/JSON-schema pointer doc, say) is excluded from
+  `find_speckit_spec_files()`'s results and never reaches `validate`/
+  `graph`/`waivers` — even when `speckit_root` is set because *other*,
+  genuinely-marked files exist alongside it. Reproduces the exact
+  false-positive `spec-adversary` demonstrated by constructing this fixture
+  against the real (pre-fix) discovery pipeline. (R-SK-2, DEC-SK-002)
+  _Verified by:_ `pytest -k test_find_speckit_spec_files_excludes_unmarked_spec_md_even_alongside_genuine_ones` · stage: `make test` (test not yet written)
 
 - [ ] **AC-SK-5:** a repo with a genuine `specs/<feature>/spec.md` tree gets
   `speckit_root` populated and its spec files unioned with any
@@ -356,17 +436,26 @@ a dedicated fix.
 
 - [ ] **AC-SK-9:** `detect_dialect()` is byte-identical on the existing
   two-dialect golden fixture after the 3-way rewrite. (R-SK-10, DEC-SK-012)
-  _Verified by:_ `pytest tests/test_decomposition.py -k hash` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest tests/test_decomposition.py::test_output_byte_identical` · stage: `make test` (test not yet written)
 
 - [ ] **AC-SK-10 (non-success):** a spec with `[NEEDS CLARIFICATION]`
   markers but none of the other speckit markers is not classified as
   speckit. (C-SK-1, DEC-SK-010)
   _Verified by:_ `pytest -k test_needs_clarification_alone_does_not_classify_as_speckit` · stage: `make test` (test not yet written)
 
-- [ ] **AC-SK-11:** a change to `speckit_root`/`feature_dirs` is detected by
-  `dialect_card.diff_cards()` — the fields are threaded into `to_card()`/
-  `_COMPARABLE_FIELDS` with no `SCHEMA_VERSION` bump. (R-SK-6, DEC-SK-004)
+- [ ] **AC-SK-11:** a change to `speckit_root` presence or `feature_dirs` is
+  detected by `dialect_card.diff_cards()` via `has_speckit_root`/
+  `feature_dirs` in `_COMPARABLE_FIELDS`, with no `SCHEMA_VERSION` bump.
+  (R-SK-6, DEC-SK-004)
   _Verified by:_ `pytest -k test_diff_cards_detects_a_speckit_root_change` · stage: `make test` (test not yet written)
+
+- [ ] **AC-SK-46 (non-success):** `to_card()`'s output for a repo with
+  `speckit_root` set never contains the raw absolute path — only
+  `has_speckit_root: true` and `feature_dirs` as bare directory names.
+  Confirms the same byte-identical-across-checkout-paths contract
+  `add-dialect-cards`' `AC-DC-4` established still holds. (R-SK-6,
+  DEC-SK-004)
+  _Verified by:_ `pytest -k test_to_card_never_exposes_raw_speckit_root_path` · stage: `make test` (test not yet written)
 
 - [ ] **AC-SK-12:** `parse_spec()` dispatches `dialect == "speckit"` to
   `parse_speckit()` via its own explicit branch. (R-SK-11)
@@ -531,6 +620,12 @@ a dedicated fix.
   parser. (C-SK-10)
   _Verified by:_ `pytest -k test_speckit_discovery_never_returns_plan_or_tasks_md` · stage: `make test` (test not yet written)
 
+- [ ] **AC-SK-47:** `feature_dirs` contains exactly the distinct, sorted
+  parent directories of `find_speckit_spec_files()`'s (content-gated)
+  results — a `specs/<name>/` subdirectory holding only an unmarked
+  `spec.md` (per AC-SK-45) does not appear in `feature_dirs`. (R-SK-28)
+  _Verified by:_ `pytest -k test_feature_dirs_derives_from_content_gated_spec_files_only` · stage: `make test` (test not yet written)
+
 ---
 
 ## Invariants Touched
@@ -542,5 +637,5 @@ spec.
 
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
-| Focused | `make test` | AC-SK-1..44 |
+| Focused | `make test` | AC-SK-1..47 |
 | Full | `make pre-pr` | full regression, lint, typecheck, security, docs, no-hardcoded-thresholds |

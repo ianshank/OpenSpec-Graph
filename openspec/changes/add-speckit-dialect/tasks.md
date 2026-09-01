@@ -8,29 +8,44 @@
   strings in `detect.py`/`parse.py`.
 - `openspec_graph/detect.py`: `StackProfile` gains `speckit_root: Path | None
   = None` and `feature_dirs: tuple[Path, ...] = ()`, appended after
-  `current_sha`; new `find_speckit_spec_files()` and
+  `current_sha`; new `find_speckit_spec_files()` — content-gated **per
+  file** (each `specs/<feature>/spec.md` must also match
+  `is_speckit_marked()`, not just exist at the right path) and
   `filter_speckit_by_feature()`; `detect_dialect()` rewritten as a 3-way
   marker sniff (`"mixed"` = `present > 1`); `profile()` sets `speckit_root`
   only when content-gated (`root/"specs"` is a dir **and**
-  `find_speckit_spec_files()` finds ≥1 file), and unions both roots' spec
-  files before calling `detect_dialect()`.
+  `find_speckit_spec_files()` finds ≥1 qualifying file), unions both
+  roots' spec files before calling `detect_dialect()`, and derives
+  `feature_dirs` as the distinct sorted parent directories of
+  `find_speckit_spec_files()`'s (content-gated) results.
 - `openspec_graph/dialect_card.py`: `_COMPARABLE_FIELDS` gains
-  `speckit_root`/`feature_dirs`; `StackProfile.as_dict()`/`to_card()`
-  updated to match.
+  `"has_speckit_root"` and `"feature_dirs"` — never the raw
+  `"speckit_root"` path. `StackProfile.as_dict()` exposes `speckit_root`
+  as an absolute-path string (mirrors `openspec_root`) and `feature_dirs`
+  as `[d.name for d in self.feature_dirs]` (mirrors `change_dirs`);
+  `to_card()` derives `has_speckit_root: bool` and passes `feature_dirs`
+  through — it never re-exposes the raw path, preserving the
+  byte-identical-across-checkout-paths contract `AC-DC-4` established.
 - New `tests/test_detect_speckit.py`: fingerprint gating (positive and
-  content-gated-negative cases), coexistence of both roots, 3-way
-  `detect_dialect()` classification including a genuine three-way
-  `"mixed"` case, byte-identity on the existing two-dialect golden fixture,
-  confirmation that `detect.py`/`parse.py` share one predicate
-  implementation (no duplicated marker strings), and that
+  content-gated-negative cases), an unmarked `spec.md` alongside genuinely
+  marked ones under the same `specs/` dir excluded from
+  `find_speckit_spec_files()` even though `speckit_root` is set (the exact
+  fixture `spec-adversary` constructed against the pre-fix design),
+  `feature_dirs` derived only from content-gated results, coexistence of
+  both roots, 3-way `detect_dialect()` classification including a genuine
+  three-way `"mixed"` case, byte-identity on the existing two-dialect
+  golden fixture, confirmation that `detect.py`/`parse.py` share one
+  predicate implementation (no duplicated marker strings), and that
   `find_speckit_spec_files()`'s glob never returns a `plan.md`/`tasks.md`
   sibling.
-- `tests/test_dialect_card.py` extended for the two new card fields.
+- `tests/test_dialect_card.py` extended for `has_speckit_root`/
+  `feature_dirs`, including a case asserting `to_card()`'s output never
+  contains a raw `speckit_root` path.
 - `tests/test_graft.py` (or the relevant `StackProfile`-construction test
   module) extended, mirroring
   `test_stack_profile_construction_still_works_without_witness_fields`, for
   the new speckit fields.
-- **Gate:** `make test` — AC-SK-1..11, AC-SK-41, AC-SK-44.
+- **Gate:** `make test` — AC-SK-1..11, AC-SK-41, AC-SK-44..47.
 
 ## Milestone 2 — `parse_speckit.py` + dispatch fix
 
@@ -90,14 +105,25 @@ Internal order matters — later steps depend on earlier ones passing first:
    `G\d{3}|H\d{3}|U\d{3}|W\d{3}`, `~line 42`) both gain the `S` prefix
    before anything else — otherwise this repo's own doc-drift discipline
    silently validates nothing about the new family.
-2. Add `openspec_graph/rules_speckit.py` (S001-S004); wire `SPECKIT_RULES`
-   into `rules.py`'s `NON_WITNESS_RULES` as a pure append (confirm
-   `GENERIC_RULES`/`HARNESS_RULES`/`UPSTREAM_RULES` are unchanged).
-3. Apply the mandatory G002/G003 fix in `openspec_graph/rules_generic.py`:
-   G002's `dialects` narrows to `("harness", "upstream")`; G003 exempts the
-   `## Success Criteria` section body from the hard-coded-threshold scan
-   when `dialect == "speckit"`, using the same blank-span technique
-   `strip_waiver_comments()` already uses.
+2. Add `openspec_graph/rules_speckit.py` (S001-S004; S001 scans
+   `strip_waiver_comments(spec.raw)`, not raw text, so a waiver's own
+   free-text reason quoting `[NEEDS CLARIFICATION]` doesn't self-trigger
+   it); wire `SPECKIT_RULES` into `rules.py`'s `NON_WITNESS_RULES` as a
+   pure append (confirm `GENERIC_RULES`/`HARNESS_RULES`/`UPSTREAM_RULES`
+   are unchanged).
+3. Apply the mandatory G002/G003 fix — spans two modules, not one:
+   - `openspec_graph/rules_generic.py`: G002's `dialects` narrows to
+     `("harness", "upstream")`.
+   - `openspec_graph/parse_semantics.py`: `hard_coded(text)` gains a
+     `dialect: str = ""` parameter and exempts the `## Success Criteria`
+     section body from the hard-coded-threshold scan when
+     `dialect == "speckit"`, using the same blank-span technique
+     `strip_waiver_comments()` already uses. `rules_generic.py`'s
+     `_hard_coded_threshold` check function itself is unchanged — it only
+     ever sees the already-extracted `spec.hard_coded_thresholds`.
+   - `openspec_graph/parse.py`: `parse_spec()`'s one call site
+     (`hard_coded_thresholds=hard_coded(text)`) is updated to
+     `hard_coded(text, resolved)`, threading the resolved dialect through.
 4. Run `tests/test_rule_registry_docs.py`; fix every location it flags:
    README's rules table, `docs/architecture/c4.md` module map + rule count
    + range comment, `docs/agents-skills-harness.md`, `docs/next-steps.md`,
@@ -110,8 +136,9 @@ Internal order matters — later steps depend on earlier ones passing first:
    empirically against the canonical fixture, which has no `specs/`
    directory.
 - New `tests/test_rules_speckit.py`: one fixture per rule (S001-S004),
-  including S002's requirement-id coverage (broadening H004's pattern
-  beyond harness's criterion-only scope) and S004's WARN (not ERROR)
+  including S002's requirement-id coverage (the first duplicate-id check
+  for requirements in the codebase; its criterion half mirrors H004) and
+  S004's WARN (not ERROR)
   severity; new G002/G003 fixture cases for a positive-only /
   Success-Criteria-percentage speckit spec; a regression case confirming
   G002/G003 are byte-unchanged for the existing harness/upstream fixtures.
