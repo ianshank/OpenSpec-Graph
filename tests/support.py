@@ -30,7 +30,14 @@ def supports_symlinks() -> bool:
         target.write_text("")
         try:
             (Path(td) / "link").symlink_to(target)
-        except OSError:
+        except (OSError, NotImplementedError):
+            # OSError: the common case (Windows without the privilege).
+            # NotImplementedError: Path.symlink_to()'s own fallback when
+            # os.symlink doesn't exist on this platform at all -- letting
+            # this one escape would crash the *importing* test module at
+            # collection time (see the module-level probes in
+            # test_witness.py/test_graft.py), the exact all-or-nothing
+            # failure this capability probe exists to avoid.
             return False
         return True
 

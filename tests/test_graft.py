@@ -22,9 +22,27 @@ from tests import support
 from tests.support import write_spec
 
 # Windows needs Administrator rights or Developer Mode to create any symlink
-# at all -- probed once per collection, not assumed from sys.platform, so a
-# Windows box that does have one of those enabled still runs this test.
+# at all -- probed once, at this module's import time, not assumed from
+# sys.platform, so a Windows box that does have one of those enabled still
+# runs this test.
 _CAN_SYMLINK = support.supports_symlinks()
+
+
+def test_supports_symlinks_returns_false_when_symlink_to_is_not_implemented(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Path.symlink_to() raises NotImplementedError, not OSError, when
+    # os.symlink doesn't exist on this platform at all -- letting that
+    # escape uncaught would crash the *importing* test module at collection
+    # time (this file's and test_witness.py's own module-level
+    # _CAN_SYMLINK probe above), the exact all-or-nothing failure this
+    # capability probe exists to avoid.
+    def _raise_not_implemented(self: Path, target: object, target_is_directory: bool = False) -> None:
+        raise NotImplementedError("os.symlink() not available on this system")
+
+    monkeypatch.setattr(Path, "symlink_to", _raise_not_implemented)
+    assert support.supports_symlinks() is False
+
 
 MAKEFILE = textwrap.dedent(
     """\

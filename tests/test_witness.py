@@ -20,8 +20,9 @@ from openspec_graph.witness import Witness
 from tests import support
 
 # Windows needs Administrator rights or Developer Mode to create any symlink
-# at all -- probed once per collection, not assumed from sys.platform, so a
-# Windows box that does have one of those enabled still runs this test.
+# at all -- probed once, at this module's import time, not assumed from
+# sys.platform, so a Windows box that does have one of those enabled still
+# runs this test.
 _CAN_SYMLINK = support.supports_symlinks()
 
 SHA = "a" * 40
