@@ -128,10 +128,7 @@ class StackProfile:
         CONTRACT.md's flat, near-root file candidates never were."""
         if not self.adr_source:
             return "the ADR log"
-        try:
-            return self.adr_source.relative_to(self.root).as_posix()
-        except ValueError:
-            return self.adr_source.name
+        return to_posix_relative(self.adr_source, self.root)
 
     def as_dict(self) -> dict[str, object]:
         return {

@@ -24,10 +24,16 @@
 - `openspec_graph/rule_types.py`: `Finding.render()` calls it (drops its
   `contextlib.suppress` block entirely, and the now-unused `contextlib`
   import); `Finding.as_dict()` deliberately untouched (DEC-PS-002).
-- `openspec_graph/detect.py`: `StackProfile.adr_source_name`'s `try`
-  branch; `as_dict()`'s `invariant_source`/`adr_source` fields;
-  `_threshold()`'s governance-policy/`.coveragerc`/`setup.cfg` candidates;
-  `root`/`openspec_root` deliberately untouched (DEC-PS-002).
+- `openspec_graph/detect.py`: `StackProfile.adr_source_name` calls
+  `to_posix_relative` directly (an initial version kept a narrow inline
+  fix here, reasoning its exception fallback returned a bare `.name` --
+  a different contract from the shared function's full-posix-path
+  fallback; code review found that distinction was never reachable in
+  practice, since `_adrs()`'s only construction site always builds
+  `adr_source` as `root / <candidate>`, so `.relative_to(root)` can never
+  actually raise there); `as_dict()`'s `invariant_source`/`adr_source`
+  fields; `_threshold()`'s governance-policy/`.coveragerc`/`setup.cfg`
+  candidates; `root`/`openspec_root` deliberately untouched (DEC-PS-002).
 - `openspec_graph/scaffold.py`: `plan_init()`'s
   `config["invariant_source"]` — the field persisted into both
   `openspec/specgraph.json` and `openspec/project.md`.

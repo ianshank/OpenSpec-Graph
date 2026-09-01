@@ -4,7 +4,10 @@
 # falling out of sync with rules.RULES; a hard-coded threshold creeping into
 # Makefile/CI YAML) has recurred multiple times in this repo's own history
 # (see tests/test_rule_registry_docs.py's docstring, tools/check_no_hardcoded_thresholds.py).
-# A reminder, not a block -- the edit already happened.
+# "decision": "block" here is PostToolUse's contract for surfacing `reason`
+# to Claude prominently -- it does NOT undo the edit (PostToolUse fires
+# after the write already landed, so there is nothing left to prevent). It
+# is a strong reminder, not an actual block, despite the JSON key's name.
 #
 # No jq dependency: not guaranteed to be on PATH (confirmed absent in at
 # least one real dev environment this repo is used from). file_path is
