@@ -12,6 +12,7 @@ import dataclasses
 import re
 
 SECTION = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
+SUBSECTION = re.compile(r"^###\s+(.+?)\s*$", re.MULTILINE)
 STATUS = re.compile(r"\*\*Status:\*\*\s*([A-Za-z-]+)")
 
 # --- harness dialect -------------------------------------------------------
@@ -201,6 +202,30 @@ def speckit_section_body(text: str, name: str) -> str:
             continue
         stop = bounds[idx + 1][1] if idx + 1 < len(bounds) else len(text)
         return text[end:stop]
+    return ""
+
+
+def speckit_subsection_body(section_text: str, name: str) -> str:
+    """Like :func:`speckit_section_body`, one heading level down (H3 inside
+    an already-isolated H2 span).
+
+    ``section_body(text, "Requirements")`` returns the *entire* H2 span,
+    including any unrelated H3 subsections that happen to sit alongside
+    "### Functional Requirements" -- a bullet shaped like ``- **FR-099**:
+    ...`` under a different H3 (or with no "### Functional Requirements"
+    heading at all) would otherwise be picked up as a real requirement.
+    Scoping to the named H3's own span, the same bounded-by-next-heading
+    technique :func:`section_body`/:func:`speckit_section_body` already use
+    at H2, closes that gap: a wrong-heading or missing-heading document
+    yields an empty span, not a false match.
+    """
+    bounds = [(m.group(1), m.start(), m.end()) for m in SUBSECTION.finditer(section_text)]
+    name_lower = name.lower()
+    for idx, (title, _start, end) in enumerate(bounds):
+        if title.strip().lower() != name_lower:
+            continue
+        stop = bounds[idx + 1][1] if idx + 1 < len(bounds) else len(section_text)
+        return section_text[end:stop]
     return ""
 
 

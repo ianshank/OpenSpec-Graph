@@ -84,6 +84,47 @@ def test_parse_speckit_fr_decl_does_not_match_a_sibling_nfr_bullet() -> None:
     assert {r.ident for r in reqs} == {"FR-001"}
 
 
+def test_parse_speckit_fr_decl_ignores_a_bullet_under_an_unrelated_h3(spec_path: Path) -> None:
+    # section_body()/speckit_section_body() return the *entire* H2 span --
+    # an FR-shaped bullet sitting under some other H3 inside "## Requirements"
+    # must not be picked up as a real functional requirement just because it
+    # shares the H2 ancestor.
+    text = textwrap.dedent(
+        """\
+        ## Requirements *(mandatory)*
+
+        ### Key Entities
+
+        - **FR-099**: Not a real requirement, just an example under the
+          wrong subsection.
+
+        ### Functional Requirements
+
+        - **FR-001**: The system MUST do X.
+        """
+    )
+    reqs, _ = parse_speckit(text)
+    assert {r.ident for r in reqs} == {"FR-001"}
+
+
+def test_parse_speckit_fr_decl_finds_nothing_with_no_functional_requirements_heading(
+    spec_path: Path,
+) -> None:
+    # No "### Functional Requirements" H3 at all -- an FR-shaped bullet
+    # directly under "## Requirements" must not be treated as a declared
+    # requirement; scanning must be scoped to the named H3, not "anywhere
+    # inside the H2".
+    text = textwrap.dedent(
+        """\
+        ## Requirements *(mandatory)*
+
+        - **FR-050**: A bullet with no Functional Requirements subsection.
+        """
+    )
+    reqs, _ = parse_speckit(text)
+    assert reqs == ()
+
+
 # --- AC-SK-15: Given/When/Then synthesis ------------------------------------
 
 

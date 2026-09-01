@@ -64,12 +64,31 @@ def _add_spec_node(nodes: list[dict[str, object]], seen: set[str], spec: ParsedS
     return spec_node
 
 
+def _entity_node_id(spec: ParsedSpec, spec_node: str, ident: str) -> str:
+    """Graph node id for a requirement/criterion belonging to ``spec``.
+
+    Harness/upstream idents are already spec-unique by authoring convention
+    (e.g. ``R-DMO-1``, ``AC-DMO-1`` -- the capability abbreviation is folded
+    into the id itself), so they pass through unqualified: changing this
+    would re-pin every existing golden-hash graph fixture for zero benefit.
+    SpecKit's own canonical convention restarts numbering at ``FR-001``/
+    ``SC-001`` in *every* feature, so a repo with more than one feature
+    would otherwise silently collapse the second feature's requirement/
+    criterion nodes into the first's via ``_add_node``'s seen-id dedup --
+    scoping the qualification to ``spec.dialect == "speckit"`` fixes the
+    real collision without touching either existing dialect's node ids.
+    """
+    if spec.dialect == "speckit":
+        return f"{spec_node}::{ident}"
+    return ident
+
+
 def _add_requirement_nodes(
     nodes: list[dict[str, object]], seen: set[str], spec: ParsedSpec, spec_node: str
 ) -> None:
     for req in spec.requirements:
         _add_node(
-            nodes, seen, req.ident,
+            nodes, seen, _entity_node_id(spec, spec_node, req.ident),
             type="requirement",
             text=req.text[:NODE_TEXT_LIMIT],
             kind=req.kind,
@@ -86,8 +105,9 @@ def _add_criterion_nodes(
     known_stages: set[str],
 ) -> None:
     for crit in spec.criteria:
+        crit_node = _entity_node_id(spec, spec_node, crit.ident)
         _add_node(
-            nodes, seen, crit.ident,
+            nodes, seen, crit_node,
             type="criterion",
             text=crit.text[:NODE_TEXT_LIMIT],
             is_negative=crit.is_negative,
@@ -96,7 +116,8 @@ def _add_criterion_nodes(
         )
         # criterion -> requirement
         for ref in crit.requirement_refs:
-            edges.append({"source": crit.ident, "target": ref, "type": "traces-to"})
+            req_node = _entity_node_id(spec, spec_node, ref)
+            edges.append({"source": crit_node, "target": req_node, "type": "traces-to"})
         # criterion -> stage (verified-by). A stage the repo lacks is an
         # edge to a node marked exists=False (AC-GR-5).
         for stage in _stages_cited(crit.verified_by):
@@ -104,7 +125,7 @@ def _add_criterion_nodes(
             stage_node = f"stage:{stage}"
             _add_node(nodes, seen, stage_node, type="stage", name=stage, exists=exists)
             edges.append(
-                {"source": crit.ident, "target": stage_node, "type": "verified-by", "exists": exists}
+                {"source": crit_node, "target": stage_node, "type": "verified-by", "exists": exists}
             )
 
 

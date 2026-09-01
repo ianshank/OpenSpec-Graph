@@ -192,6 +192,20 @@ a dedicated fix.
   generic `specs/` folder may hold unrelated subdirectories with no real
   SpecKit spec in them, and `feature_dirs` MUST report only genuine
   SpecKit features.
+- R-SK-29 (mandatory fix): `graph.py`'s requirement/criterion graph node
+  ids MUST be qualified by their owning spec when `spec.dialect ==
+  "speckit"`, so that two SpecKit features whose requirements both start
+  at `FR-001` (the canonical SpecKit convention — every feature restarts
+  its own numbering) do not collapse into a single graph node via
+  `_add_node`'s seen-id dedup. Harness/upstream idents (e.g. `R-DMO-1`,
+  `AC-DMO-1`) already fold their capability abbreviation into the id and
+  MUST stay unqualified — this requirement is scoped to speckit only.
+- R-SK-30 (mandatory fix): `parse_speckit()`'s Functional Requirements
+  scan MUST be scoped to the level-3 `Functional Requirements` heading's
+  own span, not the entire level-2 `Requirements` span it sits inside —
+  an `FR-`-shaped bullet under an unrelated level-3 heading, or a document
+  with no level-3 `Functional Requirements` heading at all, MUST NOT be
+  recognized as a declared requirement.
 - C-SK-1: `[NEEDS CLARIFICATION]` MUST NOT be used as part of the SpecKit
   dialect fingerprint (`detect_dialect()`'s speckit predicate).
 - C-SK-2: `parse.py::parse_spec()`'s three-way dispatch MUST NOT be
@@ -635,6 +649,19 @@ a dedicated fix.
   results — a `specs/<name>/` subdirectory holding only an unmarked
   `spec.md` (per AC-SK-45) does not appear in `feature_dirs`. (R-SK-28)
   _Verified by:_ `pytest -k test_feature_dirs_derives_from_content_gated_spec_files_only` · stage: `make test`
+
+- [x] **AC-SK-48:** two SpecKit features that both declare `FR-001`/
+  `SC-001` (the canonical restart-per-feature convention) produce two
+  distinct requirement nodes and two distinct criterion nodes in
+  `planlint graph`'s output — not one node with the second feature's
+  silently dropped. (R-SK-29)
+  _Verified by:_ `pytest -k test_build_graph_does_not_collapse_two_features_that_both_start_at_fr_001` · stage: `make test`
+
+- [x] **AC-SK-49 (non-success):** an `FR-`-shaped bullet under a level-3
+  heading other than `Functional Requirements` — or with no such
+  level-3 heading present at all — is not recognized as a declared
+  requirement. (R-SK-30)
+  _Verified by:_ `pytest -k test_parse_speckit_fr_decl_ignores_a_bullet_under_an_unrelated_h3 or test_parse_speckit_fr_decl_finds_nothing_with_no_functional_requirements_heading` · stage: `make test`
 
 ---
 

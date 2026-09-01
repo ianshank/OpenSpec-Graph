@@ -101,6 +101,30 @@ def test_cmd_graph_exits_2_with_neither_openspec_nor_speckit(repo: Path) -> None
     assert result.returncode == 2
 
 
+def test_build_graph_does_not_collapse_two_features_that_both_start_at_fr_001(repo: Path) -> None:
+    # SpecKit's own canonical convention restarts requirement/criterion
+    # numbering at FR-001/SC-001 in every feature -- unlike harness/upstream,
+    # whose idents fold the capability name in and are spec-unique by
+    # authoring convention. Bare-ident node ids would collapse the second
+    # feature's nodes into the first's via _add_node's seen-id dedup.
+    write_speckit_spec(repo, "001-demo-capability", GOOD_SPECKIT)
+    write_speckit_spec(
+        repo, "002-other-capability",
+        GOOD_SPECKIT.replace(
+            "Feature Specification: Demo Capability", "Feature Specification: Other Capability"
+        ).replace("`001-demo-capability`", "`002-other-capability`"),
+    )
+    result = run_cli(repo, "graph", "--format", "json")
+    assert result.returncode == 0, result.stdout + result.stderr
+    graph = json.loads(result.stdout)
+    fr_nodes = [n for n in graph["nodes"] if n["type"] == "requirement" and "FR-001" in n["id"]]
+    sc_nodes = [n for n in graph["nodes"] if n["type"] == "criterion" and "SC-001" in n["id"]]
+    assert len(fr_nodes) == 2
+    assert len({n["id"] for n in fr_nodes}) == 2
+    assert len(sc_nodes) == 2
+    assert len({n["id"] for n in sc_nodes}) == 2
+
+
 # --- AC-SK-22 (non-success): cmd_graph --change stays openspec-only -------
 
 

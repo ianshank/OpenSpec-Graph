@@ -16,6 +16,7 @@ from .parse_semantics import (
     USER_STORY_HEADING,
     line_of,
     speckit_section_body,
+    speckit_subsection_body,
 )
 
 __all__ = ["parse_speckit"]
@@ -24,10 +25,13 @@ __all__ = ["parse_speckit"]
 def parse_speckit(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion, ...]]:
     # "## Requirements *(mandatory)*" (H2, canonical SpecKit template)
     # contains the nested "### Functional Requirements" (H3) subheading +
-    # FR bullets; speckit_section_body only recognizes H2, but its
-    # "everything until the next H2" span still correctly includes the H3
-    # content within it.
-    req_body = speckit_section_body(text, "Requirements")
+    # FR bullets. Scanning the whole H2 span would also pick up a bullet
+    # shaped like an FR declaration sitting under an unrelated H3 (or with
+    # no "### Functional Requirements" heading at all) -- scope to the H3's
+    # own span via speckit_subsection_body so only bullets actually declared
+    # there count.
+    req_section = speckit_section_body(text, "Requirements")
+    req_body = speckit_subsection_body(req_section, "Functional Requirements")
     reqs = tuple(
         Requirement(ident=m.group(1), text=m.group(2), kind="functional")
         for m in FR_DECL.finditer(req_body)

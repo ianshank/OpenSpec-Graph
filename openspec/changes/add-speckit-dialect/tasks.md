@@ -155,3 +155,31 @@ Internal order matters — later steps depend on earlier ones passing first:
   findings are in — no promotion to ERROR ships as part of this change.
 - **Gate:** `make pre-pr` — AC-SK-40, and the full enterprise AQA gate
   (test, lint, typecheck, security, validate, docs) green end to end.
+
+## Post-review hardening [DONE]
+
+Findings from adversarial GitHub PR review after Milestone 5, each verified
+against real evidence (the live `github/spec-kit` template, or a
+reproducing test) before being fixed — not fixed speculatively:
+
+- `section_body()`'s exact-title match silently found nothing against the
+  real SpecKit template's `*(mandatory)*`-annotated mandatory headings
+  (confirmed live against `github/spec-kit`, not assumed): zero FR-/SC-
+  extraction, and a no-op G003 exemption, against any correctly-formatted
+  real SpecKit spec. Fixed via a new `speckit_section_body()`; every
+  SpecKit fixture repo-wide updated to the canonical annotated heading for
+  stronger regression coverage.
+- Graph node ids for requirements/criteria were bare idents
+  (`req.ident`/`crit.ident`); SpecKit's own convention restarts numbering
+  at `FR-001`/`SC-001` per feature, so two features would silently
+  collapse into one graph node via `_add_node`'s seen-id dedup. Fixed by
+  qualifying speckit node ids by their owning spec (R-SK-29/AC-SK-48);
+  harness/upstream node ids are untouched (already spec-unique by
+  authoring convention).
+- `parse_speckit()`'s Functional Requirements scan matched any
+  `FR-`-shaped bullet anywhere inside the whole level-2 `Requirements`
+  span, including under an unrelated level-3 heading or with no level-3
+  `Functional Requirements` heading at all. Fixed via
+  `speckit_subsection_body()`, scoping the scan to the named heading's
+  own span (R-SK-30/AC-SK-49).
+- **Gate:** `make pre-pr` green; `pytest tests/ -q` full suite green.
