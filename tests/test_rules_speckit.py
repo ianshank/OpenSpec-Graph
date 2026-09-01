@@ -148,13 +148,10 @@ def _minimal_speckit_spec(**overrides: object) -> parse_model.ParsedSpec:
 
 
 def test_s004_fires_at_warn_not_error(repo: Path) -> None:
-    # parse_speckit()'s own GWT extraction only ever produces a Criterion
-    # once its text has already matched the Given/When/Then pattern, so a
-    # "missing WHEN/THEN" criterion can't arise through real parsing today
-    # (R-SK-27's own documented limitation, deferred to Milestone 5) --
-    # unit-test S004's check function directly against a hand-built
-    # ParsedSpec instead, the same direct-construction pattern
-    # tests/test_ledger.py already uses for this reason.
+    # Unit-test S004's check function directly against a hand-built
+    # ParsedSpec, the same direct-construction pattern tests/test_ledger.py
+    # already uses -- independent of whatever real parsing does or doesn't
+    # produce, so this stays a pure check-function test.
     spec = _minimal_speckit_spec(
         criteria=(
             parse_model.Criterion(
@@ -166,6 +163,24 @@ def test_s004_fires_at_warn_not_error(repo: Path) -> None:
     )
     prof = detect.profile(repo)
     findings = [f for f in rules.evaluate(spec, prof) if f.rule == "S004"]
+    assert len(findings) == 1
+    assert findings[0].severity == "WARN"
+
+
+def test_s004_fires_through_real_parsing_on_a_malformed_scenario(repo: Path) -> None:
+    # Post-review hardening: GWT_SCENARIO originally required the literal
+    # Given/When/Then keywords to match at all, so parse_speckit() could
+    # never actually produce a Criterion for a malformed scenario missing
+    # WHEN/THEN -- S004 was only reachable via the hand-built ParsedSpec
+    # above, never through real parsing. GWT_SCENARIO now matches any
+    # numbered item in a User Story block; completeness is decided
+    # downstream by scenario_has_gwt(), so a genuinely malformed real
+    # scenario is captured and now actually reaches S004.
+    body = GOOD_SPECKIT.replace(
+        "1. **Given** an unattested write, **When** validation runs, **Then** the write is rejected.",
+        "1. **Given** an unattested write, something happens eventually but no outcome is stated.",
+    )
+    findings = [f for f in findings_for(repo, body) if f.rule == "S004"]
     assert len(findings) == 1
     assert findings[0].severity == "WARN"
 

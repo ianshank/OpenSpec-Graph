@@ -182,4 +182,21 @@ reproducing test) before being fixed — not fixed speculatively:
   `Functional Requirements` heading at all. Fixed via
   `speckit_subsection_body()`, scoping the scan to the named heading's
   own span (R-SK-30/AC-SK-49).
+- `GWT_SCENARIO` required the literal Given/When/Then keywords to match a
+  numbered scenario item at all, so a scenario genuinely missing WHEN or
+  THEN was never captured as a `Criterion` in the first place — S004
+  (which exists to flag exactly that) could never fire through real
+  parsing, only through a hand-built `ParsedSpec` in a unit test. Fixed
+  by broadening `GWT_SCENARIO` to match any numbered item in a User Story
+  block; completeness is decided downstream by `scenario_has_gwt()`
+  (already S004's own source of truth), not re-implemented in the regex.
+  S004 stays WARN, per R-SK-27, unchanged (R-SK-31/AC-SK-50).
+- `build_graph()`'s orphan-requirement annotation fired unconditionally:
+  since speckit criteria always have empty `requirement_refs` (C-SK-3 —
+  speckit's grammar has no FR<->SC citation convention), every speckit
+  requirement node was marked `orphan: true`, a universal false signal
+  for a dialect that was never expected to have traces-to edges at all.
+  Fixed by skipping the annotation for a requirement node belonging to a
+  speckit-dialect spec (R-SK-32/AC-SK-51); harness/upstream are
+  unaffected.
 - **Gate:** `make pre-pr` green; `pytest tests/ -q` full suite green.

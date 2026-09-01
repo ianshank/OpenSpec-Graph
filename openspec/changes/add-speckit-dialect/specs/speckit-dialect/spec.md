@@ -206,6 +206,21 @@ a dedicated fix.
   an `FR-`-shaped bullet under an unrelated level-3 heading, or a document
   with no level-3 `Functional Requirements` heading at all, MUST NOT be
   recognized as a declared requirement.
+- R-SK-31 (mandatory fix): `parse_speckit()`'s acceptance-scenario
+  extraction MUST capture a numbered scenario item in a User Story block
+  regardless of whether it names Given/When/Then, so a scenario genuinely
+  missing WHEN or THEN reaches S004 through real parsing — not only
+  through a hand-built `ParsedSpec` in a unit test, as it could before
+  this fix. Scenario completeness MUST still be decided downstream by
+  `scenario_has_gwt()`, the same function S004's own check already calls
+  — not re-implemented a second time in the extraction regex. This does
+  not relax R-SK-27: S004 stays WARN, unchanged.
+- R-SK-32 (mandatory fix): `build_graph()`'s orphan-requirement annotation
+  MUST NOT mark a speckit-dialect requirement node's `orphan` field —
+  speckit's own grammar has no FR-to-SC citation convention at all
+  (C-SK-3), so every one of its requirement nodes lacking an incoming
+  `traces-to` edge is expected and universal, not a genuine "nothing
+  references this" signal the way it is for harness/upstream.
 - C-SK-1: `[NEEDS CLARIFICATION]` MUST NOT be used as part of the SpecKit
   dialect fingerprint (`detect_dialect()`'s speckit predicate).
 - C-SK-2: `parse.py::parse_spec()`'s three-way dispatch MUST NOT be
@@ -662,6 +677,18 @@ a dedicated fix.
   level-3 heading present at all — is not recognized as a declared
   requirement. (R-SK-30)
   _Verified by:_ `pytest -k test_parse_speckit_fr_decl_ignores_a_bullet_under_an_unrelated_h3 or test_parse_speckit_fr_decl_finds_nothing_with_no_functional_requirements_heading` · stage: `make test`
+
+- [x] **AC-SK-50:** a numbered acceptance-scenario item genuinely missing
+  WHEN or THEN, in an otherwise well-formed SpecKit spec, produces an
+  S004 finding through real end-to-end parsing (`parse_speckit()` →
+  `rules.evaluate()`) — not only through a hand-built `ParsedSpec`.
+  (R-SK-31)
+  _Verified by:_ `pytest -k test_s004_fires_through_real_parsing_on_a_malformed_scenario` · stage: `make test`
+
+- [x] **AC-SK-51 (non-success):** every requirement node in a fully clean
+  SpecKit spec's `planlint graph` output comes back with no `orphan`
+  field set — not universally `orphan: true` across the dialect. (R-SK-32)
+  _Verified by:_ `pytest -k test_build_graph_does_not_mark_speckit_requirements_as_orphan` · stage: `make test`
 
 ---
 

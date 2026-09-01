@@ -68,10 +68,20 @@ USER_STORY_HEADING = re.compile(r"^###\s+User Story\s+(\d+)\b.*$", re.MULTILINE 
 # unrelated later content once `.` matches `\n` -- verified against two
 # sequential multi-line scenarios and a scenario immediately followed by an
 # unrelated "## Requirements" section, neither bleeds into the other.
+#
+# Post-review hardening: originally required the literal Given/When/Then
+# keywords in the match itself, which meant a malformed scenario missing
+# WHEN or THEN was never captured as a Criterion at all -- S004 (which
+# exists to flag exactly that) could never fire against real parsed output,
+# only against a hand-built ParsedSpec in a unit test. Matches any numbered
+# item in a User Story block now, GWT-complete or not, using the same
+# boundary lookahead as before; completeness is decided downstream by
+# scenario_has_gwt() (already the source of truth S004 itself calls), not
+# by this regex, so a genuinely incomplete scenario is now captured and can
+# be reported instead of silently disappearing.
 GWT_SCENARIO = re.compile(
-    r"^\d+\.\s*(?:\*\*)?Given(?:\*\*)?\s+.+?(?:\*\*)?When(?:\*\*)?\s+.+?(?:\*\*)?Then(?:\*\*)?\s+"
-    r".+?(?=\n\s*\d+\.|\n\s*\n|\Z)",
-    re.MULTILINE | re.IGNORECASE | re.DOTALL,
+    r"^\d+\.\s*.+?(?=\n\s*\d+\.|\n\s*\n|\Z)",
+    re.MULTILINE | re.DOTALL,
 )
 
 # --- dialect classification (shared between detect.py and parse.py) --------

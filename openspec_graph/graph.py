@@ -223,13 +223,24 @@ def _add_tree_finding_edges(
     return len(findings)
 
 
-def _mark_orphan_requirements(nodes: list[dict[str, object]], edges: list[dict[str, object]]) -> None:
+def _mark_orphan_requirements(
+    nodes: list[dict[str, object]], edges: list[dict[str, object]], untraceable_specs: set[str]
+) -> None:
     # Orphan requirements: requirement nodes with no incoming traces-to edge
-    # (AC-GR-3).
+    # (AC-GR-3). Skipped for a spec in `untraceable_specs` -- speckit's own
+    # grammar has no FR<->SC citation convention at all (C-SK-3/DEC-SK-016),
+    # so every one of its requirement nodes would otherwise be marked
+    # orphan unconditionally, a false "nothing traces to this" signal for a
+    # dialect that was never expected to have any traces-to edges in the
+    # first place. Harness/upstream are unaffected: neither spec ever adds
+    # its own spec_node to `untraceable_specs`.
     incoming_traces = {e["target"] for e in edges if e["type"] == "traces-to"}
     for node in nodes:
-        if node.get("type") == "requirement" and node["id"] not in incoming_traces:
-            node["orphan"] = True
+        if node.get("type") != "requirement" or node["id"] in incoming_traces:
+            continue
+        if node.get("spec") in untraceable_specs:
+            continue
+        node["orphan"] = True
 
 
 def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None) -> dict[str, object]:
@@ -279,6 +290,7 @@ def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None)
     broken_links = 0
     all_specs: list[ParsedSpec] = []
     rendered = 0
+    untraceable_specs: set[str] = set()
 
     for path in all_spec_files:
         spec = parse.parse_spec(path, dialect)
@@ -288,6 +300,8 @@ def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None)
         rendered += 1
         rel = _relative_to(path, profile.root)
         spec_node = _add_spec_node(nodes, seen_nodes, spec, rel)
+        if spec.dialect == "speckit":
+            untraceable_specs.add(spec_node)
         _add_requirement_nodes(nodes, seen_nodes, spec, spec_node)
         _add_criterion_nodes(nodes, edges, seen_nodes, spec, spec_node, known_stages)
         _add_invariant_edges(nodes, edges, seen_nodes, spec, spec_node, known_invariants)
@@ -303,7 +317,7 @@ def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None)
         nodes, edges, seen_nodes, rules.evaluate_tree(all_specs, profile)
     )
 
-    _mark_orphan_requirements(nodes, edges)
+    _mark_orphan_requirements(nodes, edges, untraceable_specs)
 
     return {
         "root": str(profile.root),

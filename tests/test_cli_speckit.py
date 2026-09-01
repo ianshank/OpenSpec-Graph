@@ -96,6 +96,22 @@ def test_build_graph_succeeds_on_a_speckit_only_repo(repo: Path) -> None:
     assert any("FR-001" in nid for nid in node_ids)
 
 
+def test_build_graph_does_not_mark_speckit_requirements_as_orphan(repo: Path) -> None:
+    # SpecKit's own grammar has no FR<->SC citation convention (C-SK-3) --
+    # a requirement node with no incoming traces-to edge is expected and
+    # universal for this dialect, not a real "nothing references this"
+    # signal the way it is for harness/upstream. Every requirement node in
+    # a fully clean SpecKit spec's graph must therefore come back
+    # unmarked, not orphan=True across the board.
+    write_speckit_spec(repo, "001-demo-capability", GOOD_SPECKIT)
+    result = run_cli(repo, "graph", "--format", "json")
+    assert result.returncode == 0, result.stdout + result.stderr
+    graph = json.loads(result.stdout)
+    req_nodes = [n for n in graph["nodes"] if n["type"] == "requirement"]
+    assert req_nodes
+    assert not any(n.get("orphan") for n in req_nodes)
+
+
 def test_cmd_graph_exits_2_with_neither_openspec_nor_speckit(repo: Path) -> None:
     result = run_cli(repo, "graph")
     assert result.returncode == 2
