@@ -176,7 +176,15 @@ a dedicated fix.
 - R-SK-27: S004, and any other check that depends on `GWT_SCENARIO`, MUST
   stay at WARN severity until validated against a real/representative
   SpecKit corpus (Milestone 5); no dependent check MAY be promoted to
-  ERROR as part of this change.
+  ERROR as part of this change. Milestone 5 finding: hand-authored
+  representative fixtures (no live network access to real
+  `spec-kit`-CLI-generated output in this environment) surfaced one real
+  gap -- the original single-line-only `GWT_SCENARIO` missed a realistic
+  multi-line Given/When/Then authoring style -- fixed directly in
+  `parse_semantics.py` rather than left as a known limitation. S004 stays
+  WARN regardless, per this requirement's own constraint: the fixture
+  corpus is still hand-authored, not live-collected, so the promotion bar
+  this requirement sets is deliberately not met by this milestone alone.
 - R-SK-28: `feature_dirs` MUST be the distinct, sorted set of parent
   directories of `find_speckit_spec_files()`'s (content-gated, per R-SK-2)
   results — not every structural subdirectory of `speckit_root`. Mirroring
@@ -592,10 +600,10 @@ a dedicated fix.
   harness/upstream. (C-SK-9)
   _Verified by:_ `pytest -k test_scaffold_still_only_offers_harness_and_upstream` · stage: `make test` (test not yet written)
 
-- [ ] **AC-SK-40:** a hand-authored/collected `good_speckit.md`-style
+- [x] **AC-SK-40:** a hand-authored/collected `good_speckit.md`-style
   fixture, representative of real SpecKit output, produces zero unexpected
   findings end to end. (Milestone 5, R-SK-27)
-  _Verified by:_ `pytest -k test_good_speckit_fixture_has_no_unexpected_findings` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_good_speckit_fixture_has_no_unexpected_findings` · stage: `make test`
 
 - [x] **AC-SK-41:** `parse.py` no longer contains its own copies of the
   upstream/harness marker-string checks; `detect.detect_dialect()` and

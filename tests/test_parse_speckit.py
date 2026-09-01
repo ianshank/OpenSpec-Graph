@@ -66,6 +66,34 @@ def test_parse_speckit_synthesizes_user_story_criteria() -> None:
     assert scenario_has_gwt(gwt_criteria[0])
 
 
+def test_parse_speckit_synthesizes_a_multi_line_gwt_scenario() -> None:
+    # Milestone 5 finding: Given/When/Then each on their own line, within
+    # the same numbered item, is an equally plausible SpecKit authoring
+    # style GWT_SCENARIO's original single-line-only form missed.
+    text = textwrap.dedent(
+        """\
+        ## User Scenarios & Testing
+
+        ### User Story 1 - Do X (Priority: P1)
+
+        1. **Given** an attested writer
+           **When** a write occurs
+           **Then** an evidence id is recorded
+
+        ## Requirements
+
+        ### Functional Requirements
+
+        - **FR-001**: The system MUST do X.
+        """
+    )
+    _, criteria = parse_speckit(text)
+    gwt = [c for c in criteria if c.ident.startswith("US1-AS")]
+    assert len(gwt) == 1
+    assert scenario_has_gwt(gwt[0])
+    assert "an evidence id is recorded" in gwt[0].note
+
+
 def test_parse_speckit_bounds_each_story_block_at_the_next_story_heading() -> None:
     text = textwrap.dedent(
         """\

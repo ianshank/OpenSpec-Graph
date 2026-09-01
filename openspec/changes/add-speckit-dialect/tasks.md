@@ -144,7 +144,7 @@ Internal order matters — later steps depend on earlier ones passing first:
   G002/G003 are byte-unchanged for the existing harness/upstream fixtures.
 - **Gate:** `make test` — AC-SK-28..39, AC-SK-42.
 
-## Milestone 5 — Corpus validation
+## Milestone 5 — Corpus validation [DONE]
 
 - Collect/hand-author several real/representative spec-kit-shaped
   `spec.md` files.

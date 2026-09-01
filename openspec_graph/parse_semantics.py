@@ -54,9 +54,23 @@ USER_STORY_HEADING = re.compile(r"^###\s+User Story\s+(\d+)\b.*$", re.MULTILINE 
 # heading-per-scenario "#### Scenario:" form. A prose-scrape, not a rigid
 # heading match -- provisional until validated against real SpecKit output
 # (Milestone 5); any rule depending on it stays at WARN until then.
+#
+# Milestone 5 finding: a purely single-line version of this pattern missed a
+# realistic, equally-plausible SpecKit authoring style -- Given/When/Then
+# each on their own line within the same numbered item, e.g.:
+#     1. **Given** an attested writer
+#        **When** a write occurs
+#        **Then** an evidence id is recorded
+# DOTALL lets the inner spans cross newlines to catch that form too; the
+# trailing lookahead (rather than `\s*$`) stops the match at the next
+# numbered item, a blank line, or end of text, instead of running on into
+# unrelated later content once `.` matches `\n` -- verified against two
+# sequential multi-line scenarios and a scenario immediately followed by an
+# unrelated "## Requirements" section, neither bleeds into the other.
 GWT_SCENARIO = re.compile(
-    r"^\d+\.\s*(?:\*\*)?Given(?:\*\*)?\s+.+?(?:\*\*)?When(?:\*\*)?\s+.+?(?:\*\*)?Then(?:\*\*)?\s+.+?\s*$",
-    re.MULTILINE | re.IGNORECASE,
+    r"^\d+\.\s*(?:\*\*)?Given(?:\*\*)?\s+.+?(?:\*\*)?When(?:\*\*)?\s+.+?(?:\*\*)?Then(?:\*\*)?\s+"
+    r".+?(?=\n\s*\d+\.|\n\s*\n|\Z)",
+    re.MULTILINE | re.IGNORECASE | re.DOTALL,
 )
 
 # --- dialect classification (shared between detect.py and parse.py) --------
