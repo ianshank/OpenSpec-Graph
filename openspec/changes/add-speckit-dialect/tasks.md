@@ -75,7 +75,7 @@
   by this milestone).
 - **Gate:** `make test` — AC-SK-12..18, AC-SK-43.
 
-## Milestone 3 — CLI + graph.py wiring
+## Milestone 3 — CLI + graph.py wiring [DONE]
 
 - `openspec_graph/cli.py`: `cmd_validate`/`cmd_waivers` guards become
   `if not prof.openspec_root and not prof.speckit_root: ...; return 2`;

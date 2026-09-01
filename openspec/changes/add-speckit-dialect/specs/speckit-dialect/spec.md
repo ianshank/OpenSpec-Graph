@@ -492,49 +492,49 @@ a dedicated fix.
   (`rules.py` not yet touched). (R-SK-10)
   _Verified by:_ `pytest tests/test_decomposition.py` · stage: `make test` (test not yet written)
 
-- [ ] **AC-SK-19:** `cmd_validate` and `cmd_waivers` succeed against a
+- [x] **AC-SK-19:** `cmd_validate` and `cmd_waivers` succeed against a
   SpecKit-only repo (no `openspec/`, a content-gated `specs/` tree
   present), unioning discovered spec files. (R-SK-20)
-  _Verified by:_ `pytest -k test_cmd_validate_succeeds_on_a_speckit_only_repo` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_cmd_validate_succeeds_on_a_speckit_only_repo` · stage: `make test`
 
-- [ ] **AC-SK-20 (non-success):** `cmd_validate` and `cmd_waivers` still
+- [x] **AC-SK-20 (non-success):** `cmd_validate` and `cmd_waivers` still
   exit 2 on a repo with neither `openspec/` nor a content-gated `specs/`
   tree. (R-SK-20)
-  _Verified by:_ `pytest -k test_cmd_validate_exits_2_with_neither_openspec_nor_speckit` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_cmd_validate_exits_2_with_neither_openspec_nor_speckit` · stage: `make test`
 
-- [ ] **AC-SK-21:** `build_graph()` succeeds against a SpecKit-only repo —
+- [x] **AC-SK-21:** `build_graph()` succeeds against a SpecKit-only repo —
   the `NoOpenSpecTreeError` guard and file-gather receive the same union
   fix. (R-SK-21, DEC-SK-005)
-  _Verified by:_ `pytest -k test_build_graph_succeeds_on_a_speckit_only_repo` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_build_graph_succeeds_on_a_speckit_only_repo` · stage: `make test`
 
-- [ ] **AC-SK-22 (non-success):** `cmd_graph --change` still exits 2 on a
+- [x] **AC-SK-22 (non-success):** `cmd_graph --change` still exits 2 on a
   SpecKit-only repo with no `openspec/`, even though `speckit_root` is
   populated. (C-SK-5, DEC-SK-006)
-  _Verified by:_ `pytest -k test_cmd_graph_change_stays_openspec_only_on_a_speckit_only_repo` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_cmd_graph_change_stays_openspec_only_on_a_speckit_only_repo` · stage: `make test`
 
-- [ ] **AC-SK-23:** `--dialect` argparse choices include `"speckit"` on
+- [x] **AC-SK-23:** `--dialect` argparse choices include `"speckit"` on
   `validate` and `waivers`. (R-SK-22)
-  _Verified by:_ `pytest -k test_cli_dialect_choices_include_speckit_on_validate_and_waivers` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_cli_dialect_choices_include_speckit_on_validate_and_waivers` · stage: `make test`
 
-- [ ] **AC-SK-24 (non-success):** `--dialect` choices on `new` do not
+- [x] **AC-SK-24 (non-success):** `--dialect` choices on `new` do not
   include `"speckit"`; `graph` has no `--dialect` flag at all. (C-SK-6,
   DEC-SK-008)
-  _Verified by:_ `pytest -k test_cli_new_and_graph_do_not_gain_speckit_dialect_surface` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_cli_new_and_graph_do_not_gain_speckit_dialect_surface` · stage: `make test`
 
-- [ ] **AC-SK-25:** `cmd_detect`'s text output prints a
+- [x] **AC-SK-25:** `cmd_detect`'s text output prints a
   `specs/ (SpecKit)  present/ABSENT` line. (R-SK-23)
-  _Verified by:_ `pytest -k test_cmd_detect_text_output_reports_speckit_presence` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_cmd_detect_text_output_reports_speckit_presence` · stage: `make test`
 
-- [ ] **AC-SK-26 (non-success):** no `--feature` flag exists on any
+- [x] **AC-SK-26 (non-success):** no `--feature` flag exists on any
   subparser; `filter_speckit_by_feature()` is reachable only via direct
   import. (C-SK-7, DEC-SK-007)
-  _Verified by:_ `pytest -k test_no_feature_cli_flag_exists` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_no_feature_cli_flag_exists` · stage: `make test`
 
-- [ ] **AC-SK-27:** golden hashes for validate/graph in
+- [x] **AC-SK-27:** golden hashes for validate/graph in
   `test_decomposition.py` are unchanged for the canonical fixture repo
   (which has no `specs/` dir) after the CLI-wiring milestone. (R-SK-20,
   R-SK-21)
-  _Verified by:_ `pytest tests/test_decomposition.py` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest tests/test_decomposition.py` · stage: `make test`
 
 - [ ] **AC-SK-28:** `tests/test_rule_registry_docs.py`'s `_FAMILIES` tuple
   and README-table regex accept the `S` prefix, landed before

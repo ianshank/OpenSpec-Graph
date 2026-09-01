@@ -230,13 +230,19 @@ def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None)
     definition, cited by no living spec anywhere, so it isn't "content
     belonging to a different change" being leaked into a scoped picture.
     """
-    if not profile.openspec_root or not profile.openspec_root.is_dir():
+    has_openspec = bool(profile.openspec_root and profile.openspec_root.is_dir())
+    has_speckit = bool(profile.speckit_root and profile.speckit_root.is_dir())
+    if not has_openspec and not has_speckit:
         raise NoOpenSpecTreeError(
-            f"no openspec/ directory found at {profile.root / 'openspec'}; "
-            "run `planlint init` first"
+            f"no openspec/ directory found at {profile.root / 'openspec'} and no "
+            f"SpecKit specs/ tree found at {profile.root / 'specs'}; run `planlint init` first"
         )
 
-    all_spec_files = detect.find_spec_files(profile.openspec_root)
+    all_spec_files: list[Path] = []
+    if profile.openspec_root and has_openspec:
+        all_spec_files.extend(detect.find_spec_files(profile.openspec_root))
+    if profile.speckit_root and has_speckit:
+        all_spec_files.extend(detect.find_speckit_spec_files(profile.speckit_root))
     render_paths = set(all_spec_files) if spec_files is None else set(spec_files)
     known_stages = set(profile.make_targets)
     known_invariants = set(profile.invariant_ids)

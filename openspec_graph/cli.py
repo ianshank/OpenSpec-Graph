@@ -81,6 +81,24 @@ def _profile(args: argparse.Namespace) -> detect.StackProfile:
     return prof
 
 
+def _gather_spec_files(prof: detect.StackProfile) -> list[Path]:
+    """Every spec file under whichever discovery root(s) this profile has.
+
+    Single-sourced: both ``cmd_validate`` and ``cmd_waivers`` use this,
+    rather than each carrying its own copy of the union to drift apart
+    (mirrors ``filter_by_change``'s own stated reason for living in one
+    place). ``cmd_graph``'s unscoped path doesn't need this -- it delegates
+    the identical union to ``graph.build_graph()`` internally; its
+    ``--change``-scoped path stays openspec-only, deliberately (DEC-SK-006).
+    """
+    files: list[Path] = []
+    if prof.openspec_root:
+        files.extend(detect.find_spec_files(prof.openspec_root))
+    if prof.speckit_root:
+        files.extend(detect.find_speckit_spec_files(prof.speckit_root))
+    return files
+
+
 def cmd_detect(args: argparse.Namespace) -> int:
     prof = _profile(args)
 
@@ -118,6 +136,7 @@ def cmd_detect(args: argparse.Namespace) -> int:
     print(f"languages         {', '.join(prof.languages) or '(none detected)'}")
     print(f"make targets      {len(prof.make_targets)} found")
     print(f"openspec/         {'present' if prof.openspec_root else 'ABSENT — run ``planlint init``'}")
+    print(f"specs/ (SpecKit)  {'present' if prof.speckit_root else 'ABSENT'}")
     print(f"spec dialect      {prof.dialect}")
     print(f"change packages   {len(prof.change_dirs)}")
     print(f"coverage floor    {thr.value if thr else '(none)'}  from {thr.locator if thr else '(not found)'}")
@@ -125,7 +144,7 @@ def cmd_detect(args: argparse.Namespace) -> int:
     print(f"invariants        {len(prof.invariant_ids)} in {src}")
     print(f"focused stage     make {scaffold.pick_stage(prof)}")
     if prof.dialect == "mixed":
-        print("\nWARN  repo contains both spec dialects; validate will resolve per file.")
+        print("\nWARN  repo contains more than one spec dialect; validate will resolve per file.")
     if prof.make_target_confidence == "low":
         print(
             f"\nINFO  Makefile parsed with low confidence "
@@ -165,11 +184,14 @@ def cmd_new(args: argparse.Namespace) -> int:
 
 def cmd_validate(args: argparse.Namespace) -> int:
     prof = _profile(args)
-    if not prof.openspec_root:
-        print("no openspec/ directory; run ``planlint init`` first", file=sys.stderr)
+    if not prof.openspec_root and not prof.speckit_root:
+        print(
+            "no openspec/ directory and no SpecKit specs/ tree; run ``planlint init`` first",
+            file=sys.stderr,
+        )
         return 2
 
-    spec_files = detect.find_spec_files(prof.openspec_root)
+    spec_files = _gather_spec_files(prof)
     if args.change:
         spec_files = detect.filter_by_change(spec_files, args.change)
         if not spec_files:
@@ -325,11 +347,14 @@ def cmd_graph(args: argparse.Namespace) -> int:
 
 def cmd_waivers(args: argparse.Namespace) -> int:
     prof = _profile(args)
-    if not prof.openspec_root:
-        print("no openspec/ directory; run ``planlint init`` first", file=sys.stderr)
+    if not prof.openspec_root and not prof.speckit_root:
+        print(
+            "no openspec/ directory and no SpecKit specs/ tree; run ``planlint init`` first",
+            file=sys.stderr,
+        )
         return 2
 
-    spec_files = detect.find_spec_files(prof.openspec_root)
+    spec_files = _gather_spec_files(prof)
     specs = [parse_spec(path, args.dialect or prof.dialect) for path in spec_files]
     entries = ledger.build_ledger(specs, prof.root)
 
@@ -440,7 +465,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_val = sub.add_parser("validate", help="run the rule engine")
     p_val.add_argument("--change", help="limit to one change package")
-    p_val.add_argument("--dialect", choices=["harness", "upstream", "auto"])
+    p_val.add_argument("--dialect", choices=["harness", "upstream", "speckit", "auto"])
     p_val.add_argument("--fail-on", choices=["INFO", "WARN", "ERROR"], default="ERROR")
     p_val.add_argument("--json", action="store_true")
     p_val.add_argument(
@@ -464,7 +489,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_graph.set_defaults(func=cmd_graph)
 
     p_waivers = sub.add_parser("waivers", help="list every waived rule across the tree")
-    p_waivers.add_argument("--dialect", choices=["harness", "upstream", "auto"])
+    p_waivers.add_argument("--dialect", choices=["harness", "upstream", "speckit", "auto"])
     p_waivers.add_argument("--format", choices=["text", "json"], default="text")
     p_waivers.set_defaults(func=cmd_waivers)
 
