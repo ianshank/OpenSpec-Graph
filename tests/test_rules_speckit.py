@@ -131,18 +131,18 @@ def test_s003_does_not_fire_on_a_normative_requirement(repo: Path) -> None:
 
 
 def _minimal_speckit_spec(**overrides: object) -> parse_model.ParsedSpec:
-    defaults: dict[str, object] = dict(
-        path=Path("spec.md"),
-        dialect="speckit",
-        sections=(),
-        status=None,
-        requirements=(),
-        criteria=(),
-        make_refs=(),
-        invariant_refs=(),
-        hard_coded_thresholds=(),
-        delta_headers=(),
-    )
+    defaults: dict[str, object] = {
+        "path": Path("spec.md"),
+        "dialect": "speckit",
+        "sections": (),
+        "status": None,
+        "requirements": (),
+        "criteria": (),
+        "make_refs": (),
+        "invariant_refs": (),
+        "hard_coded_thresholds": (),
+        "delta_headers": (),
+    }
     defaults.update(overrides)
     return parse_model.ParsedSpec(**defaults)  # type: ignore[arg-type]
 

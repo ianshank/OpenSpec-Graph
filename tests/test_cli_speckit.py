@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.support import run_cli, write_speckit_spec, write_spec
+from tests.support import run_cli, write_spec, write_speckit_spec
 
 GOOD_SPECKIT = textwrap.dedent(
     """\

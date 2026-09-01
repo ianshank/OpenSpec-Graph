@@ -17,7 +17,7 @@ import pytest
 
 from openspec_graph import detect, parse_semantics
 from tests import support
-from tests.support import write_speckit_spec, write_spec
+from tests.support import write_spec, write_speckit_spec
 
 _CAN_SYMLINK = support.supports_symlinks()
 
