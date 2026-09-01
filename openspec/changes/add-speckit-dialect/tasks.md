@@ -20,13 +20,17 @@
 - New `tests/test_detect_speckit.py`: fingerprint gating (positive and
   content-gated-negative cases), coexistence of both roots, 3-way
   `detect_dialect()` classification including a genuine three-way
-  `"mixed"` case, byte-identity on the existing two-dialect golden fixture.
+  `"mixed"` case, byte-identity on the existing two-dialect golden fixture,
+  confirmation that `detect.py`/`parse.py` share one predicate
+  implementation (no duplicated marker strings), and that
+  `find_speckit_spec_files()`'s glob never returns a `plan.md`/`tasks.md`
+  sibling.
 - `tests/test_dialect_card.py` extended for the two new card fields.
 - `tests/test_graft.py` (or the relevant `StackProfile`-construction test
   module) extended, mirroring
   `test_stack_profile_construction_still_works_without_witness_fields`, for
   the new speckit fields.
-- **Gate:** `make test` — AC-SK-1..11.
+- **Gate:** `make test` — AC-SK-1..11, AC-SK-41, AC-SK-44.
 
 ## Milestone 2 — `parse_speckit.py` + dispatch fix
 
@@ -49,11 +53,12 @@
 - New `tests/fixtures/good_speckit.md`.
 - New `tests/test_parse_speckit.py`: FR/SC mapping, user-story GWT
   synthesis, the escape hatch (and its asymmetry), empty
-  `requirement_refs`.
+  `requirement_refs`, and a source-inspection check that the dispatch
+  stays `if`/`elif`-shaped (no dict/registry backing it).
 - Confirm golden hashes for validate/graph/rules in
   `tests/test_decomposition.py` are unchanged (`rules.py` not yet touched
   by this milestone).
-- **Gate:** `make test` — AC-SK-12..18.
+- **Gate:** `make test` — AC-SK-12..18, AC-SK-43.
 
 ## Milestone 3 — CLI + graph.py wiring
 
@@ -86,7 +91,8 @@ Internal order matters — later steps depend on earlier ones passing first:
    before anything else — otherwise this repo's own doc-drift discipline
    silently validates nothing about the new family.
 2. Add `openspec_graph/rules_speckit.py` (S001-S004); wire `SPECKIT_RULES`
-   into `rules.py`'s `NON_WITNESS_RULES`.
+   into `rules.py`'s `NON_WITNESS_RULES` as a pure append (confirm
+   `GENERIC_RULES`/`HARNESS_RULES`/`UPSTREAM_RULES` are unchanged).
 3. Apply the mandatory G002/G003 fix in `openspec_graph/rules_generic.py`:
    G002's `dialects` narrows to `("harness", "upstream")`; G003 exempts the
    `## Success Criteria` section body from the hard-coded-threshold scan
@@ -109,7 +115,7 @@ Internal order matters — later steps depend on earlier ones passing first:
   severity; new G002/G003 fixture cases for a positive-only /
   Success-Criteria-percentage speckit spec; a regression case confirming
   G002/G003 are byte-unchanged for the existing harness/upstream fixtures.
-- **Gate:** `make test` — AC-SK-28..39.
+- **Gate:** `make test` — AC-SK-28..39, AC-SK-42.
 
 ## Milestone 5 — Corpus validation
 

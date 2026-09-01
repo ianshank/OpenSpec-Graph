@@ -16,7 +16,7 @@ writes files at `specs/<NNN-feature>/spec.md` at the repo root — no
 `openspec/` ancestor at all — in a materially different grammar
 (`FR-00N`/`SC-00N` identifiers, no delta/ADDED-MODIFIED-REMOVED concept,
 Given/When/Then as inline prose inside prioritized user stories rather than a
-dedicated `#### Scenario:` heading). Every `planlint` verb that touches specs
+dedicated level-4 `Scenario:` heading). Every `planlint` verb that touches specs
 hard-fails before any dialect logic runs: a SpecKit-only repo is invisible to
 `planlint`, not mis-parsed.
 
@@ -283,7 +283,7 @@ a dedicated fix.
   S004 is WARN, not ERROR, specifically because `GWT_SCENARIO` is a
   prose-scrape unvalidated against real SpecKit corpus content — held
   below U003's ERROR precedent (which enforces the analogous GWT-shape
-  check for upstream, where the corresponding `#### Scenario:` heading
+  check for upstream, where the corresponding level-4 `Scenario:` heading
   match is a rigid, already-validated regex, not a prose scrape) until
   Milestone 5 validates it against real content.
 - **DEC-SK-020:** the G002/G003 fix is mandatory for this change to ship at
@@ -441,7 +441,8 @@ a dedicated fix.
 
 - [ ] **AC-SK-27:** golden hashes for validate/graph in
   `test_decomposition.py` are unchanged for the canonical fixture repo
-  (which has no `specs/` dir) after the CLI-wiring milestone.
+  (which has no `specs/` dir) after the CLI-wiring milestone. (R-SK-20,
+  R-SK-21)
   _Verified by:_ `pytest tests/test_decomposition.py` · stage: `make test` (test not yet written)
 
 - [ ] **AC-SK-28:** `tests/test_rule_registry_docs.py`'s `_FAMILIES` tuple
@@ -505,6 +506,31 @@ a dedicated fix.
   findings end to end. (Milestone 5, R-SK-27)
   _Verified by:_ `pytest -k test_good_speckit_fixture_has_no_unexpected_findings` · stage: `make test` (test not yet written)
 
+- [ ] **AC-SK-41:** `parse.py` no longer contains its own copies of the
+  upstream/harness marker-string checks; `detect.detect_dialect()` and
+  `parse.parse_spec()`'s pre-resolution branch both call the same
+  `is_upstream_marked`/`is_harness_marked`/`is_speckit_marked` functions
+  imported from `parse_semantics.py`. (R-SK-7)
+  _Verified by:_ `pytest -k test_marker_predicates_are_not_duplicated_between_detect_and_parse` · stage: `make test` (test not yet written)
+
+- [ ] **AC-SK-42:** `rules.RULES` contains every `SPECKIT_RULES` entry, and
+  `NON_WITNESS_RULES` is exactly `GENERIC_RULES + HARNESS_RULES +
+  UPSTREAM_RULES + SPECKIT_RULES` — an append, not an interleave or a
+  replacement of any existing family. (R-SK-17)
+  _Verified by:_ `pytest -k test_rules_py_registers_speckit_rules_additively` · stage: `make test` (test not yet written)
+
+- [ ] **AC-SK-43 (non-success):** `inspect.getsource(parse.parse_spec)`
+  still shows explicit `if`/`elif` comparisons against the three dialect
+  string literals — no dict/mapping keyed by dialect name backs the
+  dispatch. (C-SK-2)
+  _Verified by:_ `pytest -k test_parse_spec_dispatch_is_not_dict_based` · stage: `make test` (test not yet written)
+
+- [ ] **AC-SK-44 (non-success):** `find_speckit_spec_files()`'s glob
+  matches `spec.md` only; a `plan.md`/`tasks.md` sibling in the same
+  feature directory is never returned by discovery and never reaches a
+  parser. (C-SK-10)
+  _Verified by:_ `pytest -k test_speckit_discovery_never_returns_plan_or_tasks_md` · stage: `make test` (test not yet written)
+
 ---
 
 ## Invariants Touched
@@ -516,5 +542,5 @@ spec.
 
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
-| Focused | `make test` | AC-SK-1..40 |
+| Focused | `make test` | AC-SK-1..44 |
 | Full | `make pre-pr` | full regression, lint, typecheck, security, docs, no-hardcoded-thresholds |

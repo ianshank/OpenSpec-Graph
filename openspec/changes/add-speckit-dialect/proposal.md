@@ -8,7 +8,7 @@ GitHub's SpecKit tool writes files at `specs/<NNN-feature>/spec.md` at the
 repo root (no `openspec/` ancestor at all) in a materially different grammar
 (`FR-00N`/`SC-00N` identifiers, no delta/ADDED-MODIFIED-REMOVED concept,
 Given/When/Then as inline prose inside prioritized user stories, not a
-dedicated `#### Scenario:` heading). A SpecKit-only repo is currently
+dedicated level-4 `Scenario:` heading). A SpecKit-only repo is currently
 **invisible** to `planlint`, not mis-parsed — it never gets past the
 `openspec/`-only gate to be parsed at all.
 
@@ -89,8 +89,8 @@ assumption a second time, independently of `cli.py`.
   prose inside `### User Story N` blocks → synthesized `Criterion` entries
   (`US<n>-AS<m>` ids), reusing the existing `parse.scenario_has_gwt()`
   rather than reimplementing WHEN/THEN detection. `GWT_SCENARIO` is a
-  prose-scrape, not a rigid heading match like upstream's `#### Scenario:`
-  — treated as provisional until validated against real corpus content
+  prose-scrape, not a rigid heading match like upstream's level-4
+  `Scenario:` heading — treated as provisional until validated against real corpus content
   (Milestone 5). `Criterion.requirement_refs` stays honestly empty for
   SpecKit-derived entries: no FR↔SC citation convention exists in SpecKit's
   grammar, and synthesizing a fake link would make an orphan-requirement
