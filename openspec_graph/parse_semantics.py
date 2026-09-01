@@ -41,6 +41,24 @@ SUPPRESS = re.compile(r"<!--\s*specgraph:allow\s+([A-Z]\d{3}(?:\s*,\s*[A-Z]\d{3}
 FR_ID = re.compile(r"\bFR-\d+\b")
 SC_ID = re.compile(r"\bSC-\d+\b")
 
+# `- **FR-001**: text` / `- **SC-001**: text` -- anchored so a sibling bullet
+# like `- **NFR-001**: text` (a plausible "Non-Functional Requirements"
+# subsection) cannot match: `\*\*(FR-\d+)` requires the literal `F`
+# immediately after the opening `**`, not after an `N`.
+FR_DECL = re.compile(r"^-\s*\*\*(FR-\d+)\*\*\s*:\s*(.+?)\s*$", re.MULTILINE)
+SC_DECL = re.compile(r"^-\s*\*\*(SC-\d+)\*\*\s*:\s*(.+?)\s*$", re.MULTILINE)
+NEEDS_CLARIFICATION = re.compile(r"\[NEEDS CLARIFICATION(?:\s*:\s*(.*?))?\]", re.IGNORECASE)
+USER_STORY_HEADING = re.compile(r"^###\s+User Story\s+(\d+)\b.*$", re.MULTILINE | re.IGNORECASE)
+# "1. **Given** ..., **When** ..., **Then** ..." -- SpecKit's own documented
+# inline-prose acceptance-scenario convention, distinct from upstream's
+# heading-per-scenario "#### Scenario:" form. A prose-scrape, not a rigid
+# heading match -- provisional until validated against real SpecKit output
+# (Milestone 5); any rule depending on it stays at WARN until then.
+GWT_SCENARIO = re.compile(
+    r"^\d+\.\s*(?:\*\*)?Given(?:\*\*)?\s+.+?(?:\*\*)?When(?:\*\*)?\s+.+?(?:\*\*)?Then(?:\*\*)?\s+.+?\s*$",
+    re.MULTILINE | re.IGNORECASE,
+)
+
 # --- dialect classification (shared between detect.py and parse.py) --------
 # Single source of truth for "does this text look like dialect X". Previously
 # duplicated independently in detect.py's detect_dialect() and parse.py's

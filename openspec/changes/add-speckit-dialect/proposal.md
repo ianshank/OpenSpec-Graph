@@ -75,8 +75,9 @@ assumption a second time, independently of `cli.py`.
   `**NFR-001**:` bullet can't match), `NEEDS_CLARIFICATION`,
   `USER_STORY_HEADING`, `GWT_SCENARIO`.
 - **`openspec_graph/detect.py`** — `detect_dialect()` becomes a 3-way marker
-  sniff: `is_speckit_marked` fires on (`### Functional Requirements` +
-  `FR_ID` match) or (`## Success Criteria` + `SC_ID` match). `"mixed"`
+  sniff: `is_speckit_marked` fires on (a level-3 `Functional Requirements`
+  heading + `FR_ID` match) or (a level-2 `Success Criteria` heading +
+  `SC_ID` match). `"mixed"`
   generalizes to `present > 1` across all three predicates (not an
   enumerated set of pairwise combinations). `[NEEDS CLARIFICATION]` is
   deliberately **not** the fingerprint — it's transient by design; a clean,
@@ -96,8 +97,9 @@ assumption a second time, independently of `cli.py`.
 - **`openspec_graph/parse_speckit.py`** (new) — mirrors
   `parse_upstream.py`/`parse_harness.py`'s shape:
   `parse_speckit(text) -> tuple[tuple[Requirement,...], tuple[Criterion,...]]`.
-  `FR-00N` bullets under `### Functional Requirements` → `Requirement`;
-  `SC-00N` bullets under `## Success Criteria` → `Criterion`; Given/When/Then
+  `FR-00N` bullets under a level-3 `Functional Requirements` heading →
+  `Requirement`; `SC-00N` bullets under a level-2 `Success Criteria` heading
+  → `Criterion`; Given/When/Then
   prose inside `### User Story N` blocks → synthesized `Criterion` entries
   (`US<n>-AS<m>` ids), reusing the existing `parse.scenario_has_gwt()`
   rather than reimplementing WHEN/THEN detection. `GWT_SCENARIO` is a
@@ -139,7 +141,7 @@ assumption a second time, independently of `cli.py`.
     section metadata to recover after the fact. The real fix lives one
     layer down, where the extraction happens: `hard_coded(text)` in
     `parse_semantics.py` gains a `dialect: str = ""` parameter and exempts
-    the `## Success Criteria` section body (blank-the-span, same
+    the level-2 `Success Criteria` section body (blank-the-span, same
     technique `strip_waiver_comments()` already uses) when
     `dialect == "speckit"`; `parse.py::parse_spec()`'s one call site
     (`hard_coded_thresholds=hard_coded(text)`) is updated to

@@ -47,7 +47,7 @@
   the new speckit fields.
 - **Gate:** `make test` — AC-SK-1..11, AC-SK-41, AC-SK-44..47.
 
-## Milestone 2 — `parse_speckit.py` + dispatch fix
+## Milestone 2 — `parse_speckit.py` + dispatch fix [DONE]
 
 - `openspec_graph/parse_semantics.py`: grammar regexes `FR_DECL`, `SC_DECL`
   (anchored against a sibling `**NFR-001**:` bullet false-matching),
@@ -115,8 +115,8 @@ Internal order matters — later steps depend on earlier ones passing first:
    - `openspec_graph/rules_generic.py`: G002's `dialects` narrows to
      `("harness", "upstream")`.
    - `openspec_graph/parse_semantics.py`: `hard_coded(text)` gains a
-     `dialect: str = ""` parameter and exempts the `## Success Criteria`
-     section body from the hard-coded-threshold scan when
+     `dialect: str = ""` parameter and exempts the level-2 `Success
+     Criteria` section body from the hard-coded-threshold scan when
      `dialect == "speckit"`, using the same blank-span technique
      `strip_waiver_comments()` already uses. `rules_generic.py`'s
      `_hard_coded_threshold` check function itself is unchanged — it only

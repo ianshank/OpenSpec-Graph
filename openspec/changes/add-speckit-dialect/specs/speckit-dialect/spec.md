@@ -86,8 +86,9 @@ a dedicated fix.
   call, replacing the two independently duplicated marker-string checks that
   exist today (`detect.py:413-416`, `parse.py:66-71`).
 - R-SK-8: `detect_dialect()` MUST classify a spec file as speckit-marked when
-  it contains `### Functional Requirements` together with an `FR-\d+` id, or
-  `## Success Criteria` together with an `SC-\d+` id.
+  it contains a level-3 `Functional Requirements` heading together with an
+  `FR-\d+` id, or a level-2 `Success Criteria` heading together with an
+  `SC-\d+` id.
 - R-SK-9: `detect_dialect()` MUST report `"mixed"` whenever more than one of
   the three dialect predicates matches across the tree's spec files
   (`present > 1`), not via an enumerated set of pairwise combinations.
@@ -103,9 +104,10 @@ a dedicated fix.
 - R-SK-13: `parse_speckit(text)` MUST return the same
   `(tuple[Requirement,...], tuple[Criterion,...])` shape
   `parse_harness()`/`parse_upstream()` already return.
-- R-SK-14: `parse_speckit()` MUST map each `FR-00N` bullet under
-  `### Functional Requirements` to a `Requirement`, each `SC-00N` bullet
-  under `## Success Criteria` to a `Criterion`, and Given/When/Then prose
+- R-SK-14: `parse_speckit()` MUST map each `FR-00N` bullet under a level-3
+  `Functional Requirements` heading to a `Requirement`, each `SC-00N` bullet
+  under a level-2 `Success Criteria` heading to a `Criterion`, and
+  Given/When/Then prose
   inside each `### User Story N` block to a synthesized `Criterion` with a
   `US<n>-AS<m>` id, reusing `parse.scenario_has_gwt()` for WHEN/THEN
   detection rather than a new implementation.
@@ -128,7 +130,7 @@ a dedicated fix.
 - R-SK-18 (mandatory fix): G002's `dialects` tuple MUST narrow from
   `("*",)` to `("harness", "upstream")`.
 - R-SK-19 (mandatory fix): the hard-coded-threshold scan MUST exempt the
-  `## Success Criteria` section body when `dialect == "speckit"`. This is
+  level-2 `Success Criteria` section body when `dialect == "speckit"`. This is
   NOT a change to `rules_generic.py`'s `_hard_coded_threshold` check
   function — `HARD_THRESHOLD`, `THRESHOLD_ALLOWLIST`, and the scanning
   function itself all live in `parse_semantics.py::hard_coded(text)`
@@ -373,8 +375,8 @@ a dedicated fix.
   example above replaces it. G003's failure mode is unaffected — the
   same bare-percentage bullet trips `HARD_THRESHOLD` regardless of
   phrasing.)
-- **DEC-SK-022:** G003's fix exempts only the `## Success Criteria` section
-  body, using the same blank-the-span-preserve-line-numbers technique
+- **DEC-SK-022:** G003's fix exempts only the level-2 `Success Criteria`
+  section body, using the same blank-the-span-preserve-line-numbers technique
   `strip_waiver_comments()` already uses in `parse_semantics.py`, when
   `dialect == "speckit"`. Zero behavior change for harness/upstream, since
   neither existing fixture (`good_harness.md`, `good_upstream.md`) has that
@@ -425,8 +427,8 @@ a dedicated fix.
   _Verified by:_ `pytest -k test_profile_supports_both_openspec_root_and_speckit_root_together` · stage: `make test`
 
 - [x] **AC-SK-7:** `detect_dialect()` classifies a spec file as speckit
-  given `### Functional Requirements` + an `FR-\d+` id, or
-  `## Success Criteria` + an `SC-\d+` id. (R-SK-8)
+  given a level-3 `Functional Requirements` heading + an `FR-\d+` id, or
+  a level-2 `Success Criteria` heading + an `SC-\d+` id. (R-SK-8)
   _Verified by:_ `pytest -k test_detect_dialect_classifies_speckit_markers` · stage: `make test`
 
 - [x] **AC-SK-8:** `detect_dialect()` reports `"mixed"` when a tree contains
@@ -457,33 +459,33 @@ a dedicated fix.
   DEC-SK-004)
   _Verified by:_ `pytest -k test_to_card_never_exposes_raw_speckit_root_path` · stage: `make test`
 
-- [ ] **AC-SK-12:** `parse_spec()` dispatches `dialect == "speckit"` to
+- [x] **AC-SK-12:** `parse_spec()` dispatches `dialect == "speckit"` to
   `parse_speckit()` via its own explicit branch. (R-SK-11)
   _Verified by:_ `pytest -k test_parse_spec_dispatches_speckit_to_its_own_parser` · stage: `make test` (test not yet written)
 
-- [ ] **AC-SK-13:** `parse_spec()`'s `mixed`/`unknown`/`auto` resolution
+- [x] **AC-SK-13:** `parse_spec()`'s `mixed`/`unknown`/`auto` resolution
   checks upstream, then speckit, then harness, matching
   `detect_dialect()`'s own precedence. (R-SK-12)
   _Verified by:_ `pytest -k test_parse_spec_auto_resolution_checks_upstream_then_speckit_then_harness` · stage: `make test` (test not yet written)
 
-- [ ] **AC-SK-14:** `parse_speckit()` maps `FR-00N` bullets to `Requirement`
+- [x] **AC-SK-14:** `parse_speckit()` maps `FR-00N` bullets to `Requirement`
   entries and `SC-00N` bullets to `Criterion` entries. (R-SK-13, R-SK-14)
-  _Verified by:_ `pytest -k test_parse_speckit_maps_fr_and_sc_ids` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_parse_speckit_maps_fr_and_sc_ids` · stage: `make test`
 
-- [ ] **AC-SK-15:** `parse_speckit()` synthesizes `US<n>-AS<m>` `Criterion`
+- [x] **AC-SK-15:** `parse_speckit()` synthesizes `US<n>-AS<m>` `Criterion`
   entries from Given/When/Then prose inside a `### User Story N` block,
   using `scenario_has_gwt()` unmodified. (R-SK-14, DEC-SK-015)
-  _Verified by:_ `pytest -k test_parse_speckit_synthesizes_user_story_criteria` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_parse_speckit_synthesizes_user_story_criteria` · stage: `make test`
 
-- [ ] **AC-SK-16 (non-success):** the speckit branch's escape hatch
+- [x] **AC-SK-16 (non-success):** the speckit branch's escape hatch
   reclassifies an empty speckit-parse spec containing an upstream
   `### Requirement:` heading as upstream; no reciprocal hatch reclassifies
   a harness-dispatched spec as speckit. (R-SK-15, DEC-SK-014)
-  _Verified by:_ `pytest -k "test_speckit_branch_rescues_to_upstream or test_no_reciprocal_speckit_rescue_hatch_for_harness"` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k "test_speckit_branch_rescues_to_upstream or test_no_reciprocal_speckit_rescue_hatch_for_harness"` · stage: `make test`
 
-- [ ] **AC-SK-17 (non-success):** every `Criterion` `parse_speckit()`
+- [x] **AC-SK-17 (non-success):** every `Criterion` `parse_speckit()`
   produces has an empty `requirement_refs` tuple. (C-SK-3, DEC-SK-016)
-  _Verified by:_ `pytest -k test_speckit_criteria_have_no_requirement_refs` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_speckit_criteria_have_no_requirement_refs` · stage: `make test`
 
 - [ ] **AC-SK-18:** golden hashes for validate/graph/rules in
   `test_decomposition.py` are unchanged after the parser milestone
@@ -560,8 +562,8 @@ a dedicated fix.
   _Verified by:_ `pytest -k test_g002_does_not_fire_on_a_positive_only_speckit_spec` · stage: `make test` (test not yet written)
 
 - [ ] **AC-SK-34 (non-success):** a conventional
-  `SC-001: 95% of new users...` bullet under `## Success Criteria` in a
-  speckit-dialect spec does not trigger G003. (R-SK-19, DEC-SK-022)
+  `SC-001: 95% of new users...` bullet under a level-2 `Success Criteria`
+  heading in a speckit-dialect spec does not trigger G003. (R-SK-19, DEC-SK-022)
   _Verified by:_ `pytest -k test_g003_does_not_fire_on_a_success_criteria_percentage` · stage: `make test` (test not yet written)
 
 - [ ] **AC-SK-35 (non-success):** G002/G003 behavior on the existing
@@ -595,12 +597,12 @@ a dedicated fix.
   findings end to end. (Milestone 5, R-SK-27)
   _Verified by:_ `pytest -k test_good_speckit_fixture_has_no_unexpected_findings` · stage: `make test` (test not yet written)
 
-- [ ] **AC-SK-41:** `parse.py` no longer contains its own copies of the
+- [x] **AC-SK-41:** `parse.py` no longer contains its own copies of the
   upstream/harness marker-string checks; `detect.detect_dialect()` and
   `parse.parse_spec()`'s pre-resolution branch both call the same
   `is_upstream_marked`/`is_harness_marked`/`is_speckit_marked` functions
   imported from `parse_semantics.py`. (R-SK-7)
-  _Verified by:_ `pytest -k test_marker_predicates_are_not_duplicated_between_detect_and_parse` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k "test_detect_dialect_uses_shared_marker_predicates_not_local_copies or test_parse_py_uses_shared_marker_predicates_not_local_copies"` · stage: `make test`
 
 - [ ] **AC-SK-42:** `rules.RULES` contains every `SPECKIT_RULES` entry, and
   `NON_WITNESS_RULES` is exactly `GENERIC_RULES + HARNESS_RULES +
