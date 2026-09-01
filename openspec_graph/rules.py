@@ -6,6 +6,7 @@ Decomposed into focused modules; this file is the facade/registry:
 - :mod:`rules_generic` — universal rules G001-G009.
 - :mod:`rules_harness` — harness-dialect rules H001-H006.
 - :mod:`rules_upstream` — upstream-dialect rules U001-U005.
+- :mod:`rules_speckit` — speckit-dialect rules S001-S004.
 - :mod:`rules_witness` — witness-mode rules W001-W002, evaluated only under
   ``--require-witness`` (``NON_WITNESS_RULES``/``evaluate(rule_set=...)``).
 
@@ -30,6 +31,7 @@ from .parse import ParsedSpec
 from .rule_types import ERROR, INFO, WARN, Finding, Rule
 from .rules_generic import GENERIC_RULES
 from .rules_harness import HARNESS_RULES
+from .rules_speckit import SPECKIT_RULES
 from .rules_upstream import UPSTREAM_RULES
 from .rules_witness import WITNESS_RULES
 
@@ -50,7 +52,7 @@ __all__ = [
 # (witnesses get no graph representation and no broken_links contribution,
 # ever, DEC-WM-013) and cmd_validate falls back to when --require-witness
 # isn't set (DEC-WM-007). Declared before RULES so RULES can build on it.
-NON_WITNESS_RULES: tuple[Rule, ...] = GENERIC_RULES + HARNESS_RULES + UPSTREAM_RULES
+NON_WITNESS_RULES: tuple[Rule, ...] = GENERIC_RULES + HARNESS_RULES + UPSTREAM_RULES + SPECKIT_RULES
 RULES: tuple[Rule, ...] = NON_WITNESS_RULES + WITNESS_RULES
 
 # G007 (a waiver must state a reason) cannot be silenced by naming itself in

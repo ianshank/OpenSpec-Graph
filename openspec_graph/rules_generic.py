@@ -143,7 +143,13 @@ def _orphan_adr_registry_stub(_s: ParsedSpec, _p: StackProfile) -> Iterable[str]
 
 GENERIC_RULES: tuple[Rule, ...] = (
     Rule("G001", ERROR, ("*",), "spec declares verifiable criteria", _no_criteria),
-    Rule("G002", ERROR, ("*",), "at least one non-success criterion", _needs_negative),
+    Rule(
+        "G002",
+        ERROR,
+        ("harness", "upstream"),
+        "at least one non-success criterion",
+        _needs_negative,
+    ),
     Rule("G003", ERROR, ("*",), "no hard-coded thresholds", _hard_coded_threshold),
     Rule("G004", ERROR, ("*",), "cited make targets exist", _unknown_make_target),
     Rule("G005", WARN, ("*",), "cited invariants are declared", _unknown_invariant),

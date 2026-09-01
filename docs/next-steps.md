@@ -20,7 +20,7 @@ over-engineering.
    external consumer of the saved JSON, not a core-projection change) is the
    template to follow.
 
-3. **Rule-pack plugins** — today the 22 rules are a fixed tuple. If a target
+3. **Rule-pack plugins** — today the 26 rules are a fixed tuple. If a target
    repo needs a custom convention (e.g. "every AC cites a JIRA ticket"), allow
    registering extra `Rule` objects via entry points. The deterministic
    contract (sorted, byte-stable JSON) must hold for plugins too.
@@ -90,7 +90,7 @@ it is not cargo-culted into the v0.1 surface.
 
 ## Skills / agents
 
-13. **Rules as reusable skills** — the 22 rules already are the reusable
+13. **Rules as reusable skills** — the 26 rules already are the reusable
     "skills" and the evaluator is the deterministic harness (see
     `docs/agents-skills-harness.md`). The future extension point for composing
     rule packs across repos is item 3 (entry-point `Rule` registration). No

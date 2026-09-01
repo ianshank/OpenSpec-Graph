@@ -536,58 +536,58 @@ a dedicated fix.
   R-SK-21)
   _Verified by:_ `pytest tests/test_decomposition.py` · stage: `make test`
 
-- [ ] **AC-SK-28:** `tests/test_rule_registry_docs.py`'s `_FAMILIES` tuple
+- [x] **AC-SK-28:** `tests/test_rule_registry_docs.py`'s `_FAMILIES` tuple
   and README-table regex accept the `S` prefix, landed before
   `rules_speckit.py` is registered into `rules.py`. (R-SK-25)
-  _Verified by:_ `pytest tests/test_rule_registry_docs.py` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest tests/test_rule_registry_docs.py` · stage: `make test`
 
-- [ ] **AC-SK-29:** S001 fires on an unresolved `[NEEDS CLARIFICATION]`
+- [x] **AC-SK-29:** S001 fires on an unresolved `[NEEDS CLARIFICATION]`
   marker. (R-SK-16)
-  _Verified by:_ `pytest -k test_s001_fires_on_unresolved_needs_clarification` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_s001_fires_on_unresolved_needs_clarification` · stage: `make test`
 
-- [ ] **AC-SK-30:** S002 fires on a duplicate `FR-`/`SC-` identifier.
+- [x] **AC-SK-30:** S002 fires on a duplicate `FR-`/`SC-` identifier.
   (R-SK-16)
-  _Verified by:_ `pytest -k test_s002_fires_on_duplicate_fr_or_sc_id` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_s002_fires_on_duplicate_fr_or_sc_id` · stage: `make test`
 
-- [ ] **AC-SK-31:** S003 fires on a requirement with no SHALL/MUST.
+- [x] **AC-SK-31:** S003 fires on a requirement with no SHALL/MUST.
   (R-SK-16)
-  _Verified by:_ `pytest -k test_s003_fires_on_a_non_normative_requirement` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_s003_fires_on_a_non_normative_requirement` · stage: `make test`
 
-- [ ] **AC-SK-32 (non-success):** S004 fires at WARN, not ERROR, on a
+- [x] **AC-SK-32 (non-success):** S004 fires at WARN, not ERROR, on a
   scenario missing WHEN/THEN. (R-SK-16, R-SK-27, DEC-SK-019)
-  _Verified by:_ `pytest -k test_s004_fires_at_warn_not_error` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_s004_fires_at_warn_not_error` · stage: `make test`
 
-- [ ] **AC-SK-33 (non-success):** a SpecKit spec with only positive-phrased
+- [x] **AC-SK-33 (non-success):** a SpecKit spec with only positive-phrased
   Success Criteria does not trigger G002. (R-SK-18, DEC-SK-021)
-  _Verified by:_ `pytest -k test_g002_does_not_fire_on_a_positive_only_speckit_spec` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_g002_does_not_fire_on_a_positive_only_speckit_spec` · stage: `make test`
 
-- [ ] **AC-SK-34 (non-success):** a conventional
+- [x] **AC-SK-34 (non-success):** a conventional
   `SC-001: 95% of new users...` bullet under a level-2 `Success Criteria`
   heading in a speckit-dialect spec does not trigger G003. (R-SK-19, DEC-SK-022)
-  _Verified by:_ `pytest -k test_g003_does_not_fire_on_a_success_criteria_percentage` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_g003_does_not_fire_on_a_success_criteria_percentage` · stage: `make test`
 
-- [ ] **AC-SK-35 (non-success):** G002/G003 behavior on the existing
+- [x] **AC-SK-35 (non-success):** G002/G003 behavior on the existing
   harness/upstream fixtures (`good_harness.md`, `good_upstream.md`) is
   byte-unchanged. (C-SK-8)
-  _Verified by:_ `pytest -k "test_g002 or test_g003"` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k "test_g002 or test_g003"` · stage: `make test`
 
-- [ ] **AC-SK-36:** README's rules table, `c4.md`'s module map + rule count
+- [x] **AC-SK-36:** README's rules table, `c4.md`'s module map + rule count
   + range comment, `docs/agents-skills-harness.md`, `docs/next-steps.md`,
   and `docs/differentiation-roadmap.md` all match `rules.RULES` including
   the new `S` family. (R-SK-24)
-  _Verified by:_ `pytest tests/test_rule_registry_docs.py` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest tests/test_rule_registry_docs.py` · stage: `make test`
 
-- [ ] **AC-SK-37:** `tests/baseline_rules.json` is regenerated and
+- [x] **AC-SK-37:** `tests/baseline_rules.json` is regenerated and
   `_EXPECTED_HASHES["rules"]` is re-pinned; `["validate"]`/`["graph"]`
   hashes stay unchanged, confirmed empirically. (R-SK-26)
   _Verified by:_ `pytest tests/test_decomposition.py` · stage: `make test` (test not yet written)
 
-- [ ] **AC-SK-38 (non-success):** no "orphaned requirement" rule exists for
+- [x] **AC-SK-38 (non-success):** no "orphaned requirement" rule exists for
   the speckit dialect; `planlint rules --json` lists exactly S001-S004 as
   the new speckit family. (C-SK-4, DEC-SK-017)
   _Verified by:_ `pytest -k test_no_orphan_requirement_rule_exists_for_speckit` · stage: `make test` (test not yet written)
 
-- [ ] **AC-SK-39 (non-success):** `scaffold.py`/`scaffold_templates.py` are
+- [x] **AC-SK-39 (non-success):** `scaffold.py`/`scaffold_templates.py` are
   untouched by this change; `planlint new`/`init` still only offer
   harness/upstream. (C-SK-9)
   _Verified by:_ `pytest -k test_scaffold_still_only_offers_harness_and_upstream` · stage: `make test` (test not yet written)
@@ -604,11 +604,11 @@ a dedicated fix.
   imported from `parse_semantics.py`. (R-SK-7)
   _Verified by:_ `pytest -k "test_detect_dialect_uses_shared_marker_predicates_not_local_copies or test_parse_py_uses_shared_marker_predicates_not_local_copies"` · stage: `make test`
 
-- [ ] **AC-SK-42:** `rules.RULES` contains every `SPECKIT_RULES` entry, and
+- [x] **AC-SK-42:** `rules.RULES` contains every `SPECKIT_RULES` entry, and
   `NON_WITNESS_RULES` is exactly `GENERIC_RULES + HARNESS_RULES +
   UPSTREAM_RULES + SPECKIT_RULES` — an append, not an interleave or a
   replacement of any existing family. (R-SK-17)
-  _Verified by:_ `pytest -k test_rules_py_registers_speckit_rules_additively` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_rules_py_registers_speckit_rules_additively` · stage: `make test`
 
 - [ ] **AC-SK-43 (non-success):** `inspect.getsource(parse.parse_spec)`
   still shows explicit `if`/`elif` comparisons against the three dialect

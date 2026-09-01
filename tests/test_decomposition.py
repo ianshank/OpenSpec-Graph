@@ -31,6 +31,8 @@ _NEW_MODULES = [
     "rules_generic",
     "rules_harness",
     "rules_upstream",
+    "parse_speckit",
+    "rules_speckit",
     "machinery",
     "dialect_card",
     "ledger",
@@ -47,17 +49,18 @@ _BOUNDARY_EXEMPT = {"cli", "__init__"}
 # for the canonical fixture repo (tests/fixtures/). Captured before the split;
 # any drift after decomposition fails AC-DG-2.
 #
-# The "rules" hash has been re-pinned twice: once by `fix-u003-mandatory-given`
-# (reworded U003's summary -- GIVEN became optional), once by `add-witness-mode`
-# (W001/W002 added to RULES, listed by `rules --json` for discoverability even
-# though neither is evaluated without --require-witness). "validate" and
-# "graph" stayed byte-identical across both changes -- the canonical fixture
-# never passes --require-witness, and `graph` never evaluates W001/W002 at
-# all (DEC-WM-013), so neither pathway's output shape moved.
+# The "rules" hash has been re-pinned three times: once by
+# `fix-u003-mandatory-given` (reworded U003's summary -- GIVEN became
+# optional), once by `add-witness-mode` (W001/W002 added to RULES, listed by
+# `rules --json` for discoverability even though neither is evaluated
+# without --require-witness), and once by `add-speckit-dialect` (S001-S004
+# added to RULES). "validate" and "graph" stayed byte-identical across all
+# three changes -- the canonical fixture (tests/fixtures/) has no `specs/`
+# directory, so the speckit dialect never fires against it either.
 _EXPECTED_HASHES = {
     "validate": "0a810b4f791fa5684dbf384df7ab626ddf96c3b62fcd9d8299dc8d774a3b82e0",
     "graph": "23eea4b474ff9d6d5c4f89dbb86acaac53562544a551d79bceb5c984d2015482",
-    "rules": "add77deda2a87edae3346278ced2633828b4bf5d0ae50d4d9c200f8c7e5d06de",
+    "rules": "5dc8af2ecae022e50a145d42d5a13a2f055ec78b7df3962da593180574dcd20b",
 }
 
 

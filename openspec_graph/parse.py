@@ -112,7 +112,7 @@ def parse_spec(path: Path, dialect: str) -> ParsedSpec:
         criteria=criteria,
         make_refs=tuple(sorted(set(MAKE_REF.findall(citation_text)))),
         invariant_refs=tuple(sorted(set(INV_REF.findall(citation_text)))),
-        hard_coded_thresholds=hard_coded(text),
+        hard_coded_thresholds=hard_coded(text, resolved),
         delta_headers=tuple(m.group(1) for m in DELTA_HEADER.finditer(text)),
         scenario_levels=scenario_levels(text),
         suppressed=frozenset(w.rule for w in waivers),

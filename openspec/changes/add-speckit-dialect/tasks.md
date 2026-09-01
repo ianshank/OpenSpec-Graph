@@ -95,7 +95,7 @@
   unchanged for the canonical fixture repo (no `specs/` dir).
 - **Gate:** `make test` — AC-SK-19..27.
 
-## Milestone 4 — `rules_speckit.py` + registry + doc sync
+## Milestone 4 — `rules_speckit.py` + registry + doc sync [DONE]
 
 Internal order matters — later steps depend on earlier ones passing first:
 

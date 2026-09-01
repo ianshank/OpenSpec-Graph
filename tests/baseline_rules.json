@@ -8,7 +8,7 @@
   {
     "id": "G002",
     "severity": "ERROR",
-    "dialects": "*",
+    "dialects": "harness,upstream",
     "summary": "at least one non-success criterion"
   },
   {
@@ -118,6 +118,30 @@
     "severity": "WARN",
     "dialects": "upstream",
     "summary": "heading levels match convention"
+  },
+  {
+    "id": "S001",
+    "severity": "ERROR",
+    "dialects": "speckit",
+    "summary": "no unresolved [NEEDS CLARIFICATION] markers"
+  },
+  {
+    "id": "S002",
+    "severity": "ERROR",
+    "dialects": "speckit",
+    "summary": "FR-/SC- identifiers are unique"
+  },
+  {
+    "id": "S003",
+    "severity": "WARN",
+    "dialects": "speckit",
+    "summary": "functional requirements are normative"
+  },
+  {
+    "id": "S004",
+    "severity": "WARN",
+    "dialects": "speckit",
+    "summary": "acceptance scenarios state a stimulus and an outcome"
   },
   {
     "id": "W001",

@@ -17,6 +17,9 @@ from pathlib import Path
 
 import pytest
 
+from openspec_graph import graph as graph_mod
+from openspec_graph import log as log_mod
+from openspec_graph.rules import Finding
 from tests.support import run_cli as _run_cli
 from tests.support import write_spec as _write_spec
 
@@ -312,10 +315,6 @@ def test_docs_check_passes() -> None:
 # --- Peer-review edge cases (post-merge-quality-review) ---------------------
 # Targeted coverage of high-risk branches surfaced by the coverage report,
 # not a chase for 100%. Each test names the uncovered line it closes.
-
-from openspec_graph import graph as graph_mod
-from openspec_graph import log as log_mod
-from openspec_graph.rules import Finding
 
 
 def test_log_level_from_unknown_env_returns_default() -> None:

@@ -158,9 +158,31 @@ def line_of(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
-def hard_coded(text: str) -> tuple[str, ...]:
+def hard_coded(text: str, dialect: str = "") -> tuple[str, ...]:
+    """Every hard-coded-threshold offender line, dialect-neutral by default.
+
+    ``dialect == "speckit"`` exempts the ``Success Criteria`` section body
+    from the scan (R-SK-19, mandatory fix): a conventional, purely
+    positive-phrased SpecKit Success Criterion like ``SC-001: 95% of new
+    users complete onboarding in under 5 minutes`` is a completely
+    legitimate bare-percentage bullet, not a hard-coded value that should
+    instead come from the repo's coverage/governance config -- the
+    intent this check exists to enforce for harness/upstream. Blanks the
+    section span rather than skipping it structurally, preserving length
+    (and therefore line numbers), the same technique
+    ``strip_waiver_comments()`` uses for the identical reason. Zero
+    behavior change for harness/upstream: neither existing fixture has a
+    ``Success Criteria`` heading, and the default ``dialect=""`` never
+    triggers this branch.
+    """
+    scan_text = text
+    if dialect == "speckit":
+        span = section_body(text, "Success Criteria")
+        if span:
+            start = text.index(span)
+            scan_text = text[:start] + " " * len(span) + text[start + len(span) :]
     offenders: list[str] = []
-    for raw_line in text.splitlines():
+    for raw_line in scan_text.splitlines():
         line = raw_line.strip()
         if not line.startswith("-") and not line.startswith("|"):
             continue
