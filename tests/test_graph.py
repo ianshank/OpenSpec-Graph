@@ -17,6 +17,7 @@ from openspec_graph import detect, rules
 from openspec_graph import graph as graph_module
 from openspec_graph.cli import main
 from openspec_graph.parse import parse_spec
+from tests.support import write_spec
 
 MAKEFILE = textwrap.dedent(
     """\
@@ -85,13 +86,6 @@ def repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def write_spec(repo: Path, change: str, capability: str, body: str) -> Path:
-    path = repo / "openspec" / "changes" / change / "specs" / capability / "spec.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(body)
-    return path
-
-
 def graph_for(repo: Path, body: str) -> dict:
     write_spec(repo, "demo-change", "demo-capability", body)
     return graph_module.build_graph(detect.profile(repo))
@@ -140,6 +134,20 @@ def test_build_graph_raises_for_missing_tree(repo: Path) -> None:
     with pytest.raises(graph_module.NoOpenSpecTreeError) as exc:
         graph_module.build_graph(prof)
     assert "openspec/" in str(exc.value)
+
+
+def test_no_openspec_tree_error_has_no_mixed_separators(repo: Path) -> None:
+    # The message used to string-concatenate a literal "/" onto a native
+    # str(profile.root), producing mixed separators on Windows (a backslash
+    # root followed by a bare forward slash). Proper Path joining renders
+    # the whole thing with one consistent separator instead -- a plain
+    # substring check for "openspec/" alone (the two tests above) can't
+    # catch this, since that text already appears in the message's fixed
+    # prefix regardless of how the root itself is joined.
+    prof = detect.profile(repo)
+    with pytest.raises(graph_module.NoOpenSpecTreeError) as exc:
+        graph_module.build_graph(prof)
+    assert str(prof.root / "openspec") in str(exc.value)
 
 
 # --- AC-GR-3: orphan requirement -> node with no incoming traces-to edge -----

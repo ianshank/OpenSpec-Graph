@@ -13,6 +13,7 @@ import dataclasses
 from collections.abc import Sequence
 from pathlib import Path
 
+from . import detect
 from .parse import ParsedSpec
 
 __all__ = ["LedgerEntry", "build_ledger", "owning_change"]
@@ -49,15 +50,6 @@ def owning_change(path: str) -> str | None:
     return None
 
 
-def _relative(path: Path, root: Path | None) -> str:
-    if root is None:
-        return str(path)
-    try:
-        return str(path.relative_to(root))
-    except ValueError:
-        return str(path)
-
-
 def build_ledger(specs: Sequence[ParsedSpec], root: Path | None = None) -> list[LedgerEntry]:
     """One row per waived rule id.
 
@@ -68,7 +60,7 @@ def build_ledger(specs: Sequence[ParsedSpec], root: Path | None = None) -> list[
     """
     entries: list[LedgerEntry] = []
     for spec in specs:
-        rel = _relative(spec.path, root)
+        rel = detect.to_posix_relative(spec.path, root)
         change = owning_change(rel)
         for waiver in spec.waivers:
             entries.append(

@@ -18,6 +18,13 @@ import pytest
 from openspec_graph import detect, dialect_card, rules, scaffold, witness
 from openspec_graph.cli import build_parser, main
 from openspec_graph.parse import parse_spec
+from tests import support
+from tests.support import write_spec
+
+# Windows needs Administrator rights or Developer Mode to create any symlink
+# at all -- probed once per collection, not assumed from sys.platform, so a
+# Windows box that does have one of those enabled still runs this test.
+_CAN_SYMLINK = support.supports_symlinks()
 
 MAKEFILE = textwrap.dedent(
     """\
@@ -114,13 +121,6 @@ def repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def write_spec(repo: Path, change: str, capability: str, body: str) -> Path:
-    path = repo / "openspec" / "changes" / change / "specs" / capability / "spec.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(body)
-    return path
-
-
 def findings_for(repo: Path, body: str, dialect: str = "auto") -> list[rules.Finding]:
     path = write_spec(repo, "demo-change", "demo-capability", body)
     prof = detect.profile(repo)
@@ -171,6 +171,45 @@ def test_detect_reads_threshold_from_setup_cfg(repo: Path) -> None:
     assert prof.threshold is not None
     assert prof.threshold.value == 82
     assert "setup.cfg" in prof.threshold.locator
+
+
+def test_detect_governance_policy_locator_uses_forward_slashes_for_a_nested_path(
+    repo: Path,
+) -> None:
+    # harness/shared/governance-policy.json is a genuinely multi-segment
+    # relative path (unlike the root-level candidate every other governance
+    # test here uses) -- the one _threshold() candidate that can actually
+    # leak a native separator into ThresholdSource.locator on Windows.
+    policy_dir = repo / "harness" / "shared"
+    policy_dir.mkdir(parents=True)
+    (policy_dir / "governance-policy.json").write_text(json.dumps({"coverage": {"lines": 85}}))
+    prof = detect.profile(repo)
+    assert prof.threshold is not None
+    assert prof.threshold.locator == "harness/shared/governance-policy.json:coverage.lines"
+    assert "\\" not in prof.threshold.locator
+
+
+# --- detect.to_posix_relative (Defect A: Windows path separator leak) ------
+
+
+def test_to_posix_relative_renders_a_path_under_root_with_forward_slashes() -> None:
+    result = detect.to_posix_relative(Path("/repo/openspec/changes/c1/spec.md"), Path("/repo"))
+    assert result == "openspec/changes/c1/spec.md"
+    assert "\\" not in result
+
+
+def test_to_posix_relative_falls_back_to_the_full_path_when_not_under_root() -> None:
+    outside = Path("/elsewhere/not/under/root/spec.md")
+    result = detect.to_posix_relative(outside, Path("/repo"))
+    assert result == outside.as_posix()
+    assert "\\" not in result
+
+
+def test_to_posix_relative_falls_back_when_root_is_none() -> None:
+    given = Path("openspec/changes/c1/spec.md")
+    result = detect.to_posix_relative(given, None)
+    assert result == given.as_posix()
+    assert "\\" not in result
 
 
 def test_detect_prefers_coveragerc_over_setup_cfg(repo: Path) -> None:
@@ -477,6 +516,20 @@ def test_adr_source_name_falls_back_when_no_source_is_declared(repo: Path) -> No
     assert prof.adr_source_name == "the ADR log"
 
 
+def test_as_dict_reports_a_multi_segment_invariant_source_with_forward_slashes(
+    tmp_path: Path,
+) -> None:
+    # repo fixture's own CONTRACT.md is a single, root-level segment (no
+    # separator character on either OS) -- nest it so this actually exercises
+    # StackProfile.as_dict()'s invariant_source relativization.
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "CONTRACT.md").write_text(CONTRACT)
+    payload = detect.profile(tmp_path).as_dict()
+    assert payload["invariant_source"] == "docs/CONTRACT.md"
+    assert "\\" not in payload["invariant_source"]
+
+
 def test_adrs_discovered_from_a_directory_of_numbered_files(tmp_path: Path) -> None:
     (tmp_path / "Makefile").write_text(MAKEFILE)
     adr_dir = tmp_path / "docs" / "adr"
@@ -560,6 +613,7 @@ def test_adr_directory_declaration_skips_a_heading_with_no_id_to_find_a_later_on
     assert ids == ("ADR-4",)
 
 
+@pytest.mark.skipif(not _CAN_SYMLINK, reason="platform/user lacks symlink-creation privilege")
 def test_adr_directory_read_error_is_skipped_not_crashed(tmp_path: Path) -> None:
     # glob("*.md") lists directory entries by name pattern only -- it
     # doesn't check they're readable. A dangling symlink still matches and
@@ -1185,6 +1239,31 @@ def test_init_pins_detected_conventions(repo: Path) -> None:
     assert config["invariant_source"] == "CONTRACT.md"
 
 
+def test_plan_init_persists_a_forward_slash_invariant_source_to_disk(tmp_path: Path) -> None:
+    # Highest-severity Defect A site: plan_init()'s invariant_source is
+    # written into TWO persisted files (specgraph.json, project.md) via
+    # scaffold.apply()'s write_text() -- a Windows-run `planlint init` would
+    # otherwise bake a wrong-separator path into files a user might commit,
+    # not just print one. The repo fixture's own CONTRACT.md is a single,
+    # root-level segment with no separator character on either OS, so it
+    # can't exercise this bug regardless of platform -- nest it instead.
+    (tmp_path / "Makefile").write_text(MAKEFILE)
+    (tmp_path / "harness").mkdir()
+    (tmp_path / "harness" / "CONTRACT.md").write_text(CONTRACT)
+    prof = detect.profile(tmp_path)
+    assert prof.invariant_source == tmp_path / "harness" / "CONTRACT.md"  # sanity
+
+    scaffold.apply(scaffold.plan_init(prof))
+
+    config = json.loads((tmp_path / "openspec" / "specgraph.json").read_text())
+    assert config["invariant_source"] == "harness/CONTRACT.md"
+    assert "\\" not in config["invariant_source"]
+
+    project_md = (tmp_path / "openspec" / "project.md").read_text()
+    assert "Invariant source: `harness/CONTRACT.md`" in project_md
+    assert "\\" not in project_md
+
+
 # --- CLI contract ----------------------------------------------------------
 
 
@@ -1197,6 +1276,25 @@ def test_cli_validate_exits_nonzero_on_a_bad_spec(repo: Path, capsys) -> None:
 def test_cli_validate_exits_zero_on_a_clean_spec(repo: Path) -> None:
     write_spec(repo, "ok-change", "ok-cap", GOOD_HARNESS)
     assert main(["--target", str(repo), "validate"]) == 0
+
+
+def test_cli_validate_text_finding_order_is_consistent_across_host_os(
+    repo: Path, capsys
+) -> None:
+    # "\\" sorts after digits/uppercase letters while "/" sorts before them,
+    # so a native str(path) sort key renders these two sibling change dirs in
+    # OPPOSITE relative order on Windows vs. POSIX for the identical repo:
+    # "add-thing" is shorter, so its next character after the common prefix
+    # is the path separator ("/" or "\\"); "add-thing2"'s is the digit "2".
+    # "/" (0x2F) < "2" (0x32) < "\\" (0x5C) -- posix puts add-thing first,
+    # native-Windows puts add-thing2 first. detect.to_posix_relative in the
+    # sort key (not str(f.path)) is what makes this consistent everywhere.
+    write_spec(repo, "add-thing", "cap", GOOD_HARNESS.replace("make regression", "make nope"))
+    write_spec(repo, "add-thing2", "cap", GOOD_HARNESS.replace("make regression", "make nope"))
+    assert main(["--target", str(repo), "validate"]) == 1
+    out = capsys.readouterr().out
+    assert "add-thing/" in out and "add-thing2/" in out
+    assert out.index("changes/add-thing/") < out.index("changes/add-thing2/")
 
 
 def test_cli_validate_fail_on_warn_is_stricter(repo: Path) -> None:
@@ -1214,6 +1312,26 @@ def test_cli_detect_json_is_machine_readable(repo: Path, capsys) -> None:
 def test_cli_dry_run_writes_nothing(repo: Path) -> None:
     assert main(["--target", str(repo), "new", "x", "--capability", "y", "--dry-run"]) == 0
     assert not (repo / "openspec" / "changes" / "x").exists()
+
+
+def test_cli_init_dry_run_prints_forward_slash_paths(repo: Path, capsys) -> None:
+    assert main(["--target", str(repo), "init", "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "openspec/specgraph.json" in out
+    assert "openspec/project.md" in out
+    assert "\\" not in out
+
+
+def test_cli_new_dry_run_prints_forward_slash_paths(repo: Path, capsys) -> None:
+    assert (
+        main(
+            ["--target", str(repo), "new", "add-thing", "--capability", "thing-cap", "--dry-run"]
+        )
+        == 0
+    )
+    out = capsys.readouterr().out
+    assert "openspec/changes/add-thing/specs/thing-cap/spec.md" in out
+    assert "\\" not in out
 
 
 # --- regressions found by running against real repositories ----------------
@@ -1833,6 +1951,16 @@ def test_cli_witness_records_a_zero_coverage_value_distinctly_from_none(repo: Pa
     recorded = witness.load_witnesses(repo)
     assert len(recorded) == 1
     assert recorded[0].coverage == 0.0
+
+
+def test_cli_witness_prints_a_forward_slash_path(repo: Path, capsys) -> None:
+    exit_code = main(
+        ["--target", str(repo), "witness", "--stage", "test", "--exit", "0", "--sha", "a" * 40]
+    )
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert out.startswith("witness recorded: .planlint/witnesses/")
+    assert "\\" not in out
 
 
 def test_cli_witness_rejects_a_malformed_stage(repo: Path, capsys) -> None:

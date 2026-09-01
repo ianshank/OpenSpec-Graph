@@ -99,8 +99,11 @@ for two instances; revisit that only if a third whole-tree rule arrives
 pure, stdlib-only module that projects a data structure some other module
 already computed (a `StackProfile`, a `ParsedSpec` tree, `build_graph()`'s
 dict) into a derived output — a diffable snapshot, a ledger, a diagram —
-without registering a `Rule` or doing its own filesystem/network I/O. None of
-the three imports another sibling module beyond the data types it consumes.
+without registering a `Rule` or doing its own filesystem/network I/O.
+`dialect_card.py` and `mermaid.py` import no sibling module at all;
+`ledger.py` imports `detect.to_posix_relative` — a shared pure-formatting
+helper, not a data type it consumes — to render its `path` field the same
+way every other consumer of that function does.
 
 Follow the same shape for a new one:
 

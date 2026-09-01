@@ -6,12 +6,11 @@ types only for type hints (``Rule.check`` signature); performs no analysis.
 
 from __future__ import annotations
 
-import contextlib
 import dataclasses
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
-from .detect import StackProfile
+from .detect import StackProfile, to_posix_relative
 from .parse import ParsedSpec
 
 __all__ = ["ERROR", "INFO", "WARN", "Finding", "ParsedSpec", "Rule", "StackProfile"]
@@ -44,10 +43,7 @@ class Finding:
     def render(self, root: Path | None = None) -> str:
         where = ""
         if self.path:
-            shown = self.path
-            if root:
-                with contextlib.suppress(ValueError):
-                    shown = self.path.relative_to(root)
+            shown = to_posix_relative(self.path, root)
             where = f"{shown}:{self.line}: " if self.line else f"{shown}: "
         return f"{self.severity:5s} {self.rule}  {where}{self.message}"
 

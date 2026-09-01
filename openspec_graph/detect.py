@@ -59,6 +59,27 @@ _HEADING_LINE = re.compile(r"^#+[ \t]+\S.*$", re.MULTILINE)
 _FAIL_UNDER = re.compile(r"^\s*fail_under\s*=\s*(\d+)", re.MULTILINE)
 
 
+def to_posix_relative(path: Path, root: Path | None) -> str:
+    """``path`` relative to ``root``, forward-slash rendered.
+
+    ``str(path.relative_to(root))``/plain f-string interpolation render with
+    the host OS's native separator -- identical to this on POSIX, but
+    backslash-separated on Windows, which breaks every consumer that expects
+    (or hardcodes, in this project's own test suite) a portable, forward-slash
+    relative path. Falls back to ``path.as_posix()`` -- never the
+    native-separator ``str(path)`` -- when ``root`` is ``None`` or ``path``
+    isn't actually under it; never raises. Shared by graph.py, ledger.py,
+    rule_types.py, scaffold.py, and this module's own StackProfile/threshold
+    fields, all of which had independently copy-pasted the buggy pattern.
+    """
+    if root is not None:
+        try:
+            return path.relative_to(root).as_posix()
+        except ValueError:
+            pass
+    return path.as_posix()
+
+
 @dataclasses.dataclass(frozen=True)
 class ThresholdSource:
     """Where a coverage floor actually lives in this repo."""
@@ -108,7 +129,7 @@ class StackProfile:
         if not self.adr_source:
             return "the ADR log"
         try:
-            return str(self.adr_source.relative_to(self.root))
+            return self.adr_source.relative_to(self.root).as_posix()
         except ValueError:
             return self.adr_source.name
 
@@ -122,7 +143,7 @@ class StackProfile:
             "dialect": self.dialect,
             "threshold": self.threshold.as_dict() if self.threshold else None,
             "invariant_source": (
-                str(self.invariant_source.relative_to(self.root))
+                to_posix_relative(self.invariant_source, self.root)
                 if self.invariant_source
                 else None
             ),
@@ -131,7 +152,7 @@ class StackProfile:
             "make_target_confidence": self.make_target_confidence,
             "make_unresolved_count": self.make_unresolved_count,
             "adr_source": (
-                str(self.adr_source.relative_to(self.root)) if self.adr_source else None
+                to_posix_relative(self.adr_source, self.root) if self.adr_source else None
             ),
             "adr_ids": list(self.adr_ids),
         }
@@ -248,7 +269,7 @@ def _threshold(root: Path) -> ThresholdSource | None:
             continue
         coverage = data.get("coverage")
         if isinstance(coverage, dict) and isinstance(coverage.get("lines"), int):
-            rel = policy.relative_to(root)
+            rel = to_posix_relative(policy, root)
             return ThresholdSource(f"{rel}:coverage.lines", coverage["lines"])
 
     pyproject = root / "pyproject.toml"
@@ -265,12 +286,14 @@ def _threshold(root: Path) -> ThresholdSource | None:
     coveragerc = root / ".coveragerc"
     value = _read_ini_fail_under(coveragerc, "report")
     if value is not None:
-        return ThresholdSource(f"{coveragerc.relative_to(root)}:[report].fail_under", value)
+        rel = to_posix_relative(coveragerc, root)
+        return ThresholdSource(f"{rel}:[report].fail_under", value)
 
     setup_cfg = root / "setup.cfg"
     value = _read_ini_fail_under(setup_cfg, "coverage:report")
     if value is not None:
-        return ThresholdSource(f"{setup_cfg.relative_to(root)}:[coverage:report].fail_under", value)
+        rel = to_posix_relative(setup_cfg, root)
+        return ThresholdSource(f"{rel}:[coverage:report].fail_under", value)
 
     return None
 
