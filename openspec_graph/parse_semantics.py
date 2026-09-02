@@ -12,6 +12,7 @@ import dataclasses
 import re
 
 SECTION = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
+SUBSECTION = re.compile(r"^###\s+(.+?)\s*$", re.MULTILINE)
 STATUS = re.compile(r"\*\*Status:\*\*\s*([A-Za-z-]+)")
 
 # --- harness dialect -------------------------------------------------------
@@ -36,6 +37,79 @@ CANONICAL_REQ_LEVEL = 3
 CANONICAL_SCEN_LEVEL = 4
 
 SUPPRESS = re.compile(r"<!--\s*specgraph:allow\s+([A-Z]\d{3}(?:\s*,\s*[A-Z]\d{3})*)\s*(.*?)-->")
+
+# --- speckit dialect ---------------------------------------------------------
+FR_ID = re.compile(r"\bFR-\d+\b")
+SC_ID = re.compile(r"\bSC-\d+\b")
+
+# `- **FR-001**: text` / `- **SC-001**: text` -- anchored so a sibling bullet
+# like `- **NFR-001**: text` (a plausible "Non-Functional Requirements"
+# subsection) cannot match: `\*\*(FR-\d+)` requires the literal `F`
+# immediately after the opening `**`, not after an `N`.
+FR_DECL = re.compile(r"^-\s*\*\*(FR-\d+)\*\*\s*:\s*(.+?)\s*$", re.MULTILINE)
+SC_DECL = re.compile(r"^-\s*\*\*(SC-\d+)\*\*\s*:\s*(.+?)\s*$", re.MULTILINE)
+# The bare (unannotated) heading name speckit_section_body() looks up --
+# shared by parse_speckit.py's own Success Criteria lookup and this module's
+# hard_coded() exemption below, so the two can't independently drift.
+SPECKIT_SUCCESS_CRITERIA_HEADING = "Success Criteria"
+NEEDS_CLARIFICATION = re.compile(r"\[NEEDS CLARIFICATION(?:\s*:\s*(.*?))?\]", re.IGNORECASE)
+USER_STORY_HEADING = re.compile(r"^###\s+User Story\s+(\d+)\b.*$", re.MULTILINE | re.IGNORECASE)
+# "1. **Given** ..., **When** ..., **Then** ..." -- SpecKit's own documented
+# inline-prose acceptance-scenario convention, distinct from upstream's
+# heading-per-scenario "#### Scenario:" form. A prose-scrape, not a rigid
+# heading match -- provisional until validated against real SpecKit output
+# (Milestone 5); any rule depending on it stays at WARN until then.
+#
+# Milestone 5 finding: a purely single-line version of this pattern missed a
+# realistic, equally-plausible SpecKit authoring style -- Given/When/Then
+# each on their own line within the same numbered item, e.g.:
+#     1. **Given** an attested writer
+#        **When** a write occurs
+#        **Then** an evidence id is recorded
+# DOTALL lets the inner spans cross newlines to catch that form too; the
+# trailing lookahead (rather than `\s*$`) stops the match at the next
+# numbered item, a blank line, or end of text, instead of running on into
+# unrelated later content once `.` matches `\n` -- verified against two
+# sequential multi-line scenarios and a scenario immediately followed by an
+# unrelated "## Requirements" section, neither bleeds into the other.
+#
+# Post-review hardening: originally required the literal Given/When/Then
+# keywords in the match itself, which meant a malformed scenario missing
+# WHEN or THEN was never captured as a Criterion at all -- S004 (which
+# exists to flag exactly that) could never fire against real parsed output,
+# only against a hand-built ParsedSpec in a unit test. Matches any numbered
+# item in a User Story block now, GWT-complete or not, using the same
+# boundary lookahead as before; completeness is decided downstream by
+# scenario_has_gwt() (already the source of truth S004 itself calls), not
+# by this regex, so a genuinely incomplete scenario is now captured and can
+# be reported instead of silently disappearing.
+GWT_SCENARIO = re.compile(
+    r"^\d+\.\s*.+?(?=\n\s*\d+\.|\n\s*\n|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+
+# --- dialect classification (shared between detect.py and parse.py) --------
+# Single source of truth for "does this text look like dialect X". Previously
+# duplicated independently in detect.py's detect_dialect() and parse.py's
+# parse_spec() pre-resolution branch; unified here so the two can never
+# silently drift apart, rather than adding a third, naively-duplicated copy
+# for speckit.
+AC_ID = re.compile(r"\bAC-[A-Z]{2,}-\d+\b")
+
+
+def is_upstream_marked(text: str) -> bool:
+    return "## ADDED Requirements" in text or "#### Scenario:" in text
+
+
+def is_harness_marked(text: str) -> bool:
+    return "## Acceptance Criteria" in text and bool(AC_ID.search(text))
+
+
+def is_speckit_marked(text: str) -> bool:
+    return ("### Functional Requirements" in text and bool(FR_ID.search(text))) or (
+        "## Success Criteria" in text and bool(SC_ID.search(text))
+    )
+
 
 # --- shared references -----------------------------------------------------
 # Backtick-fencing is required: a bare "make sure"/"make progress" in
@@ -109,13 +183,99 @@ def section_body(text: str, name: str) -> str:
     return ""
 
 
+# Strips a trailing markdown-emphasized parenthetical off a heading title,
+# e.g. "*(mandatory)*", "*(include if feature involves data)*".
+_TRAILING_ANNOTATION = re.compile(r"[\s*_]*\(.*?\)[\s*_]*$")
+
+
+def speckit_section_body(text: str, name: str) -> str:
+    """Like :func:`section_body`, but tolerates a trailing annotation on the
+    heading.
+
+    The canonical SpecKit template suffixes its mandatory H2 headings --
+    ``## Requirements *(mandatory)*``, ``## Success Criteria *(mandatory)*``
+    -- so :func:`section_body`'s exact-title match silently finds nothing
+    against real SpecKit output (confirmed directly against the live
+    ``github/spec-kit`` template, not assumed): every FR-/SC- bullet a real,
+    correctly-formatted spec declares would go unextracted, and G003's
+    Success-Criteria exemption (R-SK-19) would never find its span to
+    blank, defeating the fix it exists to apply. Strips a trailing
+    parenthetical (optionally wrapped in markdown emphasis) before
+    comparing, rather than a loose prefix match, so "Success Criteria"
+    still doesn't spuriously match an unrelated "Success Metrics" heading.
+    A separate function, not a change to :func:`section_body` itself --
+    that function is shared with harness/upstream, whose headings carry no
+    such annotations today, and this repo has an explicit
+    zero-behavior-change commitment for both (C-SK-8).
+    """
+    bounds = [(m.group(1), m.start(), m.end()) for m in SECTION.finditer(text)]
+    name_lower = name.lower()
+    for idx, (title, _start, end) in enumerate(bounds):
+        normalized = _TRAILING_ANNOTATION.sub("", title.strip()).strip().lower()
+        if normalized != name_lower:
+            continue
+        stop = bounds[idx + 1][1] if idx + 1 < len(bounds) else len(text)
+        return text[end:stop]
+    return ""
+
+
+def speckit_subsection_body(section_text: str, name: str) -> str:
+    """Like :func:`speckit_section_body`, one heading level down (H3 inside
+    an already-isolated H2 span).
+
+    ``section_body(text, "Requirements")`` returns the *entire* H2 span,
+    including any unrelated H3 subsections that happen to sit alongside
+    "### Functional Requirements" -- a bullet shaped like ``- **FR-099**:
+    ...`` under a different H3 (or with no "### Functional Requirements"
+    heading at all) would otherwise be picked up as a real requirement.
+    Scoping to the named H3's own span, the same bounded-by-next-heading
+    technique :func:`section_body`/:func:`speckit_section_body` already use
+    at H2, closes that gap: a wrong-heading or missing-heading document
+    yields an empty span, not a false match.
+    """
+    bounds = [(m.group(1), m.start(), m.end()) for m in SUBSECTION.finditer(section_text)]
+    name_lower = name.lower()
+    for idx, (title, _start, end) in enumerate(bounds):
+        if title.strip().lower() != name_lower:
+            continue
+        stop = bounds[idx + 1][1] if idx + 1 < len(bounds) else len(section_text)
+        return section_text[end:stop]
+    return ""
+
+
 def line_of(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
-def hard_coded(text: str) -> tuple[str, ...]:
+def hard_coded(text: str, dialect: str = "") -> tuple[str, ...]:
+    """Every hard-coded-threshold offender line, dialect-neutral by default.
+
+    ``dialect == "speckit"`` exempts the ``Success Criteria`` section body
+    from the scan (R-SK-19, mandatory fix): a conventional, purely
+    positive-phrased SpecKit Success Criterion like ``SC-001: 95% of new
+    users complete onboarding in under 5 minutes`` is a completely
+    legitimate bare-percentage bullet, not a hard-coded value that should
+    instead come from the repo's coverage/governance config -- the
+    intent this check exists to enforce for harness/upstream. Uses
+    :func:`speckit_section_body`, not :func:`section_body`, to find the
+    span -- the canonical SpecKit template's heading is
+    ``## Success Criteria *(mandatory)*``, and an exact-title lookup would
+    silently find nothing against it, defeating this exemption entirely
+    against real SpecKit output. Blanks the section span rather than
+    skipping it structurally, preserving length (and therefore line
+    numbers), the same technique ``strip_waiver_comments()`` uses for the
+    identical reason. Zero behavior change for harness/upstream: neither
+    existing fixture has a ``Success Criteria`` heading, and the default
+    ``dialect=""`` never triggers this branch.
+    """
+    scan_text = text
+    if dialect == "speckit":
+        span = speckit_section_body(text, SPECKIT_SUCCESS_CRITERIA_HEADING)
+        if span:
+            start = text.index(span)
+            scan_text = text[:start] + " " * len(span) + text[start + len(span) :]
     offenders: list[str] = []
-    for raw_line in text.splitlines():
+    for raw_line in scan_text.splitlines():
         line = raw_line.strip()
         if not line.startswith("-") and not line.startswith("|"):
             continue

@@ -49,6 +49,18 @@ def test_diff_cards_detects_an_adr_source_change() -> None:
     assert any("adr_ids" in c for c in changes)
 
 
+def test_diff_cards_detects_a_speckit_root_change() -> None:
+    old = {"schema_version": 1, "has_speckit_root": False, "feature_dirs": []}
+    new = {
+        "schema_version": 1,
+        "has_speckit_root": True,
+        "feature_dirs": ["001-demo-capability"],
+    }
+    changes = dialect_card.diff_cards(old, new)
+    assert any("has_speckit_root" in c for c in changes)
+    assert any("feature_dirs" in c for c in changes)
+
+
 def test_diff_cards_does_not_report_a_field_absent_from_the_old_card_as_drift() -> None:
     # A pre-upgrade card saved before adr_ids existed has no such key at
     # all -- not `None`, absent. Comparing that absence against the new

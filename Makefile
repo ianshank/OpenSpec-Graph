@@ -10,10 +10,10 @@ test: ## Run the test suite; line + branch coverage floors read from pyproject.t
 	python tools/check_branch_coverage.py coverage.json
 
 lint: ## Ruff check across the package, tests, and tools — a hard gate
-	ruff check openspec_graph tests tools
+	python -m ruff check openspec_graph tests tools
 
 typecheck: ## mypy with config from pyproject.toml — a hard gate
-	mypy openspec_graph tools
+	python -m mypy openspec_graph tools
 
 security: ## Secret scan (gitleaks if installed, deterministic fallback otherwise)
 	python tools/check_secrets.py

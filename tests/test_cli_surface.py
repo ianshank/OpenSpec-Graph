@@ -55,6 +55,52 @@ def test_cli_rejects_authoring_verbs() -> None:
     )
 
 
+# --- AC-SK-23/24: --dialect surface for the speckit dialect -----------------
+
+
+def _subparser(parser: argparse.ArgumentParser, verb: str) -> argparse.ArgumentParser:
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            return action.choices[verb]
+    raise AssertionError(f"no subparsers action found while looking for {verb!r}")
+
+
+def _dialect_choices(parser: argparse.ArgumentParser, verb: str) -> list[str] | None:
+    """The ``--dialect`` argument's ``choices`` for one subcommand, or
+    ``None`` if that subcommand has no ``--dialect`` argument at all."""
+    sub = _subparser(parser, verb)
+    for action in sub._actions:
+        if "--dialect" in action.option_strings:
+            return list(action.choices) if action.choices else None
+    return None
+
+
+def test_cli_dialect_choices_include_speckit_on_validate_and_waivers() -> None:
+    parser = build_parser()
+    assert _dialect_choices(parser, "validate") == ["harness", "upstream", "speckit", "auto"]
+    assert _dialect_choices(parser, "waivers") == ["harness", "upstream", "speckit", "auto"]
+
+
+def test_cli_new_and_graph_do_not_gain_speckit_dialect_surface() -> None:
+    # C-SK-6 (non-success): scaffolding a SpecKit package is out of scope --
+    # `new`'s --dialect choices must not gain "speckit", and `graph` must
+    # not gain a --dialect flag at all (it has none today).
+    parser = build_parser()
+    assert _dialect_choices(parser, "new") == ["harness", "upstream"]
+    assert _dialect_choices(parser, "graph") is None
+
+
+def test_no_feature_cli_flag_exists() -> None:
+    # C-SK-7 (non-success): filter_speckit_by_feature() exists for
+    # shape-parity with filter_by_change but is reachable only via direct
+    # import -- no subcommand may register a --feature flag.
+    parser = build_parser()
+    for verb in ALLOWED_VERBS:
+        sub = _subparser(parser, verb)
+        flags = {opt for action in sub._actions for opt in action.option_strings}
+        assert "--feature" not in flags, f"{verb} unexpectedly registers --feature"
+
+
 # --- VER-1: --version/-V ----------------------------------------------------
 
 

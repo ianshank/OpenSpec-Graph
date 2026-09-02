@@ -33,6 +33,10 @@ case "$FILE_NORM" in
     printf '{"decision": "block", "reason": "You just edited a Makefile or CI workflow file. Run `make thresholds` (or `python tools/check_no_hardcoded_thresholds.py` if make is unavailable) before finishing -- this repo requires every threshold to be read from its real locator, never hard-coded here."}'
     exit 0
     ;;
+  */openspec/changes/*/specs/*/spec.md)
+    printf '{"decision": "block", "reason": "You just edited a change-package spec.md -- the exact file planlint dialect-sniffs. Quoting a dialect marker as prose (e.g. a heading name in backticks) can misclassify this spec as the dialect it merely describes, the self-referential trap this repo has hit twice. Before finishing: run `planlint --target . validate --fail-on ERROR` (or `make validate`) and confirm the dialect/finding count is what you expect."}'
+    exit 0
+    ;;
 esac
 
 exit 0

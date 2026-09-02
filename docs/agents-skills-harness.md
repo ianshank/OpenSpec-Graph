@@ -1,5 +1,13 @@
 # Agents, Skills, and the Harness Model
 
+This document is about `planlint`'s own product architecture — what the tool
+*is*. It is unrelated to `.claude/agents/` and `.claude/skills/` (Claude Code
+dev-tooling used to *develop* planlint itself — spec-drafter, spec-adversary,
+planlint-verifier, and the `planlint-add-rule` skill; see docs/hooks.md's
+"Claude Code hooks" section): same words, two different, non-overlapping
+meanings — one about the shipped CLI, one about this repo's own contributor
+workflow.
+
 `planlint` is deliberately **not** an autonomous agent. There is no LLM in the
 loop, no tool selection, no planning step. What it provides is a deterministic
 **governance harness** with a set of mechanical **skills** (rules) that turn
@@ -29,7 +37,7 @@ they are not confused with autonomous-agent abstractions.
 
 The whole point of a governance CLI is **reproducibility**: the same spec tree
 must produce the same findings, every time, on every machine. That is
-incompatible with non-deterministic planning. The 22 rules are the "skills" —
+incompatible with non-deterministic planning. The 26 rules are the "skills" —
 fixed, auditable, and byte-stable in their output (AC-EH-4). Waivers are
 explicit inline comments (`<!-- specgraph:allow G003 reason -->`) that downgrade
 a finding to INFO but keep it visible — a suppression is never silent.

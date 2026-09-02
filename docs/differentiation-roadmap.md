@@ -294,8 +294,8 @@ stays rejected; this doesn't reopen that non-goal, only adds to it.
 undeclared `INV-n`, or a declared invariant no living spec cites (G005/G006).
 Nothing extended that discipline to architecture decision records. New rules
 `G008` (cited-must-exist) and `G009` (declared-must-be-cited) mirror
-G005/G006 exactly; 22 rules total (18 before this change, 20 after — see
-CP-7 below for the next increment, to 22).
+G005/G006 exactly; 26 rules total today — this change itself took the count
+from 18 to 20 (see CP-7 below for the next increment, to 22).
 
 - **AC-AD-1..9:** ADR ids are discovered from either a directory of
   per-decision files or a single index file, extracted by scanning each
@@ -392,8 +392,9 @@ as a content-addressed file under `.planlint/witnesses/`. A spec citing
 `` `make test` `` no longer just has to *name* a real target (H001) — under
 `--require-witness` it has to prove that target actually ran, at the current
 commit, and passed. New rules `W001` (missing/stale/failing witness) and
-`W002` (witness coverage below the detected floor); 22 rules total (20
-before this change).
+`W002` (witness coverage below the detected floor); 26 rules total today —
+this change itself took the count from 20 to 22 (see the SpecKit-dialect
+change for the next increment, to 26).
 
 - **AC-WM-1..5, AC-WM-8:** W001 fires with a distinct message for "never
   witnessed," "witnessed but not at the current commit," and "witnessed but

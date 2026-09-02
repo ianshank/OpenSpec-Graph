@@ -34,12 +34,15 @@ from .parse_semantics import (
     STATUS,
     Waiver,
     hard_coded,
+    is_speckit_marked,
+    is_upstream_marked,
     parse_waivers,
     scenario_levels,
     strip_waiver_comments,
     threshold_values,
 )
 from .parse_semantics import REQUIREMENT as _REQUIREMENT
+from .parse_speckit import parse_speckit as _parse_speckit
 from .parse_upstream import parse_upstream as _parse_upstream
 
 # Backwards-compat alias: graph.py historically read parse._MAKE_REF. Kept so
@@ -64,14 +67,27 @@ def parse_spec(path: Path, dialect: str) -> ParsedSpec:
     text = path.read_text(encoding="utf-8", errors="replace")
     resolved = dialect
     if resolved in {"mixed", "unknown", "auto"}:
-        resolved = (
-            "upstream"
-            if ("## ADDED Requirements" in text or "#### Scenario:" in text)
-            else "harness"
-        )
+        if is_upstream_marked(text):
+            resolved = "upstream"
+        elif is_speckit_marked(text):
+            resolved = "speckit"
+        else:
+            resolved = "harness"
 
+    # Explicit if/elif on the three dialect literals, not a dict/registry --
+    # each branch carries its own bespoke escape-hatch logic a dispatch
+    # table wouldn't eliminate, and this codebase has an on-the-record
+    # precedent against genericizing 2-3-instance special cases (DEC-AD-003,
+    # cited by rules.py's evaluate_tree() docstring for the analogous
+    # G006/G009 two-block shape).
     if resolved == "upstream":
         reqs, criteria = _parse_upstream(text)
+    elif resolved == "speckit":
+        reqs, criteria = _parse_speckit(text)
+        if not reqs and not criteria and _REQUIREMENT.search(text):
+            # Sniffed as speckit but actually written upstream-style.
+            resolved = "upstream"
+            reqs, criteria = _parse_upstream(text)
     else:
         reqs, criteria = _parse_harness(text)
         if not reqs and not criteria and _REQUIREMENT.search(text):
@@ -96,7 +112,7 @@ def parse_spec(path: Path, dialect: str) -> ParsedSpec:
         criteria=criteria,
         make_refs=tuple(sorted(set(MAKE_REF.findall(citation_text)))),
         invariant_refs=tuple(sorted(set(INV_REF.findall(citation_text)))),
-        hard_coded_thresholds=hard_coded(text),
+        hard_coded_thresholds=hard_coded(text, resolved),
         delta_headers=tuple(m.group(1) for m in DELTA_HEADER.finditer(text)),
         scenario_levels=scenario_levels(text),
         suppressed=frozenset(w.rule for w in waivers),

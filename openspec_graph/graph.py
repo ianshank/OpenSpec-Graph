@@ -64,12 +64,31 @@ def _add_spec_node(nodes: list[dict[str, object]], seen: set[str], spec: ParsedS
     return spec_node
 
 
+def _entity_node_id(spec: ParsedSpec, spec_node: str, ident: str) -> str:
+    """Graph node id for a requirement/criterion belonging to ``spec``.
+
+    Harness/upstream idents are already spec-unique by authoring convention
+    (e.g. ``R-DMO-1``, ``AC-DMO-1`` -- the capability abbreviation is folded
+    into the id itself), so they pass through unqualified: changing this
+    would re-pin every existing golden-hash graph fixture for zero benefit.
+    SpecKit's own canonical convention restarts numbering at ``FR-001``/
+    ``SC-001`` in *every* feature, so a repo with more than one feature
+    would otherwise silently collapse the second feature's requirement/
+    criterion nodes into the first's via ``_add_node``'s seen-id dedup --
+    scoping the qualification to ``spec.dialect == "speckit"`` fixes the
+    real collision without touching either existing dialect's node ids.
+    """
+    if spec.dialect == "speckit":
+        return f"{spec_node}::{ident}"
+    return ident
+
+
 def _add_requirement_nodes(
     nodes: list[dict[str, object]], seen: set[str], spec: ParsedSpec, spec_node: str
 ) -> None:
     for req in spec.requirements:
         _add_node(
-            nodes, seen, req.ident,
+            nodes, seen, _entity_node_id(spec, spec_node, req.ident),
             type="requirement",
             text=req.text[:NODE_TEXT_LIMIT],
             kind=req.kind,
@@ -86,8 +105,9 @@ def _add_criterion_nodes(
     known_stages: set[str],
 ) -> None:
     for crit in spec.criteria:
+        crit_node = _entity_node_id(spec, spec_node, crit.ident)
         _add_node(
-            nodes, seen, crit.ident,
+            nodes, seen, crit_node,
             type="criterion",
             text=crit.text[:NODE_TEXT_LIMIT],
             is_negative=crit.is_negative,
@@ -96,7 +116,8 @@ def _add_criterion_nodes(
         )
         # criterion -> requirement
         for ref in crit.requirement_refs:
-            edges.append({"source": crit.ident, "target": ref, "type": "traces-to"})
+            req_node = _entity_node_id(spec, spec_node, ref)
+            edges.append({"source": crit_node, "target": req_node, "type": "traces-to"})
         # criterion -> stage (verified-by). A stage the repo lacks is an
         # edge to a node marked exists=False (AC-GR-5).
         for stage in _stages_cited(crit.verified_by):
@@ -104,7 +125,7 @@ def _add_criterion_nodes(
             stage_node = f"stage:{stage}"
             _add_node(nodes, seen, stage_node, type="stage", name=stage, exists=exists)
             edges.append(
-                {"source": crit.ident, "target": stage_node, "type": "verified-by", "exists": exists}
+                {"source": crit_node, "target": stage_node, "type": "verified-by", "exists": exists}
             )
 
 
@@ -202,21 +223,35 @@ def _add_tree_finding_edges(
     return len(findings)
 
 
-def _mark_orphan_requirements(nodes: list[dict[str, object]], edges: list[dict[str, object]]) -> None:
+def _mark_orphan_requirements(
+    nodes: list[dict[str, object]], edges: list[dict[str, object]], untraceable_specs: set[str]
+) -> None:
     # Orphan requirements: requirement nodes with no incoming traces-to edge
-    # (AC-GR-3).
+    # (AC-GR-3). Skipped for a spec in `untraceable_specs` -- speckit's own
+    # grammar has no FR<->SC citation convention at all (C-SK-3/DEC-SK-016),
+    # so every one of its requirement nodes would otherwise be marked
+    # orphan unconditionally, a false "nothing traces to this" signal for a
+    # dialect that was never expected to have any traces-to edges in the
+    # first place. Harness/upstream are unaffected: neither spec ever adds
+    # its own spec_node to `untraceable_specs`.
     incoming_traces = {e["target"] for e in edges if e["type"] == "traces-to"}
     for node in nodes:
-        if node.get("type") == "requirement" and node["id"] not in incoming_traces:
-            node["orphan"] = True
+        if node.get("type") != "requirement" or node["id"] in incoming_traces:
+            continue
+        if node.get("spec") in untraceable_specs:
+            continue
+        node["orphan"] = True
 
 
 def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None) -> dict[str, object]:
-    """Build the dependency graph for every change package under ``openspec/``.
+    """Build the dependency graph for every change package under ``openspec/``
+    and/or every feature under a SpecKit ``specs/`` tree — whichever root(s)
+    the profile has.
 
-    Raises ``NoOpenSpecTreeError`` if the target has no ``openspec/`` tree
-    (AC-GR-2): the caller exits non-zero with a message naming the missing
-    directory rather than emitting an empty graph.
+    Raises ``NoOpenSpecTreeError`` if the target has neither an ``openspec/``
+    tree nor a SpecKit ``specs/`` tree (AC-GR-2/AC-SK-21): the caller exits
+    non-zero with a message naming the missing director(y/ies) rather than
+    emitting an empty graph.
 
     ``spec_files``, if given (e.g. ``--change``-filtered), scopes which specs
     get rendered as nodes/edges -- but never what feeds
@@ -230,13 +265,19 @@ def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None)
     definition, cited by no living spec anywhere, so it isn't "content
     belonging to a different change" being leaked into a scoped picture.
     """
-    if not profile.openspec_root or not profile.openspec_root.is_dir():
+    has_openspec = bool(profile.openspec_root and profile.openspec_root.is_dir())
+    has_speckit = bool(profile.speckit_root and profile.speckit_root.is_dir())
+    if not has_openspec and not has_speckit:
         raise NoOpenSpecTreeError(
-            f"no openspec/ directory found at {profile.root / 'openspec'}; "
-            "run `planlint init` first"
+            f"no openspec/ directory found at {profile.root / 'openspec'} and no "
+            f"SpecKit specs/ tree found at {profile.root / 'specs'}; run `planlint init` first"
         )
 
-    all_spec_files = detect.find_spec_files(profile.openspec_root)
+    all_spec_files: list[Path] = []
+    if profile.openspec_root and has_openspec:
+        all_spec_files.extend(detect.find_spec_files(profile.openspec_root))
+    if profile.speckit_root and has_speckit:
+        all_spec_files.extend(detect.find_speckit_spec_files(profile.speckit_root))
     render_paths = set(all_spec_files) if spec_files is None else set(spec_files)
     known_stages = set(profile.make_targets)
     known_invariants = set(profile.invariant_ids)
@@ -249,6 +290,7 @@ def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None)
     broken_links = 0
     all_specs: list[ParsedSpec] = []
     rendered = 0
+    untraceable_specs: set[str] = set()
 
     for path in all_spec_files:
         spec = parse.parse_spec(path, dialect)
@@ -258,6 +300,8 @@ def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None)
         rendered += 1
         rel = _relative_to(path, profile.root)
         spec_node = _add_spec_node(nodes, seen_nodes, spec, rel)
+        if spec.dialect == "speckit":
+            untraceable_specs.add(spec_node)
         _add_requirement_nodes(nodes, seen_nodes, spec, spec_node)
         _add_criterion_nodes(nodes, edges, seen_nodes, spec, spec_node, known_stages)
         _add_invariant_edges(nodes, edges, seen_nodes, spec, spec_node, known_invariants)
@@ -273,7 +317,7 @@ def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None)
         nodes, edges, seen_nodes, rules.evaluate_tree(all_specs, profile)
     )
 
-    _mark_orphan_requirements(nodes, edges)
+    _mark_orphan_requirements(nodes, edges, untraceable_specs)
 
     return {
         "root": str(profile.root),

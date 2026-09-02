@@ -78,6 +78,16 @@ changed — the same `PASS`/`FAIL` vocabulary as `tools/diff_spec_graph.py`'s
 existing graph-diff gate, applied to detected conventions instead of the
 spec graph.
 
+The Claude Code dev-tooling this repo is developed with (`.claude/agents/`,
+`.claude/skills/`) gets the same discipline, not a documentation-only
+exemption: `tests/test_agent_skill_docs.py` parses each agent/skill file's
+frontmatter, resolves every backtick-quoted repo-relative path reference and
+`` `make <target>` `` reference against what actually exists, and checks
+`planlint-add-rule/SKILL.md`'s rule-family checklist against
+`openspec_graph/rules_*.py` directly — the exact drift class found (that
+checklist silently missing `rules_speckit.py` after the SpecKit dialect
+landed) during the review that added this test.
+
 ## No NumPy / no heavy runtime deps
 
 `planlint` has **zero runtime dependencies**. Scientific-computing stacks

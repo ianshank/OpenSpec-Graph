@@ -19,7 +19,7 @@ from openspec_graph import detect, dialect_card, rules, scaffold, witness
 from openspec_graph.cli import build_parser, main
 from openspec_graph.parse import parse_spec
 from tests import support
-from tests.support import write_spec
+from tests.support import write_spec, write_speckit_spec
 
 # Windows needs Administrator rights or Developer Mode to create any symlink
 # at all -- probed once, at this module's import time, not assumed from
@@ -127,6 +127,39 @@ GOOD_UPSTREAM = textwrap.dedent(
     - **GIVEN** a writer with no attestation
     - **WHEN** the suite runs
     - **THEN** the check fails and names the offending file
+    """
+)
+
+GOOD_SPECKIT = textwrap.dedent(
+    """\
+    # Feature Specification: Demo Capability
+
+    **Feature Branch**: `001-demo-capability`
+    **Created**: 2026-01-01
+    **Status**: Draft
+
+    ## User Scenarios & Testing
+
+    ### User Story 1 - Attest every write (Priority: P1)
+
+    A user's write is attested so it can be verified later.
+
+    **Why this priority**: Core guarantee the feature exists for.
+
+    **Acceptance Scenarios**:
+
+    1. **Given** an attested writer, **When** a write occurs, **Then** an evidence id is recorded.
+
+    ## Requirements *(mandatory)*
+
+    ### Functional Requirements
+
+    - **FR-001**: The system MUST attest every write.
+    - **FR-002**: The system MUST record an evidence id for every attested write.
+
+    ## Success Criteria *(mandatory)*
+
+    - **SC-001**: 95% of writes are attested within 1 second.
     """
 )
 
@@ -303,6 +336,25 @@ def test_to_card_excludes_absolute_paths(repo: Path) -> None:
 def test_to_card_reports_no_openspec_root_when_absent(repo: Path) -> None:
     card = detect.profile(repo).to_card()
     assert card["has_openspec_root"] is False
+
+
+def test_to_card_never_exposes_raw_speckit_root_path(repo: Path) -> None:
+    # speckit_root is a Path | None exactly like openspec_root, so it gets
+    # openspec_root's own to_card() treatment (a has_* boolean), never
+    # adr_source's (already a relative string by the time it reaches
+    # to_card()) -- confirms the byte-identical-across-checkout-paths
+    # contract AC-DC-4/DEC-AD-009 established still holds for the new field.
+    write_speckit_spec(repo, "001-demo-capability", GOOD_SPECKIT)
+    card = detect.profile(repo).to_card()
+    assert "speckit_root" not in card
+    assert card["has_speckit_root"] is True
+    assert card["feature_dirs"] == ["001-demo-capability"]
+
+
+def test_to_card_reports_no_speckit_root_when_absent(repo: Path) -> None:
+    card = detect.profile(repo).to_card()
+    assert card["has_speckit_root"] is False
+    assert card["feature_dirs"] == []
 
 
 def test_to_card_excludes_witnesses_and_current_sha(repo: Path) -> None:
@@ -1638,6 +1690,26 @@ def test_stack_profile_construction_still_works_without_witness_fields(repo: Pat
     )
     assert prof.witnesses == ()
     assert prof.current_sha is None
+
+
+def test_stack_profile_construction_still_works_without_speckit_fields(repo: Path) -> None:
+    # New StackProfile fields must be additive (R-SK-1) -- a caller building
+    # a StackProfile without knowing about speckit_root/feature_dirs (every
+    # field predating this change) still gets sane defaults.
+    prof = detect.StackProfile(
+        root=repo,
+        languages=(),
+        make_targets=(),
+        openspec_root=None,
+        change_dirs=(),
+        dialect="harness",
+        threshold=None,
+        invariant_source=None,
+        invariant_ids=(),
+        has_project_md=False,
+    )
+    assert prof.speckit_root is None
+    assert prof.feature_dirs == ()
 
 
 def test_current_sha_returns_none_outside_a_git_repo(repo: Path) -> None:

@@ -135,7 +135,7 @@ quality without making the document wrong.
 | ID | Sev | Dialect | Checks |
 |---|---|---|---|
 | G001 | ERROR | any | The spec declares something verifiable at all |
-| G002 | ERROR | any | At least one criterion names a **non-success** outcome |
+| G002 | ERROR | harness, upstream | At least one criterion names a **non-success** outcome |
 | G003 | ERROR | any | No hard-coded thresholds; read them from the detected locator |
 | G004 | ERROR | any | Every cited `make <target>` exists in the target's Makefile |
 | G005 | WARN | any | Every cited `INV-n` is declared in the invariant source |
@@ -154,6 +154,10 @@ quality without making the document wrong.
 | U003 | ERROR | upstream | Every Scenario names a stimulus (`WHEN`) and an outcome (`THEN`); `GIVEN` is optional |
 | U004 | WARN | upstream | Requirements use SHALL / MUST |
 | U005 | WARN | upstream | Heading depths match the convention |
+| S001 | ERROR | speckit | No unresolved `[NEEDS CLARIFICATION]` marker |
+| S002 | ERROR | speckit | `FR-`/`SC-` identifiers are unique |
+| S003 | WARN | speckit | Functional requirements use SHALL / MUST |
+| S004 | WARN | speckit | Acceptance scenarios name a stimulus (`WHEN`) and an outcome (`THEN`) |
 | W001 | ERROR | any | Every cited stage has a fresh, exit-0 witness (only under `--require-witness`) |
 | W002 | ERROR | any | A witness's recorded coverage meets the detected floor (only under `--require-witness`) |
 
@@ -339,7 +343,8 @@ change package.
 - [CHANGELOG](CHANGELOG.md) — releases and notable changes
 - [Architecture (C4)](docs/architecture/c4.md) — context, container, component, code
 - [AQA guide](docs/aqa.md) — the full quality bar and how to reproduce it
-- [Hooks](docs/hooks.md) — pre-commit + CI gates, and how to add a rule
+- [Hooks](docs/hooks.md) — pre-commit + CI gates, the `.claude/` Claude Code
+  hooks/agents/skills dev-tooling layer, and how to add a rule
 - [Agents, skills, and the harness](docs/agents-skills-harness.md) — why this is
   a deterministic governance harness, not an autonomous agent
 - [Next steps](docs/next-steps.md) — what is deliberately out of scope

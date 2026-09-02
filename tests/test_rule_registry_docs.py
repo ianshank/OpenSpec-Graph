@@ -29,6 +29,7 @@ _FAMILIES = (
     ("H", "rules_harness"),
     ("U", "rules_upstream"),
     ("W", "rules_witness"),
+    ("S", "rules_speckit"),
 )
 
 
@@ -39,7 +40,9 @@ def _family_range(prefix: str) -> tuple[str, str]:
 
 def test_readme_rules_table_matches_rules_exactly() -> None:
     text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    found = dict(re.findall(r"^\| (G\d{3}|H\d{3}|U\d{3}|W\d{3}) \| (ERROR|WARN) \|", text, re.MULTILINE))
+    found = dict(
+        re.findall(r"^\| (G\d{3}|H\d{3}|U\d{3}|W\d{3}|S\d{3}) \| (ERROR|WARN) \|", text, re.MULTILINE)
+    )
     expected = {r.ident: r.severity for r in RULES}
     assert found == expected, (
         f"README.md's rules table is out of sync with rules.RULES.\n"
