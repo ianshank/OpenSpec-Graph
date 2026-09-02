@@ -202,25 +202,88 @@ def test_llms_txt_states_the_exit_code_contract() -> None:
 # --- release workflow -------------------------------------------------------
 
 
-def test_release_workflow_is_gated_and_uses_trusted_publishing() -> None:
-    """The publish path's own safety properties, pinned as text.
+def _workflow_jobs(text: str) -> dict[str, str]:
+    """Split a workflow's ``jobs:`` mapping into one text block per job.
 
-    No YAML parser is available (this repo declares no runtime or test
-    dependencies beyond the dev extras), so these are substring checks on the
-    exact tokens that carry the guarantees.
+    A crude split, but scoped: a top-level ``jobs:`` key, then each two-space
+    indented ``<name>:`` starts a block that runs to the next one. That is
+    enough to ask "does *this* job declare that dependency" instead of "does
+    this string appear anywhere in the file", which a comment or an unrelated
+    job would satisfy just as well.
+
+    No YAML parser is used because this project declares no runtime
+    dependencies and none is available to the test suite either.
+    """
+    body = text.split("\njobs:\n", 1)[1] if "\njobs:\n" in text else ""
+    assert body, "release.yml has no top-level jobs: mapping"
+    jobs: dict[str, str] = {}
+    current: str | None = None
+    for line in body.splitlines():
+        header = re.match(r"^  ([A-Za-z_][\w-]*):\s*$", line)
+        if header:
+            current = header.group(1)
+            jobs[current] = ""
+            continue
+        if line and not line.startswith("  ") and not line.startswith("\t"):
+            break  # dedented out of jobs: entirely
+        if current:
+            jobs[current] += line + "\n"
+    return jobs
+
+
+def _uncommented(block: str) -> str:
+    """Strip comment-only lines and trailing comments before matching.
+
+    Without this, every assertion below is satisfiable by a comment that
+    merely mentions the token it is looking for.
+    """
+    kept = []
+    for line in block.splitlines():
+        stripped = line.split("#", 1)[0]
+        if stripped.strip():
+            kept.append(stripped)
+    return "\n".join(kept)
+
+
+def test_release_workflow_is_gated_and_uses_trusted_publishing() -> None:
+    """The publish path's own safety properties, pinned per job.
+
+    Scoped to the job blocks rather than the whole file: asserting that
+    ``needs: gate`` appears *somewhere* does not pin the wiring at all, since
+    a comment or an unrelated job satisfies it identically. The question worth
+    asking is whether the publish job depends on the build job, and this asks
+    exactly that.
     """
     text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
-    assert "id-token: write" in text, "trusted publishing needs an OIDC token"
-    assert "pypa/gh-action-pypi-publish" in text
-    assert "make pre-pr" in text, "publishing must be gated on the full ladder"
-    assert "needs: gate" in text and "needs: build" in text, (
-        "the publish job must depend on the gate and build jobs, not run in parallel"
+    jobs = _workflow_jobs(text)
+    assert {"gate", "build", "publish"} <= set(jobs), (
+        f"release.yml defines jobs {sorted(jobs)}; the gate/build/publish chain is "
+        "what makes publishing safe"
     )
-    assert "python -m venv" in text, (
+
+    gate, build, publish = (_uncommented(jobs[n]) for n in ("gate", "build", "publish"))
+
+    assert "make pre-pr" in gate, "the gate job must run the full ladder"
+    assert re.search(r"^\s*needs:\s*gate\s*$", build, re.MULTILINE), (
+        "the build job must depend on the gate job, not run beside it"
+    )
+    assert "python -m venv" in build, (
         "the clean-environment console-script smoke test is the wheel's only check"
     )
-    # No secret may appear: trusted publishing exists so none is needed.
+    assert re.search(r"^\s*needs:\s*build\s*$", publish, re.MULTILINE), (
+        "the publish job must depend on the build job"
+    )
+    assert re.search(r"^\s*id-token:\s*write\s*$", publish, re.MULTILINE), (
+        "trusted publishing needs an OIDC token, declared on the publish job"
+    )
+    assert "pypa/gh-action-pypi-publish" in publish
+
+    # No stored secret anywhere: trusted publishing exists so none is needed.
     assert "secrets.PYPI" not in text, "a stored token defeats trusted publishing"
+    # Least privilege at the top level.
+    assert re.search(r"^permissions:\n\s+contents:\s*read\s*$", text, re.MULTILINE), (
+        "the workflow's default permissions must be read-only"
+    )
 
 
 def test_every_workflow_is_scanned_by_the_threshold_guard() -> None:
@@ -232,7 +295,17 @@ def test_every_workflow_is_scanned_by_the_threshold_guard() -> None:
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    on_disk = {p.name for p in WORKFLOWS.glob("*.yml")}
+    # Both spellings GitHub Actions accepts. Globbing only *.yml here would let
+    # a workflow added as .yaml escape this wiring check entirely -- the same
+    # single-spelling assumption the guard itself was just fixed for.
+    on_disk = {p.name for p in WORKFLOWS.glob("*.yml")} | {
+        p.name for p in WORKFLOWS.glob("*.yaml")
+    }
+    scanned = {p.name for p in mod.targets()}
+    assert on_disk <= scanned, (
+        f"workflow(s) {sorted(on_disk - scanned)} exist but the guard does not "
+        "scan them"
+    )
     assert on_disk == {"ci.yml", "release.yml"}, (
         f"a workflow was added or renamed ({sorted(on_disk)}); confirm the guard "
         "still globs the directory rather than naming files"

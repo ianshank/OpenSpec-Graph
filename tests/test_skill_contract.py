@@ -152,10 +152,14 @@ def test_read_only_verbs_leave_tree_byte_identical(populated_repo: Path) -> None
 
 
 def test_read_only_invocations_cover_every_verb_the_skill_calls_read_only() -> None:
-    """The list above is only meaningful if it matches SKILL.md's own table."""
-    text = SKILL_MD.read_text(encoding="utf-8")
-    read_only_section = text.split("Read-only.", 1)[1].split("Writes files.", 1)[0]
-    documented = set(re.findall(r"^\| `([a-z]+)` \|", read_only_section, re.MULTILINE))
+    """The list above is only meaningful if it matches SKILL.md's own table.
+
+    Parses through the shared helper rather than splitting inline: an
+    unguarded ``split(...)[1]`` raises IndexError if a heading is reworded,
+    reporting a crash instead of the drift that caused it. The helper exists
+    for exactly that reason, so it is used here too.
+    """
+    documented, _ = _skill_verb_tables()
     exercised = {argv[0] for argv in READ_ONLY_INVOCATIONS}
     assert documented == exercised, (
         f"SKILL.md's read-only table {sorted(documented)} and this test's "
