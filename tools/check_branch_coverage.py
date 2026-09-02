@@ -16,31 +16,21 @@ pyproject.toml — never hard-coded here or in the Makefile (rule G003 / C-CH-2)
 from __future__ import annotations
 
 import json
-import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _common import read_pyproject_int
+
 
 def _read_branch_floor(pyproject: Path) -> int | None:
-    """Read branch_fail_under from [tool.specgraph] without a TOML dependency.
+    """Read branch_fail_under from [tool.specgraph], anchored at the repo root.
 
     This is specgraph's own gate key, kept out of ``[tool.coverage.*]`` so
     coverage.py doesn't warn about an unknown option.
     """
-    if not pyproject.exists():
-        return None
-    in_section = False
-    for line in pyproject.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            in_section = stripped == "[tool.specgraph]"
-            continue
-        if not in_section:
-            continue
-        match = re.match(r"branch_fail_under\s*=\s*(\d+)", stripped)
-        if match:
-            return int(match.group(1))
-    return None
+    return read_pyproject_int(pyproject, "[tool.specgraph]", "branch_fail_under")
 
 
 def branch_coverage(cov_path: Path) -> tuple[float, int, int]:

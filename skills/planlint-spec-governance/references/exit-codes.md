@@ -51,6 +51,11 @@ sha that is not exactly forty hexadecimal characters, a coverage value that is
 not a finite number between zero and one hundred, and an unwritable witness
 store.
 
+**`init` and `new`, unwritable target.** A read-only checkout, a full disk, or
+a permission-denied path exits 2 with `ERROR cannot write to <target>`. This is
+a precondition failure, not a spec failure -- the same distinction the bad
+`--target` case draws, and the reason it is not exit 1.
+
 ## The one exit-1 case that is not a finding
 
 `detect --diff <baseline>` exits 1 when the detected conventions have drifted

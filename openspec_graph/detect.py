@@ -9,6 +9,7 @@ from __future__ import annotations
 import configparser
 import dataclasses
 import json
+import logging
 import re
 import subprocess
 from collections.abc import Sequence
@@ -49,6 +50,17 @@ ADR_SOURCES: tuple[str, ...] = (
     "adr",
     "docs/ADR.md",
 )
+
+# Module logger. Detection is where every "why did planlint not see my X?"
+# question is actually answered, and until now it answered none of them: the
+# candidate locations tried, the ones rejected and why, and the per-file
+# dialect votes were all discarded before anything could observe them.
+#
+# No handler is attached here. `log.configure()` (called from `cli.main`) owns
+# the stderr handler and the propagate=False that keeps records off stdout, so
+# a library consumer importing `detect.profile()` directly gets the standard
+# no-handler silence rather than output this module decided to emit.
+logger = logging.getLogger("planlint.detect")
 
 _MAKE_TARGET = re.compile(r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", re.MULTILINE)
 _INV_ID = re.compile(r"\bINV-\d+\b")
@@ -270,12 +282,15 @@ def _threshold(root: Path) -> ThresholdSource | None:
             continue
         try:
             data = json.loads(policy.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.debug("threshold: %s exists but could not be read: %s", policy, exc)
             continue
         coverage = data.get("coverage")
         if isinstance(coverage, dict) and isinstance(coverage.get("lines"), int):
             rel = to_posix_relative(policy, root)
+            logger.debug("threshold: found coverage.lines in %s", rel)
             return ThresholdSource(f"{rel}:coverage.lines", coverage["lines"])
+        logger.debug("threshold: %s has no integer coverage.lines", policy)
 
     pyproject = root / "pyproject.toml"
     if pyproject.exists():
@@ -300,6 +315,16 @@ def _threshold(root: Path) -> ThresholdSource | None:
         rel = to_posix_relative(setup_cfg, root)
         return ThresholdSource(f"{rel}:[coverage:report].fail_under", value)
 
+    # The highest-value diagnostic in the module. A repo with no detected floor
+    # gets G003 findings phrased against "the coverage floor" with no way to
+    # see which six locations were consulted, so the obvious next question --
+    # "where should I put it?" -- had no answer anywhere in the output.
+    logger.debug(
+        "threshold: no floor found under %s; tried %s, then pyproject.toml, "
+        ".coveragerc [report], setup.cfg [coverage:report]",
+        root,
+        [to_posix_relative(c, root) for c in policy_candidates],
+    )
     return None
 
 
@@ -310,11 +335,12 @@ def _invariants(root: Path) -> tuple[Path | None, tuple[str, ...]]:
             continue
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
+        except OSError as exc:
             # An untrusted target repo's candidate may exist but be
             # unreadable (permission-denied, a broken symlink `exists()`
             # didn't catch, etc.) -- treat it like any other non-match
             # rather than crashing every CLI verb that calls detect.profile().
+            logger.debug("invariants: %s exists but is unreadable: %s", path, exc)
             continue
         ids = sorted(
             set(_INV_ID.findall(text)),
@@ -373,7 +399,8 @@ def _adrs(root: Path) -> tuple[Path | None, tuple[str, ...]]:
             for p in sorted(path.glob("*.md")):
                 try:
                     text = p.read_text(encoding="utf-8", errors="replace")
-                except OSError:
+                except OSError as exc:
+                    logger.debug("adr: skipping unreadable %s: %s", p, exc)
                     # glob() lists directory entries by name pattern only --
                     # a dangling symlink still matches "*.md" but can't be
                     # read. Skip it like any other non-declaring file
@@ -391,7 +418,8 @@ def _adrs(root: Path) -> tuple[Path | None, tuple[str, ...]]:
             # file, not just its first match, is correct here.
             try:
                 text = path.read_text(encoding="utf-8", errors="replace")
-            except OSError:
+            except OSError as exc:
+                logger.debug("adr: %s exists but is unreadable: %s", path, exc)
                 continue
             ids = sorted(
                 set(_ADR_ID.findall(text)),
@@ -423,19 +451,31 @@ def detect_dialect(spec_paths: list[Path]) -> str:
     same marker strings, unified so they can never drift apart.
     """
     upstream = harness = speckit = 0
+    votes: dict[str, list[str]] = {"upstream": [], "harness": [], "speckit": []}
     for path in spec_paths:
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
+        except OSError as exc:
+            logger.debug("dialect: cannot read %s: %s", path, exc)
             continue
         if is_upstream_marked(text):
             upstream += 1
+            votes["upstream"].append(str(path))
         if is_harness_marked(text):
             harness += 1
+            votes["harness"].append(str(path))
         if is_speckit_marked(text):
             speckit += 1
+            votes["speckit"].append(str(path))
     present = sum(1 for count in (upstream, harness, speckit) if count)
     if present > 1:
+        # The one verdict a user cannot act on without knowing which files
+        # disagreed. `validate` prints "more than one spec dialect" and stops;
+        # this is the only place the evidence exists.
+        logger.debug(
+            "dialect: mixed -- upstream=%s harness=%s speckit=%s",
+            votes["upstream"], votes["harness"], votes["speckit"],
+        )
         return "mixed"
     if upstream:
         return "upstream"
@@ -465,13 +505,24 @@ def find_speckit_spec_files(speckit_root: Path) -> list[Path]:
     ``validate`` for content it was never meant to be linted as.
     """
     found: list[Path] = []
+    skipped: list[str] = []
     for path in sorted(speckit_root.glob("*/spec.md")):
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
+        except OSError as exc:
+            logger.debug("speckit: cannot read %s: %s", path, exc)
             continue
         if is_speckit_marked(text):
             found.append(path)
+        else:
+            skipped.append(str(path))
+    if skipped:
+        # From the outside this is indistinguishable from the file not
+        # existing: it simply never appears in `validate`. Naming the dropped
+        # candidates is the difference between "planlint ignored my spec" and
+        # "my spec is missing the SpecKit markers".
+        logger.debug("speckit: %d candidate(s) lack SpecKit markers: %s",
+                     len(skipped), skipped)
     return found
 
 
@@ -535,7 +586,12 @@ def _current_sha(root: Path) -> str | None:
     """
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            # S607: `git` is resolved from PATH deliberately. An absolute path
+            # would have to be guessed per platform and per installation, and
+            # the argument vector is a fixed literal with no target-controlled
+            # input -- see this function's docstring on why DEC-MP-001's
+            # shell-injection concern does not transfer to it.
+            ["git", "rev-parse", "HEAD"],  # noqa: S607
             cwd=root,
             capture_output=True,
             text=True,
