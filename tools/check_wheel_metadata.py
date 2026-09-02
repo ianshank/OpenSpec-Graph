@@ -23,6 +23,7 @@ three-way contract the CLI itself publishes.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import sys
 import zipfile
 from pathlib import Path
@@ -89,10 +90,16 @@ def check_wheel(wheel: Path, expression: str, license_files: list[str]) -> list[
         # a gate that reports a licence the installer will never register.
         licenses_root = f"{metadata_names[0][: -len('/METADATA')]}/{_LICENSE_DIR}"
         for declared in license_files:
+            # PEP 639 says these entries are globs, so they are matched as
+            # globs -- against the path *relative to* the licence directory,
+            # which preserves any subdirectory the pattern names. Comparing
+            # basenames instead would both miss `docs/LICENSE`-shaped patterns
+            # and accept a same-named file from the wrong subdirectory.
             matches = [
                 n
                 for n in names
-                if n.startswith(licenses_root) and n.endswith(f"/{Path(declared).name}")
+                if n.startswith(licenses_root)
+                and fnmatch.fnmatch(n[len(licenses_root):], declared)
             ]
             if not matches:
                 problems.append(
@@ -100,8 +107,13 @@ def check_wheel(wheel: Path, expression: str, license_files: list[str]) -> list[
                     f"matching file was packaged under {licenses_root}"
                 )
                 continue
-            if not archive.read(matches[0]).strip():
-                problems.append(f"{wheel.name}: packaged licence {matches[0]!r} is empty")
+            # Every match, not just the first: a pattern matching several files
+            # with one of them empty would otherwise pass on the strength of
+            # its siblings, which is the sort of "mostly true" a licence check
+            # has no business reporting as a pass.
+            for match in sorted(matches):
+                if not archive.read(match).strip():
+                    problems.append(f"{wheel.name}: packaged licence {match!r} is empty")
     return problems
 
 

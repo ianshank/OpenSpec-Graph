@@ -153,6 +153,59 @@ def test_an_empty_license_file_is_caught(tmp_path: Path) -> None:
     assert any("empty" in p for p in problems)
 
 
+def test_a_glob_pattern_matches_the_files_it_names(tmp_path: Path) -> None:
+    """PEP 639 says `license-files` entries are globs, so they are matched as
+    globs. Comparing basenames instead would reject a legitimate pattern like
+    `LICENSE*` outright — a gate failing on a correct wheel."""
+    wheel = _wheel(
+        tmp_path,
+        license_text=None,
+        extra={
+            f"{DIST_INFO}/licenses/LICENSE.txt": "Apache License\n",
+            f"{DIST_INFO}/licenses/LICENSE.APACHE": "Apache License\n",
+        },
+    )
+
+    assert check_wheel(wheel, "Apache-2.0", ["LICENSE*"]) == []
+
+
+def test_a_pattern_naming_a_subdirectory_is_matched_there(tmp_path: Path) -> None:
+    """The pattern is matched against the path relative to the licence
+    directory, so a subdirectory in the pattern is honoured rather than
+    flattened to a basename — which would accept the right name in the wrong
+    place."""
+    wheel = _wheel(
+        tmp_path,
+        license_text=None,
+        extra={f"{DIST_INFO}/licenses/vendor/LICENSE": "Apache License\n"},
+    )
+
+    assert check_wheel(wheel, "Apache-2.0", ["vendor/LICENSE"]) == []
+    # The same file does not satisfy a pattern naming a different directory.
+    assert check_wheel(wheel, "Apache-2.0", ["third_party/LICENSE"])
+
+
+def test_an_empty_file_is_caught_even_when_it_is_not_the_first_match(
+    tmp_path: Path,
+) -> None:
+    """Every match is checked, not just the first. A pattern matching several
+    files with one of them empty would otherwise pass on the strength of its
+    siblings — "mostly licensed" is not a thing a licence gate may report as a
+    pass."""
+    wheel = _wheel(
+        tmp_path,
+        license_text=None,
+        extra={
+            f"{DIST_INFO}/licenses/LICENSE.a": "Apache License\n",
+            f"{DIST_INFO}/licenses/LICENSE.z": "   \n",
+        },
+    )
+
+    problems = check_wheel(wheel, "Apache-2.0", ["LICENSE*"])
+
+    assert any("empty" in p and "LICENSE.z" in p for p in problems), problems
+
+
 def test_a_wheel_without_metadata_is_caught(tmp_path: Path) -> None:
     path = tmp_path / "broken-0.1-py3-none-any.whl"
     with zipfile.ZipFile(path, "w") as archive:

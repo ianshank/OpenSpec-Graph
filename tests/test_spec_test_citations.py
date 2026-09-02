@@ -8,10 +8,22 @@ selectors across two change packages named tests that did not exist, several
 of them asserting the test "already exists". A spec-governance tool cannot
 ship with that particular lie in its own tree.
 
-The check mirrors ``pytest -k`` semantics: ``-k`` matches a substring, so a
-selector resolves when at least one collected test name contains it. Test
-names are read from the AST rather than by running pytest per selector, which
-keeps the whole guard well under a second.
+A selector resolves when at least one test *function name* defined under
+``tests/`` contains it as a substring. That is deliberately narrower than what
+``pytest -k`` accepts: ``-k`` matches against the whole node id, so a real
+selector could also match a module name, a class, or a parametrised case id.
+This guard would reject such a selector as unresolved.
+
+The narrowing is the useful direction. Every citation in this repository names
+a test function, that is the convention worth enforcing, and a guard that also
+accepted module and parameter names could be satisfied by a selector matching
+nothing a reader would recognise as the cited test. A false rejection here
+costs one rewritten citation; a false acceptance costs the property the guard
+exists for. If a citation ever legitimately needs a parametrised case id, widen
+this deliberately rather than loosening it to full node ids.
+
+Names are read from the AST rather than by running pytest once per selector,
+which keeps the whole guard well under a second.
 """
 
 from __future__ import annotations
