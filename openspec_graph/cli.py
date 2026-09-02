@@ -448,13 +448,19 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     ordered = sorted(findings, key=lambda f: _sort_key(f, prof.root))
 
+    if args.format == "sarif" or args.json or args.format == "json":
+        # Serialized once, rendered by whichever machine-readable format was
+        # asked for. That is what makes "SARIF reports the same findings as
+        # --json" structural rather than a property two code paths have to be
+        # kept agreeing on.
+        serialized = [f.as_dict(prof.root) for f in ordered]
+
     if args.format == "sarif":
         print(
             json.dumps(
                 sarif.to_sarif(
-                    ordered,
+                    serialized,
                     rules.rule_table(),
-                    root=prof.root,
                     tool_version=_package_version(),
                 ),
                 indent=2,
@@ -477,7 +483,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
                     # findings paths below resolve against.
                     "target": str(prof.root),
                     "specs_checked": len(spec_files),
-                    "findings": [f.as_dict(prof.root) for f in ordered],
+                    "findings": serialized,
                     "blocking": len(blocking),
                 },
                 indent=2,
@@ -601,8 +607,16 @@ def cmd_delta(args: argparse.Namespace) -> int:
                 {
                     "schema_version": delta.DELTA_SCHEMA_VERSION,
                     "tool_version": _package_version(),
+                    # `target` is absolute by the same reasoning as the
+                    # findings envelope: it is the base the relative paths
+                    # below resolve against. The baseline's own path is
+                    # deliberately absent (DEC-DL-007) -- it is whatever
+                    # string the operator typed, frequently absolute, and
+                    # including it would make two runs of the same comparison
+                    # differ by nothing but where the card happened to sit.
+                    # That is exactly the defect `detect --json` is deprecated
+                    # for.
                     "target": str(prof.root),
-                    "baseline": str(Path(args.baseline)),
                     "machinery_changes": dialect_card.diff_cards(baseline, prof.to_card()),
                     "stale": [e.as_dict() for e in entries],
                 },

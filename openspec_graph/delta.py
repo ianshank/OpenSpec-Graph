@@ -23,13 +23,12 @@ than a git ref.
 from __future__ import annotations
 
 import dataclasses
-import re
 from collections.abc import Sequence
 from pathlib import Path
 
 from . import detect
 from .detect import StackProfile
-from .parse import ParsedSpec
+from .parse import ParsedSpec, threshold_values
 
 __all__ = ["DELTA_SCHEMA_VERSION", "DeltaEntry", "build_delta"]
 
@@ -47,11 +46,6 @@ KIND_MAKE_TARGET = "make_target"
 KIND_INVARIANT = "invariant"
 KIND_ADR = "adr"
 KIND_THRESHOLD = "threshold"
-
-# One number, decimals included, so "90.5" is a single token rather than a
-# "90" next to a "5". See _mentions_value for why that distinction is
-# load-bearing rather than tidy.
-_NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -221,20 +215,19 @@ def build_delta(
 
 
 def _mentions_value(literal: str, value: int) -> bool:
-    """Whether a spec line states ``value`` as a whole number of its own.
+    """Whether a spec line states ``value`` as its single threshold.
 
-    Number-boundary aware, not a substring test, and decimals count as one
-    number. Both halves matter, and each was a real over-match before it was
-    fixed:
+    Delegates to ``parse_semantics.threshold_values`` — the same helper G003
+    uses — rather than scanning the line here. Two implementations of "what
+    counts as a threshold on this line" would eventually disagree, and the
+    first version of this function already did: it matched a line reading
+    "coverage moved from 80% to 90%" against *both* 80 and 90, while G003
+    correctly suppresses a line carrying two threshold-shaped values because
+    it cannot tell which one is the claim.
 
-    - ``"190"`` must not match a floor of 90, and ``"90"`` must not match a
-      floor of 9 — digit-run boundaries handle that.
-    - ``"90.5"`` must not match a floor of 90 either, and neither must the
-      ``9.90`` in a version string. A spec citing 90.5 is not citing 90, and
-      telling someone it is would be a false positive in the one report this
-      verb exists to make trustworthy.
-
-    ``str(value)`` on an ``int`` never carries a decimal point, so an exact
-    token comparison rejects both cases without special-casing either.
+    Requiring exactly one value inherits that judgement instead of
+    re-deriving it. A line that names two numbers is describing a change, not
+    asserting a floor, and reporting it would be a false positive in the one
+    report this verb exists to make trustworthy.
     """
-    return str(value) in _NUMBER.findall(literal)
+    return threshold_values(literal) == (value,)

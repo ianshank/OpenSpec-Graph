@@ -38,6 +38,7 @@ _NEW_MODULES = [
     "dialect_card",
     "ledger",
     "delta",
+    "sarif",
     "mermaid",
     "witness",
     "rules_witness",

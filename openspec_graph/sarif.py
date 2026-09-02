@@ -10,23 +10,27 @@ The point of the format is placement, not content. Findings reach an adopter
 today as text in a CI log that nobody opens; SARIF puts the same findings
 inline on the diff, in the pull request their team already reviews.
 
-Stdlib-only, no I/O, no intra-package import beyond the types it reshapes.
+Stdlib-only, no I/O, and **zero intra-package imports** -- the same posture
+``mermaid.py`` holds, and for the same reason: a projection that reaches back
+into the package is one refactor away from depending on evaluation order. It
+is handed the finding dicts ``cmd_validate`` has already serialized, which is
+also what makes "the same findings as ``--json``" literally true: both
+renderings read the same list of dicts, not two traversals that have to be
+kept in step.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from pathlib import Path
-
-from . import detect
-from .rule_types import ERROR, INFO, WARN, Finding
 
 __all__ = ["SARIF_SCHEMA_URI", "SARIF_VERSION", "to_sarif"]
 
 SARIF_VERSION = "2.1.0"
-SARIF_SCHEMA_URI = (
-    "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
-)
+# schemastore's copy, which is what CodeQL itself emits. The oasis-tcs URL
+# that reads like the canonical one is dead: that repository moved off
+# `master` and reorganised its schema directory, so a validator following it
+# gets a 404 rather than a schema.
+SARIF_SCHEMA_URI = "https://json.schemastore.org/sarif-2.1.0.json"
 
 # The base id every artifact location is expressed against. GitHub resolves
 # it to the repository root, which is what makes a repository-relative uri
@@ -35,7 +39,7 @@ SRCROOT = "%SRCROOT%"
 
 # planlint severities to SARIF levels. Total over SEVERITY_ORDER's vocabulary;
 # `_level` fails upward rather than silently downgrading anything missing.
-_LEVELS = {ERROR: "error", WARN: "warning", INFO: "note"}
+_LEVELS = {"ERROR": "error", "WARN": "warning", "INFO": "note"}
 
 
 def _level(severity: str) -> str:
@@ -64,46 +68,55 @@ def _dialects(value: object) -> list[str]:
     return []
 
 
-def _location(finding: Finding, root: Path | None) -> list[dict[str, object]]:
+def _location(finding: Mapping[str, object]) -> list[dict[str, object]]:
     """The finding's location, or an empty list when it has no path.
 
     An empty ``locations`` array is valid SARIF and is honest: it says no
     location was computed. The alternatives are both worse — dropping the
     finding loses a real result to make a schema happy, and inventing a
-    synthetic uri asserts a file the finding is not about.
+    synthetic uri asserts a file the finding is not about. GitHub will not
+    render a locationless alert, which is a real cost, but a silently missing
+    finding is a worse one.
+
+    The path arrives already repository-relative and POSIX-rendered, because
+    the caller serialized it that way for the JSON envelope. Relativizing it
+    here would be a second implementation of the same rule.
     """
-    if finding.path is None:
+    path = finding.get("path")
+    if not path:
         return []
 
     physical: dict[str, object] = {
-        "artifactLocation": {
-            "uri": detect.to_posix_relative(finding.path, root),
-            "uriBaseId": SRCROOT,
-        }
+        "artifactLocation": {"uri": str(path), "uriBaseId": SRCROOT}
     }
     # Only a real line gets a region. SARIF's startLine minimum is 1, so a 0
     # cannot be represented, and clamping it to 1 would put an annotation on
     # the first line of a real file pointing at content the finding is not
     # about -- a wrong location a reviewer cannot tell is wrong. This is the
     # common path, not an edge case: no rule currently sets a line at all.
-    if finding.line >= 1:
-        physical["region"] = {"startLine": finding.line}
+    line = finding.get("line")
+    if isinstance(line, int) and line >= 1:
+        physical["region"] = {"startLine": line}
     return [{"physicalLocation": physical}]
 
 
 def to_sarif(
-    findings: Sequence[Finding],
+    findings: Sequence[Mapping[str, object]],
     rule_table: Sequence[Mapping[str, object]],
     *,
-    root: Path | None = None,
     tool_version: str = "",
     information_uri: str = "https://github.com/ianshank/planlint",
 ) -> dict[str, object]:
-    """Build a SARIF log from findings already computed by the rule engine.
+    """Build a SARIF log from findings the caller has already serialized.
 
-    ``findings`` must arrive in the order the caller wants them reported; this
-    function preserves it rather than imposing a second ordering, so the text,
-    JSON and SARIF renderings of one run agree.
+    ``findings`` are ``Finding.as_dict(root)`` outputs -- the same list the
+    ``--json`` envelope carries, in the same order. Taking dicts rather than
+    ``Finding`` objects is what keeps this module free of intra-package
+    imports, and it makes the no-divergence property structural: there is one
+    list, rendered twice, not two traversals to keep in step.
+
+    Order is preserved rather than re-imposed, so the text, JSON and SARIF
+    renderings of one run agree.
 
     ``rule_table`` is the whole registry, not only the rules that fired.
     GitHub attaches alert metadata by ``ruleId`` against the driver's rule
@@ -124,7 +137,7 @@ def to_sarif(
                 "id": ident,
                 "name": ident,
                 "shortDescription": {"text": str(entry.get("summary", ""))},
-                "defaultConfiguration": {"level": _level(str(entry.get("severity", ERROR)))},
+                "defaultConfiguration": {"level": _level(str(entry.get("severity", "ERROR")))},
                 # rule_table() renders dialects as a comma-joined string
                 # ("*", "harness,upstream"). Split rather than list() -- the
                 # latter would explode the string into single characters.
@@ -134,19 +147,20 @@ def to_sarif(
 
     results: list[dict[str, object]] = []
     for finding in findings:
+        rule_id = str(finding.get("rule", ""))
         result: dict[str, object] = {
-            "ruleId": finding.rule,
-            "level": _level(finding.severity),
-            "message": {"text": finding.message},
-            "locations": _location(finding, root),
+            "ruleId": rule_id,
+            "level": _level(str(finding.get("severity", ""))),
+            "message": {"text": str(finding.get("message", ""))},
+            "locations": _location(finding),
         }
         # ruleIndex is optional, and omitted rather than guessed when the
         # rule is not in the registry -- an index pointing at the wrong rule
         # is worse than none, and a caller can always resolve by ruleId.
-        if finding.rule in index_of:
-            result["ruleIndex"] = index_of[finding.rule]
-        if finding.subject:
-            result["properties"] = {"subject": finding.subject}
+        if rule_id in index_of:
+            result["ruleIndex"] = index_of[rule_id]
+        if finding.get("subject"):
+            result["properties"] = {"subject": finding["subject"]}
         results.append(result)
 
     driver: dict[str, object] = {
@@ -163,6 +177,9 @@ def to_sarif(
         "runs": [
             {
                 "tool": {"driver": driver},
+                # Declared so a strict validator can resolve %SRCROOT%; GitHub
+                # tolerates its absence, other consumers warn.
+                "originalUriBaseIds": {SRCROOT.strip("%"): {"uri": "file:///"}},
                 "results": results,
             }
         ],

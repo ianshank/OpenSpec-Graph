@@ -1,6 +1,6 @@
 """SARIF 2.1.0 output, the composite action, and the pre-commit hooks file.
 
-`AC-SA-1..16`. The format's value is placement: the same findings `validate`
+`AC-SA-1..19`. The format's value is placement: the same findings `validate`
 already prints, delivered onto the diff in the pull request a team already
 reviews rather than into a CI log nobody opens. So the properties worth
 guarding are the ones that decide whether an annotation lands on the right
@@ -97,7 +97,7 @@ def test_sarif_and_json_report_the_same_finding_multiset(tmp_path: Path) -> None
 
 
 def test_sarif_results_are_ordered_like_the_text_renderer(tmp_path: Path) -> None:
-    """AC-SA-11: all three renderings of one run agree on order."""
+    """AC-SA-7: all three renderings of one run agree on order."""
     repo = _repo(tmp_path)
 
     sarif_order = [
@@ -115,7 +115,7 @@ def test_sarif_results_are_ordered_like_the_text_renderer(tmp_path: Path) -> Non
 
 
 def test_sarif_output_is_byte_stable_across_runs(tmp_path: Path) -> None:
-    """AC-SA-12: a report that shuffles between runs cannot be diffed."""
+    """AC-SA-11: a report that shuffles between runs cannot be diffed."""
     repo = _repo(tmp_path)
 
     first = run_cli(repo, "validate", "--format", "sarif").stdout
@@ -157,9 +157,8 @@ def test_a_finding_with_no_path_is_emitted_without_a_location(tmp_path: Path) ->
     failure this format must not introduce. An empty locations array is valid
     SARIF and honest; a synthetic uri would assert a file."""
     log = sarif.to_sarif(
-        [Finding("G006", ERROR, "orphan invariant", path=None)],
+        [Finding("G006", ERROR, "orphan invariant", path=None).as_dict(tmp_path)],
         rule_table(),
-        root=tmp_path,
     )
 
     result = log["runs"][0]["results"][0]
@@ -176,7 +175,7 @@ def test_no_finding_is_ever_dropped_from_the_sarif_log(tmp_path: Path) -> None:
         Finding("G002", INFO, "c", path=tmp_path / "two.md", line=12),
     ]
 
-    log = sarif.to_sarif(findings, rule_table(), root=tmp_path)
+    log = sarif.to_sarif([f.as_dict(tmp_path) for f in findings], rule_table())
 
     assert len(log["runs"][0]["results"]) == len(findings)
 
@@ -186,9 +185,8 @@ def test_a_line_of_zero_emits_no_region(tmp_path: Path) -> None:
     finding. SARIF's startLine minimum is 1, so a 0 cannot be represented —
     and inventing line 1 would annotate content the finding is not about."""
     log = sarif.to_sarif(
-        [Finding("G001", ERROR, "msg", path=tmp_path / "spec.md", line=0)],
+        [Finding("G001", ERROR, "msg", path=tmp_path / "spec.md", line=0).as_dict(tmp_path)],
         rule_table(),
-        root=tmp_path,
     )
 
     physical = log["runs"][0]["results"][0]["locations"][0]["physicalLocation"]
@@ -198,9 +196,8 @@ def test_a_line_of_zero_emits_no_region(tmp_path: Path) -> None:
 def test_a_real_line_emits_a_start_line(tmp_path: Path) -> None:
     """AC-SA-5: and a finding that does carry a line still points at it."""
     log = sarif.to_sarif(
-        [Finding("G001", ERROR, "msg", path=tmp_path / "spec.md", line=42)],
+        [Finding("G001", ERROR, "msg", path=tmp_path / "spec.md", line=42).as_dict(tmp_path)],
         rule_table(),
-        root=tmp_path,
     )
 
     physical = log["runs"][0]["results"][0]["locations"][0]["physicalLocation"]
@@ -237,7 +234,7 @@ def test_artifact_location_carries_the_srcroot_base_id(tmp_path: Path) -> None:
 
 
 def test_driver_rules_mirror_the_rule_table(tmp_path: Path) -> None:
-    """AC-SA-7: the whole registry, not only the rules that fired. GitHub
+    """AC-SA-8: the whole registry, not only the rules that fired. GitHub
     attaches alert metadata by ruleId against this set, so a rule firing for
     the first time in a later run would otherwise arrive unnamed."""
     log = _sarif(_repo(tmp_path))

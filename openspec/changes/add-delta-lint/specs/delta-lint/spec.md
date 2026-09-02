@@ -67,11 +67,15 @@ cites and nothing about history. The join does not exist.
   before that field existed) MUST be skipped for that entry kind, exactly as
   `dialect_card.diff_cards` skips it. An older schema MUST NOT be read as
   "every citation of that kind went stale".
-- R-DL-7: `delta --format json` MUST emit an object carrying
-  `schema_version`, `machinery_changes` (the `diff_cards` list, verbatim), and
-  `stale_citations` (the entries). The entry list MUST be stable-ordered and
-  the whole payload MUST be byte-identical across re-runs on an unchanged
-  repository.
+- R-DL-7: `delta --format json` MUST emit an object carrying exactly
+  `schema_version`, `tool_version`, `target` (absolute, the base its relative
+  paths resolve against), `machinery_changes` (the `diff_cards` list,
+  verbatim) and `stale` (the entries) -- and nothing else. In particular it
+  MUST NOT carry the baseline's own path (`DEC-DL-007`): that is whatever
+  string the operator typed, frequently absolute, and it would make two runs
+  of the same comparison differ by nothing but where the card happened to
+  sit. The entry list MUST be stable-ordered and the whole payload MUST be
+  byte-identical across re-runs on an unchanged repository.
 - R-DL-8: `delta` MUST exit `0` when no citation went stale, `1` when at
   least one did, and `2` when the baseline file cannot be read, is not JSON,
   or is not a JSON object.
@@ -227,6 +231,26 @@ cites and nothing about history. The join does not exist.
   not of the renderer, so the text and JSON outputs cannot disagree the way
   `validate`'s two branches once did (`DEC-FE-007`).
 
+- **DEC-DL-011 (a spec added since the baseline is still reported, and this is
+  a known limitation):** the predicate is "the cited thing was supported at
+  the baseline and is not now". It says nothing about whether the *spec* was
+  present at the baseline, because the dialect card does not record spec
+  paths -- only the machinery. So a spec written after the baseline was taken,
+  citing a target removed after the baseline was taken, is reported.
+
+  Found by adversarial review, and worth stating plainly rather than
+  discovering later: the report's framing ("what your change left behind")
+  over-claims for that spec, since its citation was never satisfied by any
+  tree the spec existed in. What each entry's message actually asserts is
+  narrower and remains true -- the *target* existed at the baseline and does
+  not now -- so the output is not false, but a reader inferring "I broke this
+  spec" would be wrong about one case.
+
+  Fixing it properly means recording the spec set in the card, which widens
+  the card's schema and its `--diff` semantics for a narrow gain. Deferred
+  deliberately. If it becomes a real annoyance, the fix is a card field, not
+  a heuristic in `build_delta`.
+
 ---
 
 ## Acceptance Criteria
@@ -255,7 +279,7 @@ cites and nothing about history. The join does not exist.
   _Verified by:_ `pytest -k test_every_delta_entry_corresponds_to_a_machinery_change` · stage: `make test` (test not yet written)
 
 - [ ] **AC-DL-5 (non-success):** A baseline card taken from the *same,
-  unchanged* repository yields an empty `stale_citations` list and exit 0 —
+  unchanged* repository yields an empty `stale` list and exit 0 —
   `delta` manufactures nothing. Asserted both at the `build_delta` level and
   end-to-end through the CLI, over a fixture that is first asserted to contain
   real citations, so the criterion cannot pass vacuously on an empty tree.
@@ -272,7 +296,7 @@ cites and nothing about history. The join does not exist.
   _Verified by:_ `pytest -k test_delta_ignores_a_citation_already_broken_in_the_baseline` · stage: `make test` (test not yet written)
 
 - [ ] **AC-DL-7:** `delta --format json` emits `schema_version`,
-  `machinery_changes`, and `stale_citations`; entries are ordered by
+  `machinery_changes`, and `stale`; entries are ordered by
   `(path, kind, subject)`; and two consecutive runs over an unchanged
   repository produce byte-identical stdout. Entry order is asserted against a
   fixture whose specs are created in an order that differs from the sorted

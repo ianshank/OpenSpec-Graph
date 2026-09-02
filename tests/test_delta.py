@@ -18,7 +18,7 @@ import json
 from pathlib import Path
 
 from openspec_graph import delta, detect
-from openspec_graph.parse import parse_spec
+from openspec_graph.parse import parse_spec, threshold_values
 from tests.support import run_cli, write_spec
 
 FX = Path(__file__).resolve().parent / "fixtures"
@@ -59,7 +59,7 @@ def _move_floor(repo: Path, old: int, new: int) -> None:
 
 
 def test_delta_names_the_removed_make_target(tmp_path: Path) -> None:
-    """AC-DL-1: the citation was executable at the baseline and is not now."""
+    """AC-DL-2: the citation was executable at the baseline and is not now."""
     repo = _repo(tmp_path / "repo")
     baseline = _baseline(repo, tmp_path)
     _remove_make_target(repo, "regression")
@@ -71,7 +71,7 @@ def test_delta_names_the_removed_make_target(tmp_path: Path) -> None:
 
 
 def test_delta_ignores_a_citation_already_broken_in_the_baseline(tmp_path: Path) -> None:
-    """AC-DL-2 (non-success): the criterion that separates this verb from
+    """AC-DL-6 (non-success): the criterion that separates this verb from
     `validate`. A spec citing a target that never existed is a real finding —
     G004 reports it — but nothing about it changed, so it is not a delta.
 
@@ -94,7 +94,7 @@ def test_delta_ignores_a_citation_already_broken_in_the_baseline(tmp_path: Path)
 
 
 def test_delta_on_an_identical_baseline_is_empty(tmp_path: Path) -> None:
-    """AC-DL-3 (non-success): delta manufactures nothing. Same repo, same
+    """AC-DL-5 (non-success): delta manufactures nothing. Same repo, same
     card, exit 0 and an empty list."""
     repo = _repo(tmp_path / "repo")
     baseline = _baseline(repo, tmp_path)
@@ -106,7 +106,7 @@ def test_delta_on_an_identical_baseline_is_empty(tmp_path: Path) -> None:
 
 
 def test_delta_reports_a_spec_citing_the_old_coverage_floor(tmp_path: Path) -> None:
-    """AC-DL-4: the headline case. A spec that hard-codes the floor keeps
+    """AC-DL-1: the headline case. A spec that hard-codes the floor keeps
     passing every gate while stating a number the repository has changed."""
     repo = _repo(tmp_path / "repo")
     body = (FX / "good_harness.md").read_text(encoding="utf-8").replace(
@@ -129,7 +129,7 @@ def test_delta_reports_a_spec_citing_the_old_coverage_floor(tmp_path: Path) -> N
 
 
 def test_delta_ignores_a_floor_that_did_not_move(tmp_path: Path) -> None:
-    """AC-DL-4 (non-success): citing the floor is only stale once the floor
+    """AC-DL-1 (non-success): citing the floor is only stale once the floor
     moves. A spec naming the current number is correct, not a finding."""
     repo = _repo(tmp_path / "repo")
     body = (FX / "good_harness.md").read_text(encoding="utf-8").replace(
@@ -212,12 +212,68 @@ def test_every_delta_entry_corresponds_to_a_machinery_change(tmp_path: Path) -> 
         "attribution claim is broken"
     )
 
+    # Per entry, not merely globally: a run could report a stale ADR while the
+    # only machinery change was to the Makefile, and a whole-payload check
+    # would call that attributed. Each kind must point at a card field the
+    # diff actually names.
+    field_for_kind = {
+        delta.KIND_MAKE_TARGET: "make_targets",
+        delta.KIND_INVARIANT: "invariant_ids",
+        delta.KIND_ADR: "adr_ids",
+        delta.KIND_THRESHOLD: "threshold",
+    }
+    changed_fields = {line.split(" changed:")[0] for line in payload["machinery_changes"]}
+    for entry in payload["stale"]:
+        assert field_for_kind[entry["kind"]] in changed_fields, (
+            f"{entry['kind']} entry reported, but {field_for_kind[entry['kind']]!r} "
+            f"is not among the changed fields {sorted(changed_fields)}"
+        )
+
+
+def test_every_kind_of_entry_is_attributed_to_its_own_machinery_change(
+    tmp_path: Path,
+) -> None:
+    """AC-DL-4: the same property with all four kinds live at once, so no kind
+    is exempt from it by never having been exercised together."""
+    repo = _repo(tmp_path / "repo")
+    (repo / "CONTRACT.md").write_text("# Contract\n\n- INV-1: first.\n", encoding="utf-8")
+    adr_dir = repo / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0001-first.md").write_text("# ADR-1: the first decision\n", encoding="utf-8")
+    body = (FX / "good_harness.md").read_text(encoding="utf-8").replace(
+        "## Acceptance Criteria",
+        "## Acceptance Criteria\n\nImplements ADR-1 and INV-1.\n\n- [ ] **AC-X-9:** "
+        "coverage stays at or above 90% for the package.\n"
+        "  _Verified by:_ `pytest -k test_x` · stage: `make test`\n",
+        1,
+    )
+    write_spec(repo, "cites-everything", "cap", body)
+    baseline = _baseline(repo, tmp_path)
+
+    # Move all four at once.
+    _remove_make_target(repo, "regression")
+    _move_floor(repo, 90, 95)
+    (repo / "CONTRACT.md").write_text("# Contract\n\n(none)\n", encoding="utf-8")
+    (adr_dir / "0001-first.md").unlink()
+
+    payload = json.loads(
+        run_cli(repo, "delta", "--baseline", str(baseline), "--format", "json").stdout
+    )
+    kinds = {e["kind"] for e in payload["stale"]}
+
+    assert kinds == {
+        delta.KIND_MAKE_TARGET,
+        delta.KIND_INVARIANT,
+        delta.KIND_ADR,
+        delta.KIND_THRESHOLD,
+    }, sorted(kinds)
+
 
 # --- The exit-code contract ---
 
 
 def test_cli_delta_with_missing_baseline_is_a_usage_error(tmp_path: Path) -> None:
-    """AC-DL-5: a missing baseline is a precondition failure, not a report."""
+    """AC-DL-10: a missing baseline is a precondition failure, not a report."""
     repo = _repo(tmp_path / "repo")
 
     result = run_cli(repo, "delta", "--baseline", str(tmp_path / "absent.json"))
@@ -227,7 +283,7 @@ def test_cli_delta_with_missing_baseline_is_a_usage_error(tmp_path: Path) -> Non
 
 
 def test_cli_delta_with_a_non_object_baseline_is_a_usage_error(tmp_path: Path) -> None:
-    """AC-DL-5: valid JSON that is not a card is still not a card."""
+    """AC-DL-10: valid JSON that is not a card is still not a card."""
     repo = _repo(tmp_path / "repo")
     bad = tmp_path / "array.json"
     bad.write_text("[1, 2, 3]", encoding="utf-8")
@@ -265,7 +321,7 @@ def test_cli_delta_without_a_spec_tree_is_a_usage_error(tmp_path: Path) -> None:
 
 
 def test_cli_delta_json_lists_stale_citations_with_schema_version(tmp_path: Path) -> None:
-    """AC-DL-6: same envelope discipline as every other machine-readable
+    """AC-DL-7: same envelope discipline as every other machine-readable
     output, and byte-identical on re-run."""
     repo = _repo(tmp_path / "repo")
     baseline = _baseline(repo, tmp_path)
@@ -280,10 +336,14 @@ def test_cli_delta_json_lists_stale_citations_with_schema_version(tmp_path: Path
         "schema_version",
         "tool_version",
         "target",
-        "baseline",
         "machinery_changes",
         "stale",
     }
+    # The baseline's own path is deliberately absent (DEC-DL-007): it is
+    # whatever string the operator typed, frequently absolute, and including
+    # it would make two runs of the same comparison differ by nothing but
+    # where the card happened to sit.
+    assert "baseline" not in payload
 
 
 def test_cli_delta_json_is_byte_identical_across_runs(tmp_path: Path) -> None:
@@ -320,7 +380,7 @@ def test_delta_paths_are_repository_relative(tmp_path: Path) -> None:
 
 
 def test_cli_delta_exits_zero_on_an_identical_baseline(tmp_path: Path) -> None:
-    """AC-DL-8: "the floor moved and no spec cited it" is a useful answer.
+    """AC-DL-5: "the floor moved and no spec cited it" is a useful answer.
     Printing nothing would leave a reader unsure the baseline was read."""
     repo = _repo(tmp_path / "repo")
     baseline = _baseline(repo, tmp_path)
@@ -335,7 +395,7 @@ def test_cli_delta_exits_zero_on_an_identical_baseline(tmp_path: Path) -> None:
 
 
 def test_cli_delta_never_writes_to_the_target_repo(tmp_path: Path) -> None:
-    """AC-DL-9 (non-success): `delta` is a read-only verb, like `detect`."""
+    """AC-DL-12 (non-success): `delta` is a read-only verb, like `detect`."""
     repo = _repo(tmp_path / "repo")
     baseline = _baseline(repo, tmp_path)
     before = {p: p.stat().st_mtime_ns for p in sorted(repo.rglob("*")) if p.is_file()}
@@ -350,7 +410,7 @@ def test_cli_delta_never_writes_to_the_target_repo(tmp_path: Path) -> None:
 
 
 def test_delta_skips_a_field_absent_from_an_older_baseline_card(tmp_path: Path) -> None:
-    """AC-DL-10 (non-success): a card saved before a field existed never
+    """AC-DL-8 (non-success): a card saved before a field existed never
     tracked that dimension. Reading its absence as "everything was removed"
     would report every tool upgrade as repository drift — the same
     schema-addition trap `diff_cards` documents.
@@ -399,21 +459,43 @@ def test_delta_entries_never_reach_the_finding_stream() -> None:
 
 
 def test_delta_ignores_an_ambiguous_threshold_line() -> None:
-    """AC-DL-12: `9` must not match inside `90`, and `90` must not match
-    inside `190`. A substring test would report the wrong specs and, worse,
-    would look like it worked on the common case."""
+    """AC-DL-9: a line naming two threshold values states neither as a claim.
+
+    This is the finding that made the matcher delegate to
+    `parse_semantics.threshold_values` instead of scanning numbers itself.
+    A hand-rolled scan matched the line below against *both* 80 and 90, while
+    G003 has always suppressed a two-value line because it cannot tell which
+    number is the assertion. Two implementations of "what counts as a
+    threshold here" had already disagreed on their first day.
+    """
+    both = "- [ ] **AC-X-1:** coverage moved from 80% to 90% in this release"
+
+    assert not delta._mentions_value(both, 80), "a change description is not a claim"
+    assert not delta._mentions_value(both, 90)
+
+
+def test_delta_threshold_matching_agrees_with_the_rule_engine() -> None:
+    """AC-DL-9: the matcher *is* `threshold_values`, so a line either states
+    exactly one threshold or it states none — and delta and G003 can never
+    disagree about which.
+
+    The inherited judgement is stricter than a number scan in ways worth
+    pinning: a bare "90" in prose is not a threshold claim, `190` is not `90`,
+    and `90.5` is not `90`. Each of the last two was a live false positive
+    before the delegation.
+    """
     assert delta._mentions_value("coverage at or above 90%", 90)
     assert delta._mentions_value(">= 90", 90)
+
     assert not delta._mentions_value("coverage at or above 90%", 9)
     assert not delta._mentions_value("a floor of 190", 90)
-    assert not delta._mentions_value("no digits here", 90)
-    # A run that ends the string still matches (no trailing separator).
-    assert delta._mentions_value("floor is 90", 90)
-
-    # Decimals are one number, not two. Both of these matched a floor of 90
-    # before the matcher was fixed: a spec citing 90.5 is not citing 90, and a
-    # version string is not a threshold at all. A false positive here would
-    # land in the one report this verb exists to make trustworthy.
     assert not delta._mentions_value("coverage at or above 90.5%", 90)
     assert not delta._mentions_value("planlint v9.90 build", 90)
-    assert delta._mentions_value("a floor of 0", 0)
+    assert not delta._mentions_value("no digits here", 90)
+    # A bare number with no threshold shape is prose, not an assertion --
+    # the rule engine's own reading, inherited rather than re-litigated here.
+    assert not delta._mentions_value("floor is 90", 90)
+
+    # And it really is the same helper, not a lookalike.
+    assert delta._mentions_value.__module__ == "openspec_graph.delta"
+    assert threshold_values("coverage at or above 90%") == (90,)

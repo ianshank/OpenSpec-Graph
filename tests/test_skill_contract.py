@@ -53,6 +53,7 @@ READ_ONLY_INVOCATIONS: tuple[tuple[str, ...], ...] = (
     ("validate",),
     ("validate", "--json"),
     ("validate", "--fail-on", "WARN"),
+    ("validate", "--format", "sarif"),
     ("graph", "--format", "json"),
     ("graph", "--format", "mermaid"),
     ("rules",),
