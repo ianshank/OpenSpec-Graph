@@ -3,7 +3,8 @@
 This document is about `planlint`'s own product architecture — what the tool
 *is*. It is unrelated to `.claude/agents/` and `.claude/skills/` (Claude Code
 dev-tooling used to *develop* planlint itself — spec-drafter, spec-adversary,
-planlint-verifier, and the `planlint-add-rule` skill; see docs/hooks.md's
+planlint-verifier, and the `planlint-add-rule` / `planlint-add-eval-case`
+skills; see docs/hooks.md's
 "Claude Code hooks" section): same word, three different meanings — one about
 the shipped CLI's rules, one about this repo's own contributor workflow, and
 one about the distributable Agent Skill under `skills/` (see "A third
@@ -52,6 +53,22 @@ The three senses, disambiguated once:
 | Skill (this document) | One `Rule` — a pure, deterministic check | `openspec_graph/rules*.py` |
 | Skill (contributor tooling) | A checklist Claude Code follows when working on this repo | `.claude/skills/` |
 | Agent Skill (product) | A document telling any agent how to invoke the CLI | `skills/` |
+| Agent entry point | A pointer an agent loads unprompted, on arriving in this repo | `AGENTS.md` |
+
+The fourth is the newest and the thinnest on purpose. `AGENTS.md` exists
+because agents read a file by that name at the repository root whether or not
+anyone tells them to, so the question is not whether it is consulted but
+whether it says the right thing. It names the gate command and defers to
+`skills/planlint-spec-governance/SKILL.md` for everything else; it deliberately
+does not restate the verb surface, the exit codes, or the refusal boundary,
+because a second copy of those is a second thing to keep true.
+
+One non-obvious consequence of the name: `AGENTS.md` is also the last entry in
+`detect.INVARIANT_SOURCES`, so for a target repository with no dedicated
+contract file it is where planlint looks for `INV-n` declarations. Writing an
+invariant id into *this* repository's `AGENTS.md` would therefore make
+planlint's own self-validation adopt it as the invariant source. A test forbids
+that (`test_agents_md_declares_no_invariant_ids`).
 
 The product skill deliberately contains no rule logic. It names verbs, exit
 codes, and a boundary; its rule catalog is generated from the registry by

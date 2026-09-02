@@ -96,6 +96,17 @@ frontmatter, resolves every backtick-quoted repo-relative path reference and
 checklist silently missing `rules_speckit.py` after the SpecKit dialect
 landed) during the review that added this test.
 
+The same argument extends outward to everything an external reader acts on.
+`tests/test_agent_artifacts.py` holds the evaluation suite, `context7.json`,
+`llms.txt` and the Docker build context to their structural contracts, and
+`tests/test_adopter_urls.py` holds *adopter-facing prose* to packaging
+metadata: every install command must name the distribution this tree actually
+builds, and the version floor the CI template hands an adopter must equal the
+one the Agent Skill enforces. That test exists because the opposite happened —
+the project was renamed and eight places went on printing an install command
+for a distribution that no longer existed, with every gate green, because
+nothing compared prose against `pyproject.toml`.
+
 ## No NumPy / no heavy runtime deps
 
 `planlint` has **zero runtime dependencies**. Scientific-computing stacks

@@ -119,6 +119,31 @@ it is not cargo-culted into the v0.1 surface.
     typecheck, security, validate, docs-check, thresholds) and most pushes
     are already covered by pre-commit + CI.
 
+18. **`E501` is configured but not enforced** — `[tool.ruff] line-length = 100`
+    has always been set, but ruff's `select` was never set either, so the
+    default `E4/E7/E9/F` applied and the `E5` group (line length) was never
+    on. Turning it on today reports **100 violations**: 33 in
+    `openspec_graph/` and `tools/`, the rest in tests, with a median overage
+    of six characters and a maximum of 214. The `select` list added alongside
+    this note enables every family that was already at or near zero, and
+    names `E501` as the one deliberate omission. The work owed is the
+    rewrap, as its own change: bundling 100 reflowed lines across a dozen
+    files into an unrelated branch buries whatever else that branch did.
+
+19. **`tools/` is linted and typechecked but measured by nothing** —
+    `[tool.coverage.run] source` is `["openspec_graph"]`, so the gate scripts
+    that enforce every other gate have no coverage number of their own. Adding
+    `--cov=tools` today reports 88.3% line / 84.6% branch overall, which fails
+    the 90% floor -- but the shortfall is mostly *measurement*, not absence:
+    several tools are exercised only through `subprocess.run` calls that do
+    not inject `COVERAGE_PROCESS_START`, so their lines are invisible even
+    though tests run them. `tests/support.py`'s `run_cli` already does this
+    correctly for the CLI; the fix is a sibling helper for tool invocations,
+    after which the real gaps (`_common.write_or_check`'s check-mode branches,
+    `check_secrets`'s gitleaks-present path) can be judged on their merits.
+    Worth doing before the floor is ever raised, since today the number does
+    not describe what it claims to.
+
 ## Skills / agents
 
 13. **Rules as reusable skills** — the 26 rules already are the reusable

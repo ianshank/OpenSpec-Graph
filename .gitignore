@@ -56,4 +56,7 @@ base.json
 
 # Agent-skill evaluation runs (claude plugin eval writes here). Scrubbed
 # summaries may be committed; raw transcripts never are -- see evals/README.md.
+# `mocks/` is the runner's recorded MCP stand-ins, written beside the cases for
+# the same reason and just as untracked.
 evals/results/
+evals/mocks/

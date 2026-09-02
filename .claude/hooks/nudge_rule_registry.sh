@@ -39,6 +39,14 @@ case "/$FILE_NORM" in
     printf '{"decision": "block", "reason": "You just edited the distributable Agent Skill or its plugin manifests. These are prose and metadata an external agent acts on, so nothing else catches drift in them. Before finishing: run `pytest tests/test_skill_contract.py tests/test_agent_skill_docs.py` -- they pin the read-only claim, the per-verb exit-code messages, the generated rule catalog, and manifest/version agreement."}'
     exit 0
     ;;
+  */evals/*)
+    printf '{"decision": "block", "reason": "You just edited the evaluation suite. Its structure is asserted rather than assumed: case frontmatter, the tag vocabulary, per-grader-type required fields, regex compilability, and a README index checked in both directions. A case missing a README row, or a grader missing its pattern, grades nothing and still reports PASS. Before finishing: run `pytest tests/test_agent_artifacts.py`."}'
+    exit 0
+    ;;
+  */README.md|*/llms.txt|*/AGENTS.md|*/templates/*)
+    printf '{"decision": "block", "reason": "You just edited adopter-facing prose. Install commands, the CI template version floor, changelog release links and plugin ids here are checked against pyproject.toml and the generated manifests -- the rename that left eight dead install lines passed every gate because nothing compared prose to packaging metadata. Before finishing: run `pytest tests/test_adopter_urls.py tests/test_agent_artifacts.py`."}'
+    exit 0
+    ;;
   */openspec/changes/*/specs/*/spec.md)
     printf '{"decision": "block", "reason": "You just edited a change-package spec.md -- the exact file planlint dialect-sniffs. Quoting a dialect marker as prose (e.g. a heading name in backticks) can misclassify this spec as the dialect it merely describes, the self-referential trap this repo has hit twice. Before finishing: run `planlint --target . validate --fail-on ERROR` (or `make validate`) and confirm the dialect/finding count is what you expect."}'
     exit 0

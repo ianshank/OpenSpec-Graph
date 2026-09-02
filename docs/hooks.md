@@ -93,6 +93,15 @@ mid-edit:
   (see the `planlint-add-rule` skill below).
 - Editing the `Makefile` or a `.github/workflows/*.yml` file → reminds to run
   `make thresholds`.
+- Editing anything under `evals/` → reminds to run
+  `pytest tests/test_agent_artifacts.py`. The `planlint-add-eval-case` skill
+  under `.claude/skills/` carries the full checklist. The suite's structure is asserted,
+  not assumed: a case with no README row, or a `regex` grader with no
+  `pattern`, grades nothing and still reports a pass.
+- Editing `README.md`, `llms.txt`, `AGENTS.md` or `templates/**` → reminds to
+  run `pytest tests/test_adopter_urls.py`. This is the drift class that already
+  cost this project eight dead install commands: prose and packaging metadata
+  disagreed and every gate stayed green, because nothing compared them.
 - Editing a change package's `spec.md`
   (`openspec/changes/*/specs/*/spec.md`) → reminds to run
   `planlint validate --fail-on ERROR` before finishing. This file is the

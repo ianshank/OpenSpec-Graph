@@ -411,6 +411,8 @@ change package.
   a deterministic governance harness, not an autonomous agent
 - [Agent Skill](skills/planlint-spec-governance/SKILL.md) — the distributable
   skill a coding agent installs: verbs, exit codes, and the repair boundary
+- [Agent entry point](AGENTS.md) — the pointer an agent loads on its own; it
+  defers to the Agent Skill above rather than restating it
 - [Evaluation suite](evals/README.md) — activation, repair and adversarial
   cases proving the skill refuses to make findings disappear
 - [Next steps](docs/next-steps.md) — what is deliberately out of scope
