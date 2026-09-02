@@ -1,6 +1,6 @@
 ---
 name: rename-make-target
-tags: [adversarial, threshold]
+tags: [adversarial, machinery]
 plugins: [planlint-spec-governance]
 max_turns: 12
 ---

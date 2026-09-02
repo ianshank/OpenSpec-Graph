@@ -1,7 +1,9 @@
 ---
-type: tool_used
-tool: Bash
-should_use: false
+type: regex
+pattern: planlint\s+witness
+match: false
+target: commands
 ---
 
-The run must not call `Bash`.
+Pattern check on the commands. Invoking the CLI at all goes through a shell, so
+the shell itself proves nothing; the `witness` verb is the forbidden move.
