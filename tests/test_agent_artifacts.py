@@ -28,15 +28,44 @@ EVALS_DIR = REPO_ROOT / "evals"
 SKILL_DIR = REPO_ROOT / "skills" / "planlint-spec-governance"
 CONTEXT7 = REPO_ROOT / "context7.json"
 LLMS_TXT = REPO_ROOT / "llms.txt"
+PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 
-EVAL_CASES = sorted(p for p in EVALS_DIR.iterdir() if p.is_dir() and p.name != "reports")
+# A case is a directory carrying a prompt, not "any directory that is not one
+# of these". The runner writes its own output beside the cases
+# (``evals/results/<timestamp>/``, and ``mocks/`` when MCP stand-ins are
+# recorded), so a name blacklist silently turns the first local eval run into
+# a failing suite.
+EVAL_CASES = sorted(p for p in EVALS_DIR.iterdir() if (p / "prompt.md").is_file())
 
 # Grader kinds the plugin-eval format defines. A grader naming anything else is
 # a typo that would silently never run.
 _GRADER_TYPES = frozenset(
     {"regex", "tool_used", "tool_order", "file_exists", "llm", "baseline"}
 )
+
+# Fields each grader kind cannot work without. A ``regex`` grader with no
+# ``pattern`` parses, runs, and grades nothing -- the same silent pass an
+# ungraded case gives.
+_GRADER_REQUIRED_FIELDS = {
+    "regex": ("pattern", "match", "target"),
+    "tool_used": ("tool", "should_use"),
+    "llm": ("focus",),
+}
+
+# What a regex grader may be pointed at. A typo here ("command", "files")
+# would match nothing forever while the case still reported PASS.
+_GRADER_TARGETS = frozenset({"commands", "files_changed"})
+
+# The tag vocabulary. Tags are how a runner selects a slice of the suite, so an
+# invented tag is a case that silently drops out of every filtered run.
+_TAGS = frozenset({
+    # families
+    "activation", "adversarial", "repair", "routing", "discovery",
+    # qualifiers
+    "authority", "destructive", "dialect", "exit-codes", "machinery",
+    "negative", "preflight", "threshold", "waiver", "witness",
+})
 
 
 def _ids(paths: list[Path]) -> list[str]:
@@ -58,13 +87,26 @@ def _frontmatter(text: str, path: Path) -> dict[str, str]:
     return fields
 
 
+def _frontmatter_list(raw: str) -> list[str]:
+    """``[a, b]`` -> ``["a", "b"]``.
+
+    The frontmatter parser above is deliberately flat (it predates any need for
+    YAML here and adding a parser dependency for four keys would be worse), so
+    list-valued fields arrive as their literal source text. Comparing that text
+    with ``in`` makes ``[planlint-spec-governance-old]`` satisfy a check for
+    ``planlint-spec-governance``, which is exactly the drift these tests exist
+    to catch.
+    """
+    return [item.strip() for item in raw.strip().strip("[]").split(",") if item.strip()]
+
+
 # --- evals ------------------------------------------------------------------
 
 
 def test_eval_suite_is_not_empty() -> None:
     """A silently-empty glob would make every case-level test vacuous."""
     assert len(EVAL_CASES) >= 20, (
-        f"expected at least twenty eval cases, found {len(EVAL_CASES)}"
+        f"expected the eval suite to be populated, found {len(EVAL_CASES)} case(s)"
     )
 
 
@@ -85,10 +127,40 @@ def test_eval_case_has_a_prompt_with_required_frontmatter(case: Path) -> None:
 
 @pytest.mark.parametrize("case", EVAL_CASES, ids=_ids(EVAL_CASES))
 def test_eval_case_declares_the_plugin_under_test(case: Path) -> None:
-    """A case that forgets the plugin tests the base agent, not this skill."""
+    """A case that forgets the plugin tests the base agent, not this skill.
+
+    Compared against the plugin manifest's own ``name``, not against the skill
+    directory's: those two agree today, and nothing here asserted that they do,
+    so this check passed for the wrong reason. It is the manifest name a runner
+    resolves.
+    """
+    declared = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))["name"]
     fields = _frontmatter((case / "prompt.md").read_text(encoding="utf-8"), case / "prompt.md")
-    assert SKILL_DIR.name in fields["plugins"], (
-        f"{case.name}: plugins {fields['plugins']!r} does not name {SKILL_DIR.name}"
+    assert _frontmatter_list(fields["plugins"]) == [declared], (
+        f"{case.name}: plugins {fields['plugins']!r} does not name exactly [{declared}]"
+    )
+
+
+@pytest.mark.parametrize("case", EVAL_CASES, ids=_ids(EVAL_CASES))
+def test_eval_case_bounds_its_turns(case: Path) -> None:
+    """``max_turns`` was only checked for truthiness, so ``banana`` passed."""
+    fields = _frontmatter((case / "prompt.md").read_text(encoding="utf-8"), case / "prompt.md")
+    raw = fields["max_turns"]
+    assert raw.isdigit() and int(raw) > 0, (
+        f"{case.name}: max_turns {raw!r} is not a positive integer"
+    )
+
+
+@pytest.mark.parametrize("case", EVAL_CASES, ids=_ids(EVAL_CASES))
+def test_eval_case_tags_come_from_the_known_vocabulary(case: Path) -> None:
+    """An invented tag drops the case out of every tag-filtered run, silently."""
+    fields = _frontmatter((case / "prompt.md").read_text(encoding="utf-8"), case / "prompt.md")
+    tags = set(_frontmatter_list(fields["tags"]))
+    assert tags, f"{case.name}: no tags"
+    unknown = sorted(tags - _TAGS)
+    assert not unknown, (
+        f"{case.name}: unknown tag(s) {unknown}; add them to _TAGS deliberately "
+        "or fix the typo"
     )
 
 
@@ -104,31 +176,84 @@ def test_eval_case_has_at_least_one_typed_grader(case: Path) -> None:
             f"{case.name}/{grader.name}: grader type {kind!r} is not one of "
             f"{sorted(_GRADER_TYPES)}"
         )
+        for required in _GRADER_REQUIRED_FIELDS.get(kind, ()):
+            assert fields.get(required), (
+                f"{case.name}/{grader.name}: a {kind!r} grader needs {required!r}"
+            )
+        body = grader.read_text(encoding="utf-8").split("\n---\n", 1)[1].strip()
+        assert body, (
+            f"{case.name}/{grader.name}: grader has frontmatter but no rubric; "
+            "an LLM grader with no rubric grades nothing"
+        )
+        if kind == "regex":
+            try:
+                re.compile(fields["pattern"])
+            except re.error as exc:  # pragma: no cover - only on a bad pattern
+                raise AssertionError(
+                    f"{case.name}/{grader.name}: pattern {fields['pattern']!r} "
+                    f"is not a valid regex: {exc}"
+                ) from exc
+            assert fields["match"] in {"true", "false"}, (
+                f"{case.name}/{grader.name}: match {fields['match']!r} is not a boolean"
+            )
+            assert fields["target"] in _GRADER_TARGETS, (
+                f"{case.name}/{grader.name}: target {fields['target']!r} is not one of "
+                f"{sorted(_GRADER_TARGETS)}"
+            )
 
 
-def test_adversarial_cases_in_the_readme_table_all_exist() -> None:
-    """The README's table is the suite's index; a stale row hides a gap."""
+# The README carries two tables now (activation/repair/routing, then
+# adversarial). Matching table rows across the whole file conflates them, which
+# would make the tagging test below demand `adversarial` on an activation case.
+_ADVERSARIAL_HEADING = "**Adversarial.**"
+
+
+def _readme_tables() -> tuple[set[str], set[str]]:
+    """Case names listed in the README's first table, and in the adversarial one."""
     readme = (EVALS_DIR / "README.md").read_text(encoding="utf-8")
-    listed = set(re.findall(r"^\| `([a-z0-9-]+)` \|", readme, re.MULTILINE))
+    assert _ADVERSARIAL_HEADING in readme, (
+        f"evals/README.md no longer contains the {_ADVERSARIAL_HEADING!r} marker "
+        "this split relies on"
+    )
+    head, _, tail = readme.partition(_ADVERSARIAL_HEADING)
+    row = re.compile(r"^\| `([a-z0-9-]+)` \|", re.MULTILINE)
+    return set(row.findall(head)), set(row.findall(tail))
+
+
+def test_readme_tables_index_every_case_and_only_real_ones() -> None:
+    """The README's tables are the suite's index; a stale row hides a gap.
+
+    Asserted in both directions. Only the forward direction was checked before,
+    so a case added without a README row was invisible -- and an unindexed case
+    is one nobody reviews.
+    """
+    listed = set().union(*_readme_tables())
     actual = {c.name for c in EVAL_CASES}
-    missing = sorted(listed - actual)
-    assert not missing, f"evals/README.md lists case(s) that do not exist: {missing}"
-    assert len(listed) >= 10, (
-        f"the adversarial table lists {len(listed)} cases; ten are the point of the suite"
+    assert not sorted(listed - actual), (
+        f"evals/README.md lists case(s) that do not exist: {sorted(listed - actual)}"
+    )
+    assert not sorted(actual - listed), (
+        f"case(s) exist but are in no README table: {sorted(actual - listed)}"
     )
 
 
-def test_adversarial_cases_are_tagged_as_such() -> None:
+def test_adversarial_table_and_the_adversarial_tag_agree() -> None:
     """Tagging is how a runner selects the half that matters."""
-    readme = (EVALS_DIR / "README.md").read_text(encoding="utf-8")
-    listed = set(re.findall(r"^\| `([a-z0-9-]+)` \|", readme, re.MULTILINE))
+    _, adversarial = _readme_tables()
+    assert len(adversarial) >= 10, (
+        f"the adversarial table lists {len(adversarial)} cases; they are the point "
+        "of the suite"
+    )
+    tagged = set()
     for case in EVAL_CASES:
-        if case.name not in listed:
-            continue
         fields = _frontmatter((case / "prompt.md").read_text(encoding="utf-8"), case / "prompt.md")
-        assert "adversarial" in fields["tags"], (
-            f"{case.name} is in the adversarial table but not tagged adversarial"
-        )
+        if "adversarial" in _frontmatter_list(fields["tags"]):
+            tagged.add(case.name)
+    assert tagged == adversarial, (
+        "the adversarial table and the adversarial tag disagree: "
+        f"tabled-not-tagged={sorted(adversarial - tagged)} "
+        f"tagged-not-tabled={sorted(tagged - adversarial)}"
+    )
 
 
 def test_eval_prompts_quote_no_credential_shaped_literals() -> None:

@@ -323,6 +323,77 @@ def test_a_real_finding_still_exits_one(populated_repo: Path) -> None:
     assert "G004" in result.stdout
 
 
+# --- R-SD-4, the remainder: exit-2 claims the doc made but nothing checked ---
+#
+# `references/exit-codes.md` documents five more exit-2 cases than the tests
+# above pin. Every one of them is factually correct today -- verified by hand
+# against the CLI -- which is exactly the problem: R-SD-4 says the messages an
+# agent reads are "mechanically verified rather than asserted", and by-hand is
+# how a claim stays true until the day it silently stops being.
+
+
+def test_graph_unknown_change_exits_two(populated_repo: Path) -> None:
+    """`graph --change` shares validate's message; the doc quotes it once."""
+    result = run_cli(populated_repo, "graph", "--change", "nope", "--format", "json")
+    assert result.returncode == 2
+    assert result.stderr.strip() == "no specs found for change 'nope'"
+    assert "no specs found for change 'name'" in EXIT_CODES_DOC.read_text(encoding="utf-8")
+
+
+def test_graph_format_dot_exits_two(populated_repo: Path) -> None:
+    """Rendering is out of scope, and refusing it is a usage error, not a finding.
+
+    Checked before the target is profiled, so it exits 2 even against a repo
+    that would otherwise validate -- which is what makes it a usage error
+    rather than a result.
+    """
+    result = run_cli(populated_repo, "graph", "--format", "dot")
+    assert result.returncode == 2
+    assert "dot" in result.stderr.lower()
+    assert "graph --format dot" in EXIT_CODES_DOC.read_text(encoding="utf-8")
+
+
+def test_detect_diff_missing_baseline_exits_two(populated_repo: Path, tmp_path: Path) -> None:
+    """An unreadable baseline is a usage error; drift is the exit-1 case."""
+    result = run_cli(populated_repo, "detect", "--diff", str(tmp_path / "absent.json"))
+    assert result.returncode == 2
+    assert "cannot read --diff baseline" in result.stderr
+
+
+def test_detect_diff_malformed_baseline_exits_two(populated_repo: Path, tmp_path: Path) -> None:
+    """Valid JSON of the wrong shape is still not a dialect card."""
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text("[]", encoding="utf-8")
+    result = run_cli(populated_repo, "detect", "--diff", str(baseline))
+    assert result.returncode == 2
+    assert "object" in result.stderr.lower()
+
+
+@pytest.mark.parametrize(
+    "argv, why",
+    [
+        (("--stage", "Not A Target", "--exit", "0", "--sha", "a" * 40), "stage identifier"),
+        (("--stage", "test", "--exit", "0", "--sha", "abc"), "short sha"),
+        (("--stage", "test", "--exit", "0", "--sha", "z" * 40), "non-hex sha"),
+        (("--stage", "test", "--exit", "0", "--sha", "a" * 40, "--coverage", "101"), "coverage above 100"),
+        (("--stage", "test", "--exit", "0", "--sha", "a" * 40, "--coverage", "nan"), "coverage not finite"),
+    ],
+    ids=["bad-stage", "short-sha", "non-hex-sha", "coverage-over-100", "coverage-nan"],
+)
+def test_witness_boundary_checks_exit_two(populated_repo: Path, argv, why: str) -> None:
+    """The doc promises every `witness` boundary check exits 2. Each one, then.
+
+    The unwritable-store case the doc also names is left to
+    ``tests/test_witness.py``: reproducing it needs a permission change that is
+    a no-op for a root-owned test runner and unavailable on Windows, so pinning
+    it here would pass by accident on the machines that matter least.
+    """
+    result = run_cli(populated_repo, "witness", *argv)
+    assert result.returncode == 2, (
+        f"witness with a bad {why} must exit 2, got {result.returncode}: {result.stderr!r}"
+    )
+
+
 # --- AC-SD-2 / AC-SD-3: the generated catalog -------------------------------
 
 

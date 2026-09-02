@@ -444,6 +444,35 @@ def test_skill_min_version_is_not_ahead_of_the_package(path: Path) -> None:
 
 
 @pytest.mark.parametrize("path", DIST_SKILL_MANIFESTS, ids=_ids(DIST_SKILL_MANIFESTS))
+def test_skill_metadata_version_matches_the_package(path: Path) -> None:
+    """One release, one number -- the skill's own version included.
+
+    `.claude-plugin/`'s manifests are generated from ``openspec_graph.__version__``
+    and were therefore always in step with it. `metadata.version` inside SKILL.md
+    is hand-written and was not: it sat a minor release behind the manifests that
+    describe the same artifact, with nothing to notice.
+
+    It matters beyond tidiness. Claude Code caches an installed plugin by
+    version and refreshes only when the string changes, so the version attached
+    to this document is what decides whether an edit to it ever reaches an
+    installed agent (see docs/hooks.md, "Releasing a skill change"). Two numbers
+    for one artifact is two answers to that question.
+    """
+    from openspec_graph import __version__
+
+    fields = _frontmatter(path.read_text(encoding="utf-8"))
+    declared = fields.get("metadata.version")
+    assert declared, (
+        f"{path.relative_to(REPO_ROOT)}: a distributable skill must declare "
+        "metadata.version"
+    )
+    assert declared == __version__, (
+        f"{path.relative_to(REPO_ROOT)}: metadata.version is {declared!r} but the "
+        f"package is {__version__!r}; a skill change ships in a package release"
+    )
+
+
+@pytest.mark.parametrize("path", DIST_SKILL_MANIFESTS, ids=_ids(DIST_SKILL_MANIFESTS))
 def test_compatibility_prose_matches_the_declared_minimum(path: Path) -> None:
     """Two numbers, one meaning -- so they must be bound, not both written.
 
