@@ -23,6 +23,7 @@ reader never observes a partially-written file (``DEC-WM-012``).
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import hashlib
 import json
@@ -110,10 +111,10 @@ def write_witness(root: Path, witness: Witness) -> Path:
             handle.write(payload)
         os.replace(tmp_name, target)
     except BaseException:
-        try:
+        # Best-effort cleanup: the original exception is what the caller needs,
+        # so a failure to remove the temp file must not replace it.
+        with contextlib.suppress(OSError):
             os.unlink(tmp_name)
-        except OSError:
-            pass
         raise
     return target
 

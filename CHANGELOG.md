@@ -5,8 +5,66 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [0.2.0] — 2026-09-02
 
-> `0.1.0` was recorded in this changelog but never tagged in git; `v0.2.0` is
-> the first tagged release and the first published to PyPI.
+> `v0.1.0` was tagged in git (`cdc94ca`) under the previous distribution name
+> `openspec-graph`, and was never published to a package index. `v0.2.0` is the
+> first release under the `planlint` name and the first intended for PyPI;
+> publication happens when the tag is pushed and `.github/workflows/release.yml`
+> runs.
+
+### Added — adopter-facing guards and an agent entry point
+
+- **`AGENTS.md`**: the pointer an agent loads on arriving in this repository.
+  It names the gate command and defers to the Agent Skill for the verb surface
+  and the refusal boundary rather than restating either. Wired into
+  `tools/check_docs.py`, so it must exist and be linked from the README, and
+  its links are resolved by a test — the same treatment `llms.txt` already had.
+- **`tests/test_adopter_urls.py`**: holds every install command this repository
+  prints to what it actually publishes. Files are discovered rather than
+  listed, because the incident behind this test was eight places drifting and
+  a hand-written list only ever covers the ones already fixed.
+- **`tests/test_agent_artifacts.py` gains a root-markdown wiring check**: any
+  markdown file at the repository root must be under the docs gate. This is the
+  check that would have caught `AGENTS.md` shipping as an orphan.
+- **A curated `ruff` `select` list.** Ruff's default selection is `E4/E7/E9/F`,
+  so every other family — import sorting, bugbear, bandit, pyupgrade — was off,
+  including the `S` rules the existing `per-file-ignores` already named. Each
+  family enabled was at or near zero violations, so this locks in properties
+  the code already had. `E501` stays off deliberately, with the reason and the
+  measured backlog recorded in `docs/next-steps.md`.
+- **Diagnostic logging in `detect.py`**, which previously had none despite
+  owning every discovery decision. The coverage floor's six candidate
+  locations, the per-file votes behind a `mixed` dialect verdict, unreadable
+  invariant and ADR candidates, and SpecKit files dropped for missing markers
+  are all observable under `PLANLINT_LOG_LEVEL=DEBUG`. Records go to stderr via
+  the existing `planlint` logger, so stdout stays parseable.
+
+### Fixed — the write verbs now honour the exit-code contract
+
+- **`init` and `new` exit 2 on an unwritable target, not 1.** `scaffold.apply`
+  let an `OSError` escape, so a read-only checkout or a full disk produced a
+  traceback and exit 1 — the code the contract reserves for "findings were
+  reported". A caller reading only the exit code could not tell a broken mount
+  from a failing gate. `witness` already guarded its own store this way; the
+  three write verbs now agree. This is the same defect class as `DEC-SD-001`,
+  one verb further in.
+- **An evaluation grader that failed every correct run.** `fabricate-witness`
+  asserted the run must not call `Bash` at all; invoking the CLI goes through a
+  shell, so only an agent that did nothing could pass.
+- **Both coverage gates shared a hand-rolled TOML section scanner.** Now one
+  helper in `tools/_common.py`. The scripts still read the `pyproject.toml` of
+  whichever tree they are pointed at, which is what makes them testable against
+  a synthetic floor.
+- **Three false claims in this section's own preamble**, about `v0.1.0` never
+  being tagged and `v0.2.0` already being published. `v0.1.0` is tagged at
+  `cdc94ca` under the previous distribution name; nothing has been published.
+- **`docs/architecture/c4.md` claimed three generated files and listed four**,
+  and credited `tools/render_mermaid.py` with a `--check` mode it does not have
+  — it is a stdout filter that writes nothing tracked.
+- **`SKILL.md`'s `metadata.version` was a minor release behind the manifests**
+  describing the same artifact, with nothing binding them. Claude Code
+  refreshes a cached plugin only when its version string changes, so the
+  number decides whether an edit reaches an installed agent; the policy is now
+  stated in `docs/hooks.md` and pinned by a test.
 
 ### Added — distributable Agent Skill (`add-agent-skill-distribution` change package)
 
@@ -610,4 +668,4 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   graph-diff regression gate on PRs.
 
 [0.2.0]: https://github.com/ianshank/planlint/releases/tag/v0.2.0
-[0.1.0]: https://github.com/ianshank/planlint/blob/main/CHANGELOG.md#010--2026-08-30
+[0.1.0]: https://github.com/ianshank/planlint/releases/tag/v0.1.0

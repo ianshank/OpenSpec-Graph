@@ -85,7 +85,9 @@ def test_c4_module_map_family_ranges_match_rules() -> None:
         # each family's range) -- tolerate an en dash or hyphen, and any
         # short run of markup/whitespace between the filename and the range
         # rather than requiring the old ASCII tree's "# " comment style.
-        pattern = rf"{module}\.py.{{0,40}}?{re.escape(low)}[–-]{re.escape(high)}"
+        # RUF001: the en dash is deliberate -- c4.md writes its line ranges
+        # with one, and this character class accepts either spelling.
+        pattern = rf"{module}\.py.{{0,40}}?{re.escape(low)}[–-]{re.escape(high)}"  # noqa: RUF001
         assert re.search(pattern, text, re.DOTALL), (
             f"c4.md's module map doesn't claim {module}.py covers {low}-{high}"
         )

@@ -51,6 +51,11 @@ planlint --target /path/to/clone graph --format mermaid  # a picture, not just J
 planlint --version                           # print the installed version and exit
 ```
 
+The distribution and the command are both `planlint`, with no hyphen.
+`plan-lint` on PyPI is an unrelated project, analysing LLM agent plans; this
+one gates OpenSpec and SpecKit change packages against a repository's real
+machinery.
+
 ### Exit codes
 
 | Exit | Meaning |
@@ -213,7 +218,8 @@ planlint --target /path/to/clone waivers --format json
 
 ## What it found in a real repository
 
-Run against `ianshank/Mouse-Droid-AGI` (12 specs across 10 change packages),
+Run on 2026-08-30 with the pre-rename `openspec-graph` 0.1.0 against
+`ianshank/Mouse-Droid-AGI` at `<sha>` (12 specs across 10 change packages),
 `planlint validate --fail-on WARN` returned exit 1 with these genuine defects:
 
 - `mouse-droid-nemoclaw-integration/specs/openclaw-integration/spec.md` states
@@ -227,16 +233,17 @@ Run against `ianshank/Mouse-Droid-AGI` (12 specs across 10 change packages),
   `####` (U005), and declares no delta header (U001).
 - Twelve requirements across `claude-workforce` and `dev-governance` are titled
   as nouns ("MCP Configuration", "Truthful Coverage Claims") with no SHALL or
-  MUST, so they read as topics rather than obligations (U004).
+  MUST, so they read as topics rather than obligations (U004). **Partly a
+  linter bug** — see item 4 below for how many of these were real.
 
-Against `Mango_Code_Agent-Harness`: 0 errors, 4 warnings — every spec in
+Against `Mango_Code_Agent-Harness` at `<sha>`: 0 errors, 4 warnings — every spec in
 `add-neurosym-governed-synthesis` goes from `## Problem Statement` straight to
 `## Acceptance Criteria` with no `## Requirements` section, so its ACs have
 nothing to trace back to (H006).
 
 ### And what it got wrong
 
-Three findings in the first run were the linter's fault, not the repo's. They
+Four findings in the first run were the linter's fault, not the repo's. They
 are now regression tests, named after the file that exposed them:
 
 1. **G002 false positive** on `cloud-egress`. "a partial GCP block **opens no**
@@ -349,11 +356,11 @@ so it cannot drift from the engine. Agents that read the open Agent Skills
 format can also use the directory directly by copying it into their own skills
 folder; it carries no repository-relative references.
 
-Twenty evaluation cases live in [`evals/`](evals/README.md); half are
-adversarial, each asking the agent to make a finding disappear without changing
-the fact behind it. They grade on tool calls and file state, not on what the
-agent said, and they are the evidence that the skill cannot be talked into a
-false pass.
+Evaluation cases live in [`evals/`](evals/README.md). The adversarial ones each
+ask the agent to make a finding disappear without changing the fact behind it;
+wherever that move leaves a trace in the commands run or the files changed, it
+is graded on that trace rather than on what the agent said. They are the
+evidence that the skill cannot be talked into a false pass.
 
 The skill is deliberately allowed to repair an existing spec and re-run the
 gate, and deliberately forbidden from making a finding disappear without
@@ -404,10 +411,14 @@ change package.
   a deterministic governance harness, not an autonomous agent
 - [Agent Skill](skills/planlint-spec-governance/SKILL.md) — the distributable
   skill a coding agent installs: verbs, exit codes, and the repair boundary
-- [Evaluation suite](evals/README.md) — twenty cases, half adversarial, proving
-  the skill refuses to make findings disappear
+- [Agent entry point](AGENTS.md) — the pointer an agent loads on its own; it
+  defers to the Agent Skill above rather than restating it
+- [Evaluation suite](evals/README.md) — activation, repair and adversarial
+  cases proving the skill refuses to make findings disappear
 - [Next steps](docs/next-steps.md) — what is deliberately out of scope
 - [Differentiation roadmap](docs/differentiation-roadmap.md) — the wedge, the
   comparison, and the candidate change packages
+- [Distribution plan](docs/distribution-plan.md) — what remains between this
+  repository and a published release, and what was deliberately cut
 
 Upstream OpenSpec conventions: [Fission-AI/OpenSpec concepts](https://github.com/Fission-AI/OpenSpec/blob/main/docs/concepts.md).

@@ -98,10 +98,46 @@ branch_fail_under = 80
 # tomli backports stdlib tomllib (3.11+) for coverage.process_startup()'s
 # config-file parsing on the 3.10 leg of the CI matrix; coverage itself
 # declares zero dependencies, so this is required, not merely convenient.
-dev = ["pytest", "pytest-cov", "ruff", "mypy", "tomli; python_version < \"3.11\""]
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "build", "tomli; python_version < \"3.11\""]
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
+# Ruff's default selection is E4/E7/E9 + F only. Everything below was
+# therefore unenforced, including the `S` rules the per-file-ignores already
+# named -- an ignore list for rules that were never on is config that looks
+# like a gate and is not, which is the same class of defect this project
+# exists to catch in other people's repositories.
+#
+# Chosen for signal over volume: every family here was at or near zero
+# violations when it was turned on, so each one locks in a property the code
+# already has rather than starting a cleanup backlog.
+select = [
+    "E4", "E7", "E9", "F",  # ruff's defaults, kept explicit
+    "I",    # import sorting -- the diff-noise class no reviewer should arbitrate
+    "B",    # bugbear: mutable defaults, loop-variable capture, silent no-ops
+    "S",    # bandit: subprocess and deserialization hazards, in a tool that
+            # reads untrusted repositories for a living
+    "UP",   # pyupgrade, floored at the `requires-python` this project declares
+    "SIM",  # simplifications that remove a branch rather than reword one
+    "RET",  # return-path consistency
+    "C4",   # comprehension forms
+    "PIE", "ICN", "TID", "EXE", "ISC", "Q",  # small, mechanical, zero-violation
+    "DTZ",  # naive datetimes -- witness records carry timestamps
+    "N",    # PEP 8 naming
+    "RUF",  # ruff's own checks, incl. unused-noqa
+]
+# Deliberately NOT selected, each for a stated reason rather than by omission:
+#   E501  -- the line-length limit above is real but currently unmet in ~100
+#            places, most of them predating this config. Enabling it and
+#            rewrapping them is owed work, tracked in docs/next-steps.md, not
+#            something to bundle into an unrelated change.
+#   ERA   -- flags prose comments that quote markdown headings as dead code;
+#            the false-positive rate here is most of the hits.
+#   T20   -- this is a CLI. `print` is the product.
+#   ANN/D -- annotation and docstring coverage in tests; large, low-yield.
+#   PL    -- Pylint refactor heuristics; opinions, not defects.
 
 [tool.ruff.lint.per-file-ignores]
 # tests use assert and subprocess intentionally; tools are scripts, not a package.

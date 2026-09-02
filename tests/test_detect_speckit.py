@@ -10,6 +10,7 @@ all assume an openspec/ tree.
 
 from __future__ import annotations
 
+import subprocess
 import textwrap
 from pathlib import Path
 
@@ -253,3 +254,66 @@ def test_detect_dialect_uses_shared_marker_predicates_not_local_copies() -> None
     assert detect.is_upstream_marked is parse_semantics.is_upstream_marked
     assert detect.is_harness_marked is parse_semantics.is_harness_marked
     assert detect.is_speckit_marked is parse_semantics.is_speckit_marked
+
+
+# --- `git` absent or uncooperative ------------------------------------------
+#
+# `_current_sha` is on every `detect` and `witness` path, and each of its
+# failure arms folds to None by design. None had ever been exercised: the test
+# machine always has git, in a real repository, answering quickly. A tool that
+# reads untrusted clones will meet all three of these.
+
+
+@pytest.mark.parametrize(
+    "outcome, why",
+    [
+        (FileNotFoundError("git"), "git is not installed"),
+        (subprocess.TimeoutExpired("git", 5), "git hung and was killed"),
+    ],
+    ids=["git-missing", "git-timeout"],
+)
+def test_current_sha_is_none_when_git_cannot_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, outcome: Exception, why: str
+) -> None:
+    """Every way git can fail to answer folds to "unknown", never an exception."""
+    def _raise(*_args: object, **_kwargs: object) -> None:
+        raise outcome
+
+    monkeypatch.setattr(detect.subprocess, "run", _raise)
+    assert detect._current_sha(tmp_path) is None, why
+
+
+def test_current_sha_is_none_outside_a_git_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A nonzero exit is "unknown", not an error to propagate."""
+    def _fail(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess:
+        return subprocess.CompletedProcess([], 128, "", "not a git repository")
+
+    monkeypatch.setattr(detect.subprocess, "run", _fail)
+    assert detect._current_sha(tmp_path) is None
+
+
+def test_current_sha_rejects_output_that_is_not_a_full_sha(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Guards against trusting whatever happened to be on stdout.
+
+    A `git` shim, an abbreviated sha, or a localized message would otherwise be
+    recorded into a witness as if it identified a commit -- and witness
+    freshness is decided by comparing that string against a real HEAD.
+    """
+    for stdout in ("abc1234", "", "HEAD is now at deadbee", "z" * 40):
+        def _out(*_args: object, _s: str = stdout, **_kwargs: object):
+            return subprocess.CompletedProcess([], 0, _s, "")
+
+        monkeypatch.setattr(detect.subprocess, "run", _out)
+        assert detect._current_sha(tmp_path) is None, f"accepted {stdout!r} as a sha"
+
+    def _valid(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess:
+        return subprocess.CompletedProcess([], 0, "a" * 40 + "\n", "")
+
+    monkeypatch.setattr(detect.subprocess, "run", _valid)
+    assert detect._current_sha(tmp_path) == "a" * 40, (
+        "the happy path must still work, or the rejections above prove nothing"
+    )

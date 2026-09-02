@@ -15,27 +15,17 @@ Usage::
 from __future__ import annotations
 
 import json
-import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _common import read_pyproject_int
+
 
 def _read_floor(pyproject: Path) -> int | None:
-    """Read fail_under from [tool.coverage.report] without a TOML dependency."""
-    if not pyproject.exists():
-        return None
-    in_section = False
-    for line in pyproject.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            in_section = stripped == "[tool.coverage.report]"
-            continue
-        if not in_section:
-            continue
-        match = re.match(r"fail_under\s*=\s*(\d+)", stripped)
-        if match:
-            return int(match.group(1))
-    return None
+    """Read fail_under from [tool.coverage.report] in the given pyproject.toml."""
+    return read_pyproject_int(pyproject, "[tool.coverage.report]", "fail_under")
 
 
 def line_coverage(cov_path: Path) -> tuple[float, int, int]:

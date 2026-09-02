@@ -16,8 +16,9 @@
 ## Milestone 1 — Change package
 
 - This package (`proposal.md`, `tasks.md`, the capability spec) written
-  spec-first, before implementation. Every acceptance criterion starts
-  unchecked.
+  spec-first, before implementation. Every acceptance criterion started
+  unchecked and was checked off as the test verifying it landed; the spec
+  records which test pins each one.
 - **Gate:** `make validate` is clean against this package, and the spec is
   also clean at the warning level so the graph-diff gate cannot regress.
 

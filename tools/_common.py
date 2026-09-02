@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -66,6 +67,42 @@ def read_text(path: Path) -> str:
     so encoding is never left to the platform default.
     """
     return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def read_pyproject_int(pyproject: Path, section: str, key: str) -> int | None:
+    """Read one integer key out of one ``pyproject.toml`` table, stdlib only.
+
+    Hand-rolled rather than via ``tomllib`` because these gate scripts run
+    before anything is installed and on the 3.10 leg of the matrix, where the
+    stdlib parser does not exist. Section-aware on purpose: a bare search for
+    the key would match the same name under any other table.
+
+    The path is an argument rather than :func:`repo_root`, deliberately. The
+    coverage gates read the ``pyproject.toml`` of whichever tree they are
+    pointed at, so they can be exercised against a synthetic one (see
+    ``tests/test_ci_hardening.py``, which writes a floor of 95 into a temp
+    directory and asserts the gate honours it). Anchoring at this repository's
+    own root would make the gate untestable and would silently ignore the
+    config of the tree actually being measured.
+
+    Returns ``None`` when the file, the table, or the key is absent. Callers
+    treat that as a misconfiguration and fail loudly; it is never a skip.
+    """
+    if not pyproject.exists():
+        return None
+    in_section = False
+    pattern = re.compile(rf"{re.escape(key)}\s*=\s*(\d+)")
+    for line in pyproject.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            in_section = stripped == section
+            continue
+        if not in_section:
+            continue
+        match = pattern.match(stripped)
+        if match:
+            return int(match.group(1))
+    return None
 
 
 def write_or_check(path: Path, expected: str, *, write: bool, label: str) -> int:

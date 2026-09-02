@@ -22,6 +22,7 @@ Exit codes: 0 clean, 1 findings at or above the fail level, 2 usage error.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib.metadata
 import json
 import logging
@@ -207,7 +208,18 @@ def cmd_init(args: argparse.Namespace) -> int:
     if args.dry_run:
         print("\ndry run — nothing written")
         return 0
-    written = scaffold.apply(plans, force=args.force)
+    try:
+        written = scaffold.apply(plans, force=args.force)
+    except OSError as exc:
+        # Exit 2, never 1. An unwritable target is a precondition failure --
+        # a read-only checkout, a full disk, a permission-denied path -- and
+        # exit 1 is reserved for "findings were reported at or above
+        # --fail-on". Letting the OSError escape produced a traceback and exit
+        # 1, so a CI job could not tell a broken spec from a broken mount.
+        # `witness` already validated its own store this way (see cmd_witness);
+        # the two write paths now agree.
+        print(f"ERROR cannot write to {args.target}: {exc}", file=sys.stderr)
+        return 2
     print(f"\nwrote {len(written)} file(s)")
     return 0
 
@@ -220,7 +232,18 @@ def cmd_new(args: argparse.Namespace) -> int:
     if args.dry_run:
         print("\ndry run — nothing written")
         return 0
-    written = scaffold.apply(plans, force=args.force)
+    try:
+        written = scaffold.apply(plans, force=args.force)
+    except OSError as exc:
+        # Exit 2, never 1. An unwritable target is a precondition failure --
+        # a read-only checkout, a full disk, a permission-denied path -- and
+        # exit 1 is reserved for "findings were reported at or above
+        # --fail-on". Letting the OSError escape produced a traceback and exit
+        # 1, so a CI job could not tell a broken spec from a broken mount.
+        # `witness` already validated its own store this way (see cmd_witness);
+        # the two write paths now agree.
+        print(f"ERROR cannot write to {args.target}: {exc}", file=sys.stderr)
+        return 2
     print(f"\nwrote {len(written)} file(s)")
     if written:
         print("Now fill the Problem Statement with evidence, then run ``planlint validate``.")
@@ -585,10 +608,8 @@ def main(argv: list[str] | None = None) -> int:
     # ValueError there), not just one missing the attribute entirely.
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
-            try:
+            with contextlib.suppress(ValueError, OSError):
                 stream.reconfigure(encoding="utf-8", errors="backslashreplace")
-            except (ValueError, OSError):
-                pass
     args = build_parser().parse_args(argv)
     configure_logging(verbose=getattr(args, "verbose", False))
     return int(args.func(args))

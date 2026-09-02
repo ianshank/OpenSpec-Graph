@@ -93,6 +93,15 @@ mid-edit:
   (see the `planlint-add-rule` skill below).
 - Editing the `Makefile` or a `.github/workflows/*.yml` file → reminds to run
   `make thresholds`.
+- Editing anything under `evals/` → reminds to run
+  `pytest tests/test_agent_artifacts.py`. The `planlint-add-eval-case` skill
+  under `.claude/skills/` carries the full checklist. The suite's structure is asserted,
+  not assumed: a case with no README row, or a `regex` grader with no
+  `pattern`, grades nothing and still reports a pass.
+- Editing `README.md`, `llms.txt`, `AGENTS.md` or `templates/**` → reminds to
+  run `pytest tests/test_adopter_urls.py`. This is the drift class that already
+  cost this project eight dead install commands: prose and packaging metadata
+  disagreed and every gate stayed green, because nothing compared them.
 - Editing a change package's `spec.md`
   (`openspec/changes/*/specs/*/spec.md`) → reminds to run
   `planlint validate --fail-on ERROR` before finishing. This file is the
@@ -150,6 +159,29 @@ is an explicit decision, not silence (`DEC-WL-003`/`DEC-AD-004` — does a
 not?). `evaluate_tree()` stays two parallel blocks rather than a registry
 for two instances; revisit that only if a third whole-tree rule arrives
 (`DEC-AD-003`).
+
+## Releasing a skill change
+
+The `.claude-plugin/` manifests carry a `version`, generated from
+`openspec_graph.__version__` by `make skill-manifests`. That number is not
+decoration: Claude Code caches an installed plugin by version and refreshes it
+only when the string changes. A rewrite of `SKILL.md`'s refusal text under an
+unchanged version therefore reaches nobody who already installed the plugin --
+they keep the cached copy, and the skill they run is not the skill in this
+repository.
+
+So: **any change under `skills/` or `.claude-plugin/` ships in a package
+release.** A prose-only fix is still a patch bump, and the tag is what
+publishes it. `SKILL.md`'s own `metadata.version` mirrors
+`openspec_graph.__version__` for the same reason, and
+`tests/test_agent_skill_docs.py` fails if the two drift, so there is one number
+to bump rather than three to keep in step by hand.
+
+The alternative — omitting `version` from the manifests so Claude Code falls
+back to the resolved commit sha — was rejected: the manifests are pinned to the
+package version by `AC-SD-7`, and releases here are already tag-driven, so a
+sha-tracking plugin would refresh on every unrelated commit to `main` while the
+distribution it invokes stayed put.
 
 ## Adding a new pure derived-output module
 

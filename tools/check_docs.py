@@ -26,6 +26,11 @@ REQUIRED_DOCS = [
     # the product surface an agent reads first, and an unlinked one is
     # undiscoverable from the repo's front page.
     "skills/planlint-spec-governance/SKILL.md",
+    # The repo-root entry point an agent loads without being asked. Same
+    # argument as the skill above, one step earlier: it is read before anyone
+    # decides to read anything else, so an unlinked copy is a file no human
+    # reviews and every agent obeys.
+    "AGENTS.md",
 ]
 
 
