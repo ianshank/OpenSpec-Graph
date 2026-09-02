@@ -275,7 +275,11 @@ def test_ci_template_pins_the_floor_the_skill_enforces() -> None:
     """
     text = SKILL_MD.read_text(encoding="utf-8")
     _, fence, body = text.partition("\n---\n")
-    assert fence, "SKILL.md has no closing frontmatter fence; the scan below would "
+    assert fence, (
+        "SKILL.md has no closing frontmatter fence; without one the search below "
+        "would run over the whole document and could match a version number in "
+        "the prose body instead of the declared minimum"
+    )
     frontmatter = text[: len(text) - len(body) - len(fence)]
     declared = re.search(r"^[ \t]+planlint-min-version:[ \t]*(\S+)$", frontmatter, re.MULTILINE)
     assert declared, "SKILL.md declares no indented metadata.planlint-min-version"

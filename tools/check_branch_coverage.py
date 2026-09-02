@@ -9,8 +9,12 @@ Usage::
     coverage run ... && coverage json -o coverage.json
     python tools/check_branch_coverage.py [coverage.json]
 
-The floor is read from ``[tool.coverage.report].branch_fail_under`` in
-pyproject.toml — never hard-coded here or in the Makefile (rule G003 / C-CH-2).
+The floor is read from ``[tool.specgraph].branch_fail_under`` in pyproject.toml
+— never hard-coded here or in the Makefile (rule G003 / C-CH-2). It lives in
+this project's own table rather than ``[tool.coverage.report]`` so coverage.py
+does not warn about an option it does not recognize; the function below and
+this gate's own failure message have always said so, and only this docstring
+disagreed.
 """
 
 from __future__ import annotations
@@ -25,7 +29,7 @@ from _common import read_pyproject_int
 
 
 def _read_branch_floor(pyproject: Path) -> int | None:
-    """Read branch_fail_under from [tool.specgraph], anchored at the repo root.
+    """Read branch_fail_under from [tool.specgraph] in the given pyproject.toml.
 
     This is specgraph's own gate key, kept out of ``[tool.coverage.*]`` so
     coverage.py doesn't warn about an unknown option.

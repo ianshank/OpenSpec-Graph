@@ -24,7 +24,7 @@ from _common import read_pyproject_int
 
 
 def _read_floor(pyproject: Path) -> int | None:
-    """Read fail_under from [tool.coverage.report], anchored at the repo root."""
+    """Read fail_under from [tool.coverage.report] in the given pyproject.toml."""
     return read_pyproject_int(pyproject, "[tool.coverage.report]", "fail_under")
 
 
