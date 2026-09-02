@@ -1,4 +1,4 @@
-"""Shared test helpers for the OpenSpec-Graph test suite.
+"""Shared test helpers for the planlint test suite.
 
 Only genuinely-duplicated helpers live here. Tailored per-test fixture *variants*
 ( GOOD_HARNESS, MAKEFILE, etc.) stay inline in the test modules that use them,

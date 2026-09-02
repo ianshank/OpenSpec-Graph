@@ -344,11 +344,18 @@ def test_non_ascii_target_path_error_survives_ascii_stdout_encoding(tmp_path: Pa
     hardcoded literal) must not crash stderr either. The target directory
     never needs to exist for this error path, so this is fully deterministic
     and does not depend on the OS username itself containing non-ASCII
-    characters."""
+    characters.
+
+    Exits 2, not 1, since `add-agent-skill-distribution` (DEC-SD-001): a bad
+    --target is a usage error, and exit 1 is reserved for "findings were
+    reported". This test's own subject is unchanged -- that the non-ASCII path
+    still reaches stderr intact under an ASCII ambient encoding.
+    """
     nonexistent = tmp_path / "café-does-not-exist"
     result = run_cli(nonexistent, "detect", env={**os.environ, "PYTHONIOENCODING": "ascii"})
-    assert result.returncode == 1
+    assert result.returncode == 2
     assert "café-does-not-exist" in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_json_output_is_unaffected_by_the_stdout_encoding_fix(

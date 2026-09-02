@@ -1,0 +1,32 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "planlint",
+  "description": "Deterministic linter for implementation plans and specs: validates OpenSpec and SpecKit change packages against a repository's real Makefile targets, coverage floor, waivers and witnesses.",
+  "folders": [
+    "docs",
+    "skills/planlint-spec-governance"
+  ],
+  "excludeFolders": [
+    "tests",
+    "tools",
+    "openspec",
+    "templates",
+    "evals",
+    ".claude",
+    ".github"
+  ],
+  "excludeFiles": [
+    "CHANGELOG.md"
+  ],
+  "rules": [
+    "planlint is a linter and a gate, not an authoring tool. It never writes spec prose.",
+    "Read-only verbs: detect, validate, graph, rules, waivers. These never modify the target repository.",
+    "Verbs that write files: init (two files), new (three files), witness (one record under the target's hidden witness store). Both init and new accept --dry-run.",
+    "Exit codes are three-way: 0 means no findings at or above the threshold, 1 means findings were reported, 2 means a precondition or usage error such as a missing spec tree or a target path that is not a directory. Exit 2 is not a spec failure.",
+    "A nonzero exit is authoritative. Never report a pass that the tool did not report.",
+    "Waivers are inline HTML comments using the specgraph:allow prefix, which is retained as a stable identifier after the CLI was renamed to planlint. Every waiver must state a reason; a reason-less waiver is itself an error (G007).",
+    "planlint never runs make and never evaluates the target repository's file contents as code. It makes exactly one subprocess call, a read-only git rev-parse HEAD, used only for witness freshness.",
+    "Three dialects exist: harness, upstream, and speckit. The new verb scaffolds only harness and upstream packages.",
+    "Witness rules (the W family) are evaluated only when validate is passed --require-witness. A plain validate run does not check them."
+  ]
+}

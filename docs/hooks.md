@@ -45,7 +45,7 @@ coverage suite, so it is slower than the commit-time hook. Pre-commit + CI
 already cover the common case; the pre-push hook is for contributors who want
 a local net before the round-trip to CI.
 
-## CI hooks (`.github/workflows/ci.yml`)
+## CI hooks (`.github/workflows/`)
 
 | Job | Trigger | Gate |
 |---|---|---|
@@ -54,12 +54,23 @@ a local net before the round-trip to CI.
 | `graph-diff` | PR only | `tools/diff_spec_graph.py` base→head (AC-CH-5/6) |
 | `security` | push + PR | gitleaks + no-hardcoded-thresholds (hard) |
 | `docs` | push + PR | `make docs-check` (hard) |
+| `release` (separate workflow) | `v*` tag | `make pre-pr`, then a clean-venv smoke test of the `planlint` console script, then trusted publishing to PyPI |
 
 `typecheck` runs as a step inside the `test` matrix (so every supported Python
 version is type-checked), not as a standalone job.
 
 The `graph-diff` job checks out the PR head SHA (not the synthetic merge
 commit) so `merge-base` resolves to the true branch point (DEC-CH-001).
+
+`release` lives in its own workflow file because it is tag-triggered, not
+push/PR-triggered. Its clean-venv step is not redundant with the `test`
+matrix: the suite runs the CLI as `python -m openspec_graph.cli`, so nothing
+else ever exercises the console script a wheel actually installs, or proves
+the package really declares no runtime dependencies.
+
+Note that `tools/check_no_hardcoded_thresholds.py` scans **every** file under
+`.github/workflows/`, not a named one — a workflow added later would otherwise
+escape the guard while it still printed PASS.
 
 ## Claude Code hooks (`.claude/hooks/`)
 
@@ -71,6 +82,12 @@ commit or push time. It targets drift classes that recurred multiple times in
 this repo's own history and are easy for an agent (or a human) to forget
 mid-edit:
 
+- Editing `skills/planlint-spec-governance/**` or `.claude-plugin/**` → reminds to
+  run `pytest tests/test_skill_contract.py tests/test_agent_skill_docs.py`. These
+  are prose and metadata an *external* agent acts on, so no other gate catches
+  drift in them. The glob names the distributable skill specifically: a bare
+  `*/skills/*` also matched `.claude/skills/`, nudging contributors toward a test
+  that does not cover their file.
 - Editing `openspec_graph/rules.py` or `rules_*.py` → reminds to regenerate
   `tests/baseline_rules.json` and run `tests/test_rule_registry_docs.py`
   (see the `planlint-add-rule` skill below).
@@ -85,7 +102,7 @@ mid-edit:
   merely describes — a self-referential trap this repo has hit more than
   once while writing specs *about* its own dialect grammar.
 
-`.claude/hooks/nudge_rule_registry.sh` implements all three checks via a
+`.claude/hooks/nudge_rule_registry.sh` implements all four checks via a
 single shell script (no `jq` dependency — not guaranteed to be on `PATH` in
 every dev environment this repo is used from). Despite the JSON key's name,
 `"decision": "block"` does **not** undo the edit — `PostToolUse` fires after
@@ -99,6 +116,10 @@ this repo's own dogfooded OpenSpec change-package workflow) and
 hook case above points at).
 
 ## Adding a custom rule
+
+Adding or changing a rule also requires regenerating the distributable
+skill's rule catalog with `make skill-catalog`; `tests/test_skill_contract.py`
+fails on a stale one, and the `.claude/` hook nudges for it.
 
 Rules live in `openspec_graph/rules.py` as `Rule(ident, severity, dialects,
 summary, check)`. A rule is a pure function

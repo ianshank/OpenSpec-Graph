@@ -1,6 +1,6 @@
 # Project conventions
 
-Detected by `openspec-graph` — correct anything wrong, this file is authoritative.
+Detected by `planlint` — correct anything wrong, this file is authoritative.
 
 - Spec dialect: `harness`
 - Coverage floor source: `pyproject.toml:[tool.coverage.report].fail_under`

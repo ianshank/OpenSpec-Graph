@@ -1,0 +1,99 @@
+# Tag-triggered release to PyPI via trusted publishing (OIDC), so no API token
+# is stored anywhere in this repo or its settings.
+#
+# One-time setup, outside this file: register a pending publisher on PyPI for
+# project `planlint`, owner `ianshank`, repository `planlint`, workflow
+# `release.yml`, environment `pypi`.
+#
+# The build is gated on the full pre-PR ladder *and* on installing the built
+# wheel into a clean environment. That second gate is not redundant: the test
+# suite runs the CLI as `python -m openspec_graph.cli`, so nothing else here
+# ever exercises the `planlint` console script the wheel actually installs.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Full gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Full enterprise gate
+        run: make pre-pr
+
+  build:
+    name: Build and smoke-test the wheel
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      # The console script is the thing users get and the thing no other job
+      # here touches. A fresh venv also proves the package really declares no
+      # runtime dependencies: a missing one would surface as an ImportError.
+      - name: Smoke-test the console script in a clean environment
+        run: |
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/pip install --quiet dist/*.whl
+          /tmp/smoke/bin/planlint --version
+          /tmp/smoke/bin/planlint --target . detect
+          /tmp/smoke/bin/planlint --target . validate --fail-on ERROR
+
+      - name: Confirm the tag matches the packaged version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(/tmp/smoke/bin/planlint --version | awk '{print $2}')"
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$TAG" != "$PKG" ]; then
+            echo "tag $GITHUB_REF_NAME does not match packaged version $PKG"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

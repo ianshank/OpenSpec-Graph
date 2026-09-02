@@ -1,0 +1,35 @@
+# planlint
+
+> Deterministic linter for implementation plans. It reads a repository's real
+> machinery (Makefile targets, the coverage floor's config locator, declared
+> invariants) and reports where a spec's claims do not match them. No model,
+> no planning step, no tool selection: the same spec tree produces the same
+> findings on every machine.
+
+planlint evaluates plans; it does not author them. Read-only by default.
+
+## Contract
+
+- Read-only verbs: `detect`, `validate`, `graph`, `rules`, `waivers`.
+- Verbs that write: `init`, `new`, `witness`. `init` and `new` take `--dry-run`
+  and never overwrite without `--force`.
+- Exit 0 means no findings at or above the threshold. Exit 1 means findings.
+  Exit 2 means a precondition or usage error, which is not a spec failure.
+- `planlint` never executes `make` and never evaluates the target repository's
+  own content. It makes one read-only `git rev-parse HEAD` call.
+
+## Docs
+
+- [Agent Skill](skills/planlint-spec-governance/SKILL.md): how a coding agent should invoke the CLI
+- [Exit codes](skills/planlint-spec-governance/references/exit-codes.md): the full per-verb contract
+- [Rule catalog](skills/planlint-spec-governance/references/rule-catalog.md): every rule id, severity and dialect
+- [Dialects](skills/planlint-spec-governance/references/dialects.md): harness, upstream and speckit
+- [Architecture](docs/architecture/c4.md): context, container, component, code
+- [Agents, skills, and the harness](docs/agents-skills-harness.md): why this is a deterministic harness
+- [Quality gates](docs/aqa.md): the gate ladder and how to reproduce it
+- [Hooks](docs/hooks.md): CI gates and how to add a rule
+
+## Optional
+
+- [Next steps](docs/next-steps.md): what is deliberately out of scope
+- [Differentiation roadmap](docs/differentiation-roadmap.md): the wedge and candidate changes

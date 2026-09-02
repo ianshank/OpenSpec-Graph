@@ -47,17 +47,50 @@ SEVERITY_ORDER = {"INFO": 0, "WARN": 1, "ERROR": 2}
 logger = logging.getLogger("planlint")
 
 
+# The distribution name in pyproject's [project] section. Named once so the
+# --version lookup can prefer it over an arbitrary list index (see below).
+_DISTRIBUTION = "planlint"
+
+# Emitted by every verb's target check. Single-sourced because the Agent Skill
+# (skills/planlint-spec-governance/references/exit-codes.md) quotes it verbatim
+# and tests/test_skill_contract.py pins it: two independent copies of a string
+# an external consumer parses is the drift this repo has paid for before.
+_NOT_A_DIRECTORY = "ERROR target is not a directory: {root}"
+
+
 def _version_string() -> str:
-    # Resolve the distribution name from the importable package name
-    # ("openspec_graph") via packages_distributions(), rather than a second
-    # hardcoded copy of pyproject.toml's [project] name ("openspec-graph"
-    # -- spelled differently, hyphen vs. underscore, which is exactly why
-    # only this mapping, not a literal, can bridge the two correctly).
-    # NOT "planlint", which is only the console-script name.
+    # Resolve the version through the distribution that provides this import
+    # name, rather than restating pyproject's [project] name as a literal.
+    #
+    # Since 0.2.0 the distribution and the console script are both "planlint"
+    # (before the rename the distribution was "openspec-graph"). That rename
+    # is exactly why indexing is unsafe here: an environment that still has
+    # the old editable install alongside the new one has *two* distributions
+    # providing "openspec_graph", and packages_distributions() returns them in
+    # no defined order -- so `distributions[0]` could report the stale
+    # version indefinitely. `--version` is the preflight step the Agent Skill
+    # tells every agent to run first, so a wrong answer here is the worst one
+    # available. Pick the expected distribution by name when it is present,
+    # fall back to the sole provider otherwise, and say so on stderr when the
+    # environment is ambiguous.
     top_level = (__package__ or __name__).split(".")[0]
     try:
-        distributions = importlib.metadata.packages_distributions()[top_level]
-        version = importlib.metadata.version(distributions[0])
+        # De-duplicated: packages_distributions() can list the same
+        # distribution more than once (a repeated editable install leaves
+        # several metadata directories for one name), and warning about that
+        # would fire on every single invocation of every verb for an
+        # environment that is in fact perfectly fine.
+        distributions = sorted(set(importlib.metadata.packages_distributions()[top_level]))
+        if len(distributions) > 1:
+            print(
+                f"WARNING: {len(distributions)} distributions provide "
+                f"{top_level!r}: {distributions}. Uninstall the stale one "
+                "(`pip uninstall openspec-graph`) -- the reported version may "
+                "not be the code you are running.",
+                file=sys.stderr,
+            )
+        chosen = _DISTRIBUTION if _DISTRIBUTION in distributions else distributions[0]
+        version = importlib.metadata.version(chosen)
     except (KeyError, IndexError, importlib.metadata.PackageNotFoundError):
         # Uninstalled checkout (e.g. running from a source clone without
         # `pip install -e .`): fall back to the package's own constant
@@ -70,7 +103,18 @@ def _profile(args: argparse.Namespace) -> detect.StackProfile:
     root = Path(args.target).resolve()
     logger.debug("profiling target %s", root)
     if not root.is_dir():
-        raise SystemExit(f"target is not a directory: {root}")
+        # Exit 2 (usage/precondition error), never 1. `SystemExit(str)` prints
+        # the message and exits 1 -- the same code `validate` uses for "findings
+        # were reported at or above --fail-on", so a mistyped or stale --target
+        # was indistinguishable from a real spec failure to any caller reading
+        # only the exit code. The `witness` verb already validates its own
+        # boundary inputs at exit 2 (cli.py's cmd_witness); this aligns every
+        # other verb with that, rather than inventing a new convention
+        # (DEC-SD-001). SystemExit(2) prints nothing itself, so the message is
+        # written explicitly to stderr first.
+        logger.debug("target %s does not resolve to a directory; exiting 2", root)
+        print(_NOT_A_DIRECTORY.format(root=root), file=sys.stderr)
+        raise SystemExit(2)
     prof = detect.profile(root)
     logger.debug(
         "profile: dialect=%s change_packages=%d openspec=%s speckit=%s features=%d "
@@ -381,7 +425,7 @@ def cmd_witness(args: argparse.Namespace) -> int:
     ever match (DEC-WM-003/DEC-WM-020)."""
     root = Path(args.target).resolve()
     if not root.is_dir():
-        print(f"ERROR target is not a directory: {root}", file=sys.stderr)
+        print(_NOT_A_DIRECTORY.format(root=root), file=sys.stderr)
         return 2
 
     if not _STAGE_PATTERN.fullmatch(args.stage):

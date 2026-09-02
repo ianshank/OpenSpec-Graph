@@ -442,7 +442,15 @@ def test_common_module_is_stdlib_only() -> None:
     import ast
 
     tree = ast.parse((REPO_ROOT / "tools" / "_common.py").read_text(encoding="utf-8"))
-    allowed = {"__future__", "pathlib", "os", "sys"}
+    # Checked against the interpreter's own stdlib inventory rather than a
+    # hand-listed allowlist. The hand-listed version was exactly the set of
+    # modules the file happened to import at the time, so adding any *stdlib*
+    # module failed a test whose stated contract is "no third-party deps" --
+    # it read as a rejection but was really a stale literal. sys.stdlib_module_names
+    # exists on every version this project supports (3.10+), and is strictly
+    # stronger: it also rejects a stdlib module that only exists on a newer
+    # interpreter than the one running.
+    allowed = set(sys.stdlib_module_names) | {"__future__"}
     imported: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):

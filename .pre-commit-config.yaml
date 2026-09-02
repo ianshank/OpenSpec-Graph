@@ -1,4 +1,4 @@
-# Pre-commit hooks for OpenSpec-Graph.
+# Pre-commit hooks for planlint.
 # Install once:  pip install pre-commit && pre-commit install
 #
 # Local hooks call the same `make` targets CI uses, so a commit never bypasses
@@ -29,7 +29,7 @@ repos:
         pass_filenames: false
 
       - id: specgraph-validate
-        name: specgraph validate (self-dogfooding)
+        name: planlint validate (self-dogfooding)
         entry: make validate
         language: system
         pass_filenames: false

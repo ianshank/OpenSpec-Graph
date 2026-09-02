@@ -23,14 +23,20 @@ fi
 # (a Windows path's "\\" doubled to "\\\\") or already single-backslash;
 # collapse both forms to "/" so a forward-slash-only glob still matches.
 FILE_NORM=$(printf '%s' "$FILE" | sed 's/\\\\/\//g; s/\\/\//g')
+# Matched below as "/$FILE_NORM" so a repo-relative path (skills/x/SKILL.md)
+# hits the same globs as an absolute one; harmless for paths already absolute.
 
-case "$FILE_NORM" in
+case "/$FILE_NORM" in
   */openspec_graph/rules.py|*/openspec_graph/rules_*.py)
-    printf '{"decision": "block", "reason": "You just edited a rules module. Before finishing: regenerate tests/baseline_rules.json via `planlint rules --json > tests/baseline_rules.json`, then run `pytest tests/test_rule_registry_docs.py` and fix every doc location it reports out of sync (see the planlint-add-rule skill)."}'
+    printf '{"decision": "block", "reason": "You just edited a rules module. Before finishing: regenerate tests/baseline_rules.json via `planlint rules --json > tests/baseline_rules.json`, then run `make skill-catalog` to regenerate the distributable skill rule catalog, then run `pytest tests/test_rule_registry_docs.py tests/test_skill_contract.py` and fix every doc location they report out of sync (see the planlint-add-rule skill)."}'
     exit 0
     ;;
-  */Makefile|*/.github/workflows/*.yml)
+  */Makefile|*/.github/workflows/*.yml|*/.github/workflows/*.yaml)
     printf '{"decision": "block", "reason": "You just edited a Makefile or CI workflow file. Run `make thresholds` (or `python tools/check_no_hardcoded_thresholds.py` if make is unavailable) before finishing -- this repo requires every threshold to be read from its real locator, never hard-coded here."}'
+    exit 0
+    ;;
+  */skills/planlint-spec-governance/*|*/.claude-plugin/*)
+    printf '{"decision": "block", "reason": "You just edited the distributable Agent Skill or its plugin manifests. These are prose and metadata an external agent acts on, so nothing else catches drift in them. Before finishing: run `pytest tests/test_skill_contract.py tests/test_agent_skill_docs.py` -- they pin the read-only claim, the per-verb exit-code messages, the generated rule catalog, and manifest/version agreement."}'
     exit 0
     ;;
   */openspec/changes/*/specs/*/spec.md)

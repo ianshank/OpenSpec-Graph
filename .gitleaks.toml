@@ -1,9 +1,11 @@
-# gitleaks config for OpenSpec-Graph.
+# gitleaks config for planlint.
 # Runs in CI (gitleaks action) and locally via `make security` (real gitleaks if
-# installed, deterministic Python fallback otherwise). Test fixtures that
-# legitimately contain fake tokens are allowlisted by path.
+# installed, deterministic Python fallback otherwise). Only vendored and
+# generated trees are allowlisted; test sources, skills/ and evals/ are scanned
+# deliberately, so a real secret committed in a test or an eval prompt fails the
+# gate -- evals/README.md's "never commit raw transcripts" rule depends on it.
 
-title = "OpenSpec-Graph secret scan"
+title = "planlint secret scan"
 
 # A gitleaks --config file REPLACES the built-in ruleset entirely unless it
 # explicitly extends it -- without this, the file below only ever adds an

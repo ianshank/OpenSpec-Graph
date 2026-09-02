@@ -1,5 +1,5 @@
 """Fail if a numeric threshold, tool version, or pinned path is hard-coded in
-the Makefile or CI workflow YAML (AC-EH-6, rule G003 / C-CH-2).
+the Makefile or any CI workflow YAML (AC-EH-6, rule G003 / C-CH-2).
 
 Thresholds must live in ``pyproject.toml`` and be read by scripts at run time.
 This guard catches a regression where someone re-introduces a bare number into
@@ -9,7 +9,7 @@ workflow instead of the dev extras.
 Allowed: comments, the Makefile's own ``$(MAKE)`` recursion, and the literal
 ``0``/``1`` exit codes. Flagged: any other integer appearing on a command line
 in the Makefile, or a ``fail-under``/``fail_under``/``--cov-fail-under`` literal
-in the workflow.
+in any workflow.
 """
 
 from __future__ import annotations
@@ -72,10 +72,28 @@ def check_workflow(path: Path) -> list[str]:
     return findings
 
 
+def targets() -> list[Path]:
+    """Every file this guard scans.
+
+    A named function, not an inline list inside ``main``, so a test can assert
+    on the *selection* rather than re-deriving it. That distinction is the
+    whole bug this function exists to prevent: the guard previously named
+    ``ci.yml`` literally, so any workflow added later escaped it while the
+    guard still printed PASS -- and a test that re-globbed the directory
+    itself would have passed against the broken version too (R-SD-10).
+
+    Both YAML spellings are included: GitHub Actions accepts ``.yml`` and
+    ``.yaml``, and a guard that covers only one is the same bug one rename
+    away. Sorted for a stable report order across filesystems.
+    """
+    workflows_dir = REPO_ROOT / ".github" / "workflows"
+    workflows = sorted(workflows_dir.glob("*.yml")) + sorted(workflows_dir.glob("*.yaml"))
+    return [REPO_ROOT / "Makefile", *workflows]
+
+
 def main(argv: list[str]) -> int:
-    targets = [REPO_ROOT / "Makefile", REPO_ROOT / ".github" / "workflows" / "ci.yml"]
     findings: list[str] = []
-    for target in targets:
+    for target in targets():
         findings.extend(check_makefile(target) if target.name == "Makefile" else check_workflow(target))
 
     if findings:

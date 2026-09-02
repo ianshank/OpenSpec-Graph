@@ -127,3 +127,39 @@ it is not cargo-culted into the v0.1 surface.
     rule packs across repos is item 3 (entry-point `Rule` registration). No
     autonomous agent layer is planned: the harness evaluates, it never proposes
     or acts (INV-16 — the evaluator proposes nothing).
+
+14. **The distributable Agent Skill is a caller, not an agent layer** — since
+    `add-agent-skill-distribution`, `skills/planlint-spec-governance/` tells an
+    external agent how to *invoke* this CLI. That does not contradict item 13:
+    the skill contains no rule logic, its catalog is generated from the
+    registry, and the agent reading it is somebody else's, running outside this
+    process. The harness still only disposes.
+
+15. **PEP 639 licence metadata** — `pyproject.toml` still uses the
+    `license = { text = ... }` table form, which setuptools 77 deprecated in
+    favour of an SPDX string plus a `license-files` glob, with removal
+    announced. The migration is owed, not optional: a build months from now can
+    warn or fail on a form that was correct when written. It was attempted and
+    backed out because the SPDX form makes setuptools require
+    `packaging>=24.2` at build time, which could not be verified in the
+    environment available (a distro-managed `packaging` 24.0 that cannot be
+    upgraded). Do it as its own change, with a proven clean-environment build,
+    and raise `[build-system] requires` to `setuptools>=77` in the same commit.
+    `Dockerfile` already copies `LICENSE` so the `license-files` glob will not
+    break the image build when it lands.
+
+16. **CI wiring for the eval suite** — `evals/` has twenty cases and no job
+    runs them. `claude plugin eval` needs a plugin runtime CI does not have,
+    and the adversarial half is non-deterministic by nature, so it stays a
+    manual pre-release check rather than a gate. `tests/test_agent_artifacts.py`
+    validates the suite's *structure* deterministically, which is the part that
+    can be gated. Revisit if a headless runner appears.
+
+17. **Deliberately not done for the skill (yet)** — a published tool wrapper
+    for programmatic multi-agent frameworks (a subprocess shim with its own
+    release cadence, shipping untested from here); a hosted evaluation dataset
+    (the suite under `evals/` is the source, an export is mechanical); and any
+    skill capability that would let an agent write a waiver, record a witness,
+    or edit a threshold. The last one is not a roadmap item but a permanent
+    non-goal — those are exactly the moves the adversarial evaluation cases
+    exist to prove the skill refuses.
