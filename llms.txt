@@ -17,6 +17,8 @@ planlint evaluates plans; it does not author them. Read-only by default.
   Exit 2 means a precondition or usage error, which is not a spec failure.
 - `planlint` never executes `make` and never evaluates the target repository's
   own content. It makes one read-only `git rev-parse HEAD` call.
+- The distribution and the command are both `planlint`, no hyphen.
+- `plan-lint` on PyPI is an unrelated project, not this tool.
 
 ## Docs
 

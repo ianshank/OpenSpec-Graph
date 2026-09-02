@@ -148,8 +148,8 @@ it is not cargo-culted into the v0.1 surface.
     `Dockerfile` already copies `LICENSE` so the `license-files` glob will not
     break the image build when it lands.
 
-16. **CI wiring for the eval suite** — `evals/` has twenty cases and no job
-    runs them. `claude plugin eval` needs a plugin runtime CI does not have,
+16. **CI wiring for the eval suite** — the cases under `evals/` have no job
+    running them. `claude plugin eval` needs a plugin runtime CI does not have,
     and the adversarial half is non-deterministic by nature, so it stays a
     manual pre-release check rather than a gate. `tests/test_agent_artifacts.py`
     validates the suite's *structure* deterministically, which is the part that

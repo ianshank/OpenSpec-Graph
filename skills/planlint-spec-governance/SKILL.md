@@ -4,7 +4,7 @@ description: Validate OpenSpec or SpecKit change packages (proposal.md, spec.md,
 license: Apache-2.0
 compatibility: Requires the planlint CLI (version 0.2.0 or newer) on PATH and Python 3.10 or newer. git is optional.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   planlint-min-version: 0.2.0
 ---
 
@@ -35,7 +35,9 @@ planlint --target . validate --fail-on ERROR  # the gate
 
 Run `detect` first. It reports the dialect, the coverage-threshold locator,
 and the make targets it found, which is the context every finding is phrased
-against. Add `--json` to either command when you need structured output.
+against. For structured output use `validate --json` for findings, and
+`detect --format json` for a portable, schema-versioned dialect card --
+`detect --json` is a legacy shape carrying machine-specific absolute paths.
 
 ## Exit codes
 

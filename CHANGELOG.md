@@ -5,8 +5,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [0.2.0] — 2026-09-02
 
-> `0.1.0` was recorded in this changelog but never tagged in git; `v0.2.0` is
-> the first tagged release and the first published to PyPI.
+> `v0.1.0` was tagged in git (`cdc94ca`) under the previous distribution name
+> `openspec-graph`, and was never published to a package index. `v0.2.0` is the
+> first release under the `planlint` name and the first intended for PyPI;
+> publication happens when the tag is pushed and `.github/workflows/release.yml`
+> runs.
 
 ### Added — distributable Agent Skill (`add-agent-skill-distribution` change package)
 
@@ -610,4 +613,4 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   graph-diff regression gate on PRs.
 
 [0.2.0]: https://github.com/ianshank/planlint/releases/tag/v0.2.0
-[0.1.0]: https://github.com/ianshank/planlint/blob/main/CHANGELOG.md#010--2026-08-30
+[0.1.0]: https://github.com/ianshank/planlint/releases/tag/v0.1.0

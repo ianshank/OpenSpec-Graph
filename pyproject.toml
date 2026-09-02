@@ -98,7 +98,7 @@ branch_fail_under = 80
 # tomli backports stdlib tomllib (3.11+) for coverage.process_startup()'s
 # config-file parsing on the 3.10 leg of the CI matrix; coverage itself
 # declares zero dependencies, so this is required, not merely convenient.
-dev = ["pytest", "pytest-cov", "ruff", "mypy", "tomli; python_version < \"3.11\""]
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "build", "tomli; python_version < \"3.11\""]
 
 [tool.ruff]
 line-length = 100
