@@ -14,12 +14,15 @@ core `make ci` gate with the enterprise gates (typecheck, security, docs).
 | `make validate` | `planlint validate --fail-on ERROR` | spec rule violation → exit 1 |
 | `make docs-check` | required docs exist + linked from README | missing/unlinked → exit 1 |
 | `make pre-pr` | all of the above + no-hardcoded-thresholds | any → exit 1 |
+| `make skill-catalog` | regenerates the distributable skill's rule catalog | writer only; freshness is gated by `make test` |
 
 ## Quality-gate thresholds live in config, not in CI
 
 Coverage floors are read from `pyproject.toml` at run time by
 `tools/check_coverage_floor.py` (line, `fail_under`) and
-`tools/check_branch_coverage.py` (branch, `branch_fail_under`). The Makefile
+`tools/check_branch_coverage.py` (branch, `branch_fail_under`). Every file
+under `.github/workflows/` is scanned for a re-introduced literal, not just
+the continuous-integration one. The Makefile
 and workflow YAML contain **no** quality-gate thresholds (coverage floors) and
 no tool-version pins (`ruff==`, `mypy==`, `pytest==`) — tools come from the
 `[dev]` extras. `tools/check_no_hardcoded_thresholds.py` fails the gate if a

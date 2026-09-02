@@ -70,7 +70,17 @@ def _profile(args: argparse.Namespace) -> detect.StackProfile:
     root = Path(args.target).resolve()
     logger.debug("profiling target %s", root)
     if not root.is_dir():
-        raise SystemExit(f"target is not a directory: {root}")
+        # Exit 2 (usage/precondition error), never 1. `SystemExit(str)` prints
+        # the message and exits 1 -- the same code `validate` uses for "findings
+        # were reported at or above --fail-on", so a mistyped or stale --target
+        # was indistinguishable from a real spec failure to any caller reading
+        # only the exit code. The `witness` verb already validates its own
+        # boundary inputs at exit 2 (cli.py's cmd_witness); this aligns every
+        # other verb with that, rather than inventing a new convention
+        # (DEC-SD-001). SystemExit(2) prints nothing itself, so the message is
+        # written explicitly to stderr first.
+        print(f"ERROR target is not a directory: {root}", file=sys.stderr)
+        raise SystemExit(2)
     prof = detect.profile(root)
     logger.debug(
         "profile: dialect=%s change_packages=%d openspec=%s speckit=%s features=%d "

@@ -1,9 +1,60 @@
 # Changelog
 
-All notable changes to OpenSpec-Graph follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+All notable changes to planlint follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0]
+
+> `0.1.0` was recorded in this changelog but never tagged in git; `v0.2.0` is
+> the first tagged release and the first published to PyPI.
+
+### Added — distributable Agent Skill (`add-agent-skill-distribution` change package)
+
+- **`skills/planlint-spec-governance/`**: a SKILL.md a coding agent installs,
+  stating the verb surface, the three-way exit-code contract, the read-only
+  boundary, and the repairs it must not make. It delegates every judgement to
+  the CLI's exit code and never restates rule logic in prose.
+- **`.claude-plugin/` manifests**: the repo is installable as a single plugin
+  (`/plugin marketplace add ianshank/planlint`, then
+  `/plugin install planlint-spec-governance@planlint`).
+- **`tools/render_rule_catalog.py`**: generates the skill's rule catalog from
+  `rules.RULES`. A stale catalog fails `make test`, so the skill cannot cite a
+  rule the engine no longer has. Deliberately prints no rule total — the
+  existing registry guard cannot see this file.
+- **`tests/test_skill_contract.py`**: proves the read-only verbs leave a target
+  tree byte-identical by hashing every file before and after (not `git status`,
+  which is blind to ignored paths and useless on a non-git target), pins the
+  per-verb exit-2 messages the skill quotes, and checks manifest agreement.
+- **`context7.json` and `evals/`**: retrieval scoping for agent-facing docs,
+  and an evaluation suite whose adversarial half tests that the skill refuses
+  to make findings disappear.
+
+### Fixed
+
+- **A bad `--target` now exits 2, not 1.** `_profile()` raised `SystemExit`
+  with a message string when the target path was not a directory, which exits
+  1 — the same code `validate` uses for "findings were reported". A mistyped or
+  stale path was therefore indistinguishable from a real spec failure to
+  anything reading only the exit code. The `witness` verb already validated its
+  own boundary inputs at exit 2; every verb now agrees (`DEC-SD-001`).
+- **`templates/spec-gate.yml` now triggers on SpecKit trees.** It listed only
+  `openspec/**`, so a repository using the SpecKit dialect never ran the gate
+  it had just installed.
+- **`tools/check_no_hardcoded_thresholds.py` scans every workflow.** It named
+  `ci.yml` alone, so any workflow added later escaped the guard while it still
+  printed PASS.
+
+### Changed
+
+- **Distribution renamed** from `openspec-graph` to `planlint`, matching the
+  command it has shipped since the CLI rename. Run `pip uninstall
+  openspec-graph` before reinstalling: two distributions providing one import
+  name make the `--version` lookup pick between them in undefined order.
+- **One version source.** `pyproject.toml` reads `openspec_graph.__version__`
+  via setuptools' `attr:` mechanism instead of carrying a second literal.
+- **Packaging metadata** for a package index (readme, license, classifiers,
+  project URLs) plus a tag-triggered release workflow using trusted publishing,
+  gated on `make pre-pr` and a clean-environment console-script smoke test.
 
 ### Added — SpecKit as a third dialect (`add-speckit-dialect` change package)
 
@@ -463,7 +514,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **`tests/test_cli_surface.py`**: verb allow-list guard (AC-RP-3 non-success —
   an authoring/propose/apply verb added to the CLI fails `make test`) plus
   deprecation-alias behavior tests.
-- Not yet published to PyPI; install from source or `pip install git+https://github.com/ianshank/OpenSpec-Graph`.
+- Not published to PyPI at the time of that change; see 0.2.0 for the rename and first release.
 
 ### Changed — decompose god files (`decompose-god-files` change package)
 
@@ -541,5 +592,5 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - GitHub Actions CI: test matrix (3.10–3.13), self-validate hard gate,
   graph-diff regression gate on PRs.
 
-[Unreleased]: https://github.com/ianshank/OpenSpec-Graph/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/ianshank/OpenSpec-Graph/releases/tag/v0.1.0
+[0.2.0]: https://github.com/ianshank/planlint/releases/tag/v0.2.0
+[0.1.0]: https://github.com/ianshank/planlint/blob/main/CHANGELOG.md#010--2025-xx-xx

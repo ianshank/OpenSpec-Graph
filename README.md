@@ -1,4 +1,4 @@
-# OpenSpec-Graph (`planlint`)
+# planlint
 
 **The CI gate that fails when a spec cites a gate this repo does not have.**
 
@@ -39,7 +39,7 @@ but never declared, a threshold hard-coded instead of read from its source.
 Zero runtime dependencies. Python 3.10+.
 
 ```bash
-pip install -e .                     # local dev install (no PyPI release yet)
+pip install planlint                 # or `pip install -e .` for a dev checkout
 planlint --target /path/to/clone detect      # read-only: stack, dialect, threshold
 planlint --target /path/to/clone detect --format json   # portable dialect card (schema-versioned)
 planlint --target /path/to/clone detect --diff prev.json  # exit 1 + list what drifted, else PASS
@@ -51,9 +51,10 @@ planlint --target /path/to/clone graph --format mermaid  # a picture, not just J
 planlint --version                           # print the installed version and exit
 ```
 
-> The package is not yet published to PyPI. Until it is, install from source
-> (`pip install -e .`) or directly from GitHub
-> (`pip install git+https://github.com/ianshank/OpenSpec-Graph`).
+> Contributors upgrading from before the distribution rename should run
+> `pip uninstall openspec-graph` first. Two distributions providing the same
+> import name make `--version`'s distribution lookup pick between them in
+> undefined order, so a stale editable install can report the wrong version.
 
 > The command was renamed from `specgraph` to `planlint`. `specgraph` remains a
 > backwards-compatible alias that prints a deprecation to stderr and delegates
@@ -293,7 +294,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install git+https://github.com/ianshank/OpenSpec-Graph
+      - run: pip install planlint
       - run: planlint --target . detect                       # surfaces drift in the log
       - run: planlint --target . validate --fail-on ERROR     # exit 1 blocks the merge
 ```
@@ -304,6 +305,29 @@ Or as a Make target, so it joins the existing gate ladder:
 specs: ## Validate every OpenSpec change package
 	planlint --target . validate --fail-on ERROR
 ```
+
+## Use from a coding agent
+
+`planlint` ships as an Agent Skill so a coding agent can run the gate instead
+of guessing at it. The skill states the verb surface, the exit-code contract,
+and the boundary an agent must not cross — it never restates rule logic in
+prose, and it never overrides a nonzero exit.
+
+```
+/plugin marketplace add ianshank/planlint
+/plugin install planlint-spec-governance@planlint
+```
+
+The skill source is [`skills/planlint-spec-governance/SKILL.md`](skills/planlint-spec-governance/SKILL.md).
+Its rule catalog is generated from the rule registry by `make skill-catalog`,
+so it cannot drift from the engine. Agents that read the open Agent Skills
+format can also use the directory directly by copying it into their own skills
+folder; it carries no repository-relative references.
+
+The skill is deliberately allowed to repair an existing spec and re-run the
+gate, and deliberately forbidden from making a finding disappear without
+changing the fact behind it: no agent-written waivers, no recorded witnesses,
+no edits to the coverage floor, no renamed Makefile targets.
 
 ## Dogfooding
 
@@ -347,6 +371,8 @@ change package.
   hooks/agents/skills dev-tooling layer, and how to add a rule
 - [Agents, skills, and the harness](docs/agents-skills-harness.md) — why this is
   a deterministic governance harness, not an autonomous agent
+- [Agent Skill](skills/planlint-spec-governance/SKILL.md) — the distributable
+  skill a coding agent installs: verbs, exit codes, and the repair boundary
 - [Next steps](docs/next-steps.md) — what is deliberately out of scope
 - [Differentiation roadmap](docs/differentiation-roadmap.md) — the wedge, the
   comparison, and the candidate change packages

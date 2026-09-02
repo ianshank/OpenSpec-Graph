@@ -54,12 +54,23 @@ a local net before the round-trip to CI.
 | `graph-diff` | PR only | `tools/diff_spec_graph.py` base→head (AC-CH-5/6) |
 | `security` | push + PR | gitleaks + no-hardcoded-thresholds (hard) |
 | `docs` | push + PR | `make docs-check` (hard) |
+| `release` (separate workflow) | `v*` tag | `make pre-pr`, then a clean-venv smoke test of the `planlint` console script, then trusted publishing to PyPI |
 
 `typecheck` runs as a step inside the `test` matrix (so every supported Python
 version is type-checked), not as a standalone job.
 
 The `graph-diff` job checks out the PR head SHA (not the synthetic merge
 commit) so `merge-base` resolves to the true branch point (DEC-CH-001).
+
+`release` lives in its own workflow file because it is tag-triggered, not
+push/PR-triggered. Its clean-venv step is not redundant with the `test`
+matrix: the suite runs the CLI as `python -m openspec_graph.cli`, so nothing
+else ever exercises the console script a wheel actually installs, or proves
+the package really declares no runtime dependencies.
+
+Note that `tools/check_no_hardcoded_thresholds.py` scans **every** file under
+`.github/workflows/`, not a named one — a workflow added later would otherwise
+escape the guard while it still printed PASS.
 
 ## Claude Code hooks (`.claude/hooks/`)
 
@@ -99,6 +110,10 @@ this repo's own dogfooded OpenSpec change-package workflow) and
 hook case above points at).
 
 ## Adding a custom rule
+
+Adding or changing a rule also requires regenerating the distributable
+skill's rule catalog with `make skill-catalog`; `tests/test_skill_contract.py`
+fails on a stale one, and the `.claude/` hook nudges for it.
 
 Rules live in `openspec_graph/rules.py` as `Rule(ident, severity, dialects,
 summary, check)`. A rule is a pure function

@@ -1,4 +1,4 @@
-# OpenSpec-Graph Differentiation — Implementation Plan
+# planlint Differentiation — Implementation Plan
 
 > Planning artifact. Not implementation. Not part of PR #4 (`decompose-god-files`).
 > If committed, goes on a separate doc-only branch.

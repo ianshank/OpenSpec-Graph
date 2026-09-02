@@ -33,6 +33,28 @@ they are not confused with autonomous-agent abstractions.
   outside `planlint` by design (INV-16 analogue: the harness disposes, it does
   not propose).
 
+## A third meaning: the distributable Agent Skill
+
+Since the `add-agent-skill-distribution` change there is a third thing in this
+repo called a "skill", and it is neither of the two above:
+`skills/planlint-spec-governance/` is an **Agent Skill** in the open
+SKILL.md format — a document a coding agent installs so it knows how to *run*
+this CLI. It is product, shipped to other people's repositories, unlike
+`.claude/skills/` (contributor tooling for developing planlint itself).
+
+The three senses, disambiguated once:
+
+| Term | What it is | Where |
+|---|---|---|
+| Skill (this document) | One `Rule` — a pure, deterministic check | `openspec_graph/rules*.py` |
+| Skill (contributor tooling) | A checklist Claude Code follows when working on this repo | `.claude/skills/` |
+| Agent Skill (product) | A document telling any agent how to invoke the CLI | `skills/` |
+
+The product skill deliberately contains no rule logic. It names verbs, exit
+codes, and a boundary; its rule catalog is generated from the registry by
+`make skill-catalog` rather than written by hand, so the deterministic harness
+stays the only place a rule is defined.
+
 ## Why not autonomous agents
 
 The whole point of a governance CLI is **reproducibility**: the same spec tree

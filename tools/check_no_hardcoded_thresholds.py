@@ -1,5 +1,5 @@
 """Fail if a numeric threshold, tool version, or pinned path is hard-coded in
-the Makefile or CI workflow YAML (AC-EH-6, rule G003 / C-CH-2).
+the Makefile or any CI workflow YAML (AC-EH-6, rule G003 / C-CH-2).
 
 Thresholds must live in ``pyproject.toml`` and be read by scripts at run time.
 This guard catches a regression where someone re-introduces a bare number into
@@ -9,7 +9,7 @@ workflow instead of the dev extras.
 Allowed: comments, the Makefile's own ``$(MAKE)`` recursion, and the literal
 ``0``/``1`` exit codes. Flagged: any other integer appearing on a command line
 in the Makefile, or a ``fail-under``/``fail_under``/``--cov-fail-under`` literal
-in the workflow.
+in any workflow.
 """
 
 from __future__ import annotations
@@ -73,7 +73,14 @@ def check_workflow(path: Path) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    targets = [REPO_ROOT / "Makefile", REPO_ROOT / ".github" / "workflows" / "ci.yml"]
+    # Every workflow, not just ci.yml. Naming one file meant any workflow
+    # added later (a release job, a scheduled scan) escaped this guard
+    # silently -- the guard would still print PASS while the new file pinned
+    # a coverage floor or a tool version (R-SD-10). Sorted for a stable
+    # report order across filesystems.
+    workflows = sorted((REPO_ROOT / ".github" / "workflows").glob("*.yml"))
+    workflows += sorted((REPO_ROOT / ".github" / "workflows").glob("*.yaml"))
+    targets = [REPO_ROOT / "Makefile", *workflows]
     findings: list[str] = []
     for target in targets:
         findings.extend(check_makefile(target) if target.name == "Makefile" else check_workflow(target))

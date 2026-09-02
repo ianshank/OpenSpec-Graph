@@ -21,6 +21,11 @@ REQUIRED_DOCS = [
     "docs/hooks.md",
     "docs/agents-skills-harness.md",
     "docs/next-steps.md",
+    # The distributable Agent Skill's own entry point. Listed here so "the
+    # README links it" is a gate rather than a hope (R-SD-11): the skill is
+    # the product surface an agent reads first, and an unlinked one is
+    # undiscoverable from the repo's front page.
+    "skills/planlint-spec-governance/SKILL.md",
 ]
 
 

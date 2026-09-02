@@ -7,7 +7,12 @@ the spec conventions mechanically instead of by review prose.
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+# The single source of truth for the version. `pyproject.toml` reads this
+# attribute via setuptools' `dynamic`/`attr:` mechanism rather than carrying
+# its own literal -- two literals with nothing binding them is the same drift
+# class `tests/test_rule_registry_docs.py` exists for, and a release is the
+# worst place to discover it (DEC-SD-009).
+__version__ = "0.2.0"
 
 from .detect import StackProfile, detect_dialect, profile
 from .graph import NoOpenSpecTreeError, build_graph

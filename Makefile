@@ -1,4 +1,4 @@
-.PHONY: help test lint typecheck security validate graph graph-mermaid ci pre-pr docs-check thresholds clean
+.PHONY: help test lint typecheck security validate graph graph-mermaid ci pre-pr docs-check thresholds skill-catalog clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-14s %s\n", $$1, $$2}'
@@ -38,6 +38,9 @@ docs-check: ## Confirm required docs exist and are linked from README
 
 thresholds: ## Confirm no hard-coded thresholds in the Makefile or workflow YAML
 	python tools/check_no_hardcoded_thresholds.py
+
+skill-catalog: ## Regenerate the distributable skill's rule catalog from the registry
+	python tools/render_rule_catalog.py --write
 
 clean: ## Remove build, cache, and coverage artifacts
 	rm -rf build dist *.egg-info .pytest_cache .ruff_cache .mypy_cache htmlcov

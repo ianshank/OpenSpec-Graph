@@ -41,3 +41,13 @@ base.json
 .vscode
 *.swp
 .DS_Store
+
+# Agent-facing distribution artifacts: shipped through the git repo (the plugin
+# marketplace installs from the repo, not from an image), never needed in a
+# build context. Keeping them out also keeps the image free of prose that would
+# drift from the installed CLI.
+skills
+evals
+.claude-plugin
+context7.json
+llms.txt

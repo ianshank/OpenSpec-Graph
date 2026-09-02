@@ -1,0 +1,17 @@
+{
+  "name": "planlint-spec-governance",
+  "version": "0.2.0",
+  "description": "Validate OpenSpec and SpecKit change packages against a repository's real Makefile targets, coverage floor, waivers and witnesses using the deterministic planlint CLI.",
+  "author": {
+    "name": "ianshank"
+  },
+  "homepage": "https://github.com/ianshank/planlint",
+  "license": "Apache-2.0",
+  "keywords": [
+    "specs",
+    "governance",
+    "lint",
+    "openspec",
+    "speckit"
+  ]
+}
