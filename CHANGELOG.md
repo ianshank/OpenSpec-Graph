@@ -5,6 +5,26 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed — one spec on disk is discovered once
+
+- **A symlinked change or feature directory no longer double-counts a spec.**
+  `Path.glob()` follows a valid directory symlink, so a
+  `specs/002-alias -> specs/001-foo` link yielded two distinct paths for one
+  `spec.md`: `feature_dirs` reported two features for one, `specs_checked`
+  over-reported, and the graph rendered duplicate `FR-001`/`SC-001` nodes for a
+  single requirement. Both discovery functions and `profile()`'s separate
+  `change_dirs` glob now deduplicate by real-path identity through one shared
+  helper. Identity is the file, not its content: two distinct specs that read
+  the same are still two specs.
+- **The surviving name is the real directory's, not an alias's.** The first
+  implementation kept the first path in sorted order, which was deterministic
+  but arbitrary — `alias-change` sorts before `real-change`, so the alias
+  survived and `--change real-change` reported "no specs found" while
+  `--change alias-change` passed. The real path now wins, with ordering
+  breaking ties only where no candidate is a real path. Two directories that
+  are one package are addressable by one name, and it is the recognisable one;
+  the alias name exits 2.
+
 ### Fixed — the exit-code contract now holds for unreadable specs
 
 - **A spec that exists but cannot be read exits 2, not 1.** `parse_spec` read

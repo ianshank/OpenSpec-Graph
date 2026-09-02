@@ -38,19 +38,19 @@ over-engineering.
    stale-cached-belief problem this project exists to catch in target repos).
    Worth doing only with a clear answer to that question in hand.
 
-4a. **Symlinked feature/change directories double-count a spec** — `detect.py`'s
-   `find_spec_files()`/`find_speckit_spec_files()` both glob (`changes/*/specs/*/spec.md`,
-   `specs/*/spec.md`); `Path.glob()` follows a *valid* directory symlink, so a
-   `specs/002-alias -> specs/001-foo` symlink yields two distinct `Path`
-   entries for the same underlying `spec.md`. Confirmed by construction
-   (add-speckit-dialect PR review): `StackProfile.feature_dirs` reports 2
-   features for 1 real one, and `graph.build_graph()` renders duplicate
-   `FR-001`/`SC-001` nodes. Not SpecKit-specific — `find_spec_files()` has
-   the identical latent behavior for `openspec/changes/`. Deferred rather
-   than patched into the SpecKit PR: the fix (dedup by `Path.resolve()`
-   identity, keep first-encountered logical path) is symmetric across both
-   discovery functions, so it belongs in its own scoped change, not a
-   dialect-specific patch that would leave the two paths asymmetric.
+4a. ~~**Symlinked feature/change directories double-count a spec**~~ — shipped
+   in `fix-symlinked-spec-dir-double-count`. `Path.glob()` follows a *valid*
+   directory symlink, so a `specs/002-alias -> specs/001-foo` link yielded two
+   distinct `Path` entries for one `spec.md`: `feature_dirs` reported 2
+   features for 1, and `graph.build_graph()` rendered duplicate `FR-001`/
+   `SC-001` nodes. Fixed symmetrically across both discovery functions with a
+   shared `_dedupe_by_identity()` helper, as this item required.
+
+   One thing this item did not anticipate: `profile()` computes `change_dirs`
+   from its own separate glob, so fixing only the two spec-file functions left
+   it still double-counting. A test caught it; reading the code had not. The
+   glob stays separate — a change package with no `spec.md` yet is still a
+   change package — and simply gets the same dedup.
 
 4b. **A `Functional Requirements`/`Success Criteria` heading at the wrong
    level silently yields zero extracted requirements/criteria, with no
