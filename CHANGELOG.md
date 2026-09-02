@@ -5,6 +5,56 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — `delta`, which reports what *your change* broke
+
+- **`planlint delta --baseline CARD.json`** compares a saved dialect card
+  (`detect --format json`) against the live repository and lists every spec
+  whose citations the machinery moved out from under: a make target removed
+  since the baseline, an invariant or ADR no longer declared, or — the case
+  the roadmap names — a spec still citing the coverage floor you just changed.
+  Text or JSON, with the same schema-versioned envelope every other
+  machine-readable output carries.
+- **It is not a second `validate`.** A citation must have been *supported at
+  the baseline* and be unsupported now. One that was already broken before the
+  comparison began is `validate`'s finding (G004/G005/G008), not a delta.
+  Without that attribution the verb would report the same things under a
+  different name and leave a reader unable to tell which of them their own
+  commit caused, so it is a requirement with its own test rather than a note.
+- The baseline is a saved card rather than a git ref, deliberately. Reading
+  machinery at a ref needs a second subprocess call site taking a
+  user-supplied argument, which the existing safety argument for the only
+  such call does not cover; and threshold, invariant and ADR discovery are
+  multi-file scans over a root, not single files to `git show`. "Since a ref"
+  is already available through the worktree pattern the graph-diff job uses.
+
+### Added — SARIF output, a composite action, and pre-commit hooks
+
+- **`validate --format sarif`** emits SARIF 2.1.0, so findings land inline on
+  the pull-request diff a team already reviews instead of in a CI log nobody
+  opens. `--json` is kept as an exact alias of `--format json`; pairing it
+  with a different format exits 2 rather than silently picking one.
+- The projection consumes the findings `validate` already computed, so "the
+  same findings as `--json`" is true by construction rather than by a second
+  implementation somebody has to keep in step. All three renderings share one
+  sort order.
+- **A `line` of 0 omits the region entirely, never clamping to 1.** This is
+  the common path, not an edge case: no rule sets a line today, so clamping
+  would put a wrong annotation on the first line of every file in every pull
+  request — and a reviewer could not tell it was wrong. A finding with no path
+  is emitted with an empty `locations` array rather than dropped; losing a
+  result to satisfy a schema is the one failure this format must not add.
+- **`.github/actions/planlint/action.yml`**, a composite action that installs
+  a pinned planlint, reports detected conventions, and uploads SARIF — with
+  the gate applied *after* the upload, so findings reach the diff even when
+  the job fails. **`.pre-commit-hooks.yaml`** gives adopters a hook definition;
+  it is distinct from this repository's own contributor-facing
+  `.pre-commit-config.yaml`, and never invokes a `make` target an adopter
+  does not have.
+- **The adopter-URL guard now covers both.** Its corpus stopped at the skill
+  tree and `templates/`, so the action's pinned install line would have been
+  unguarded — the same gap that let a rename leave eight files printing a
+  command for a name that no longer existed.
+
 ### Fixed — one spec on disk is discovered once
 
 - **A symlinked change or feature directory no longer double-counts a spec.**

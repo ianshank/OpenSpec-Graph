@@ -147,8 +147,15 @@ def _distribution_name() -> str:
 def _adopter_files() -> list[Path]:
     """Every tracked file a reader might copy an install command out of."""
     found: list[Path] = []
-    for pattern in ("*.md", "docs/**/*.md", "skills/**/*.md", "skills/**/*.yml",
-                    "templates/*.yml", "Dockerfile"):
+    # `.github/actions/**` and the repo-root `*.yaml` carry adopter-facing
+    # install lines too: the composite action pins a planlint version, and the
+    # pre-commit hooks file names the console script. Both were outside the
+    # corpus when they were added, which is exactly the gap this module's
+    # docstring describes -- the project was renamed once and eight places
+    # kept printing a command for a name that no longer existed. Discovered,
+    # never listed.
+    for pattern in ("*.md", "*.yaml", "docs/**/*.md", "skills/**/*.md", "skills/**/*.yml",
+                    "templates/*.yml", ".github/actions/**/*.yml", "Dockerfile"):
         for path in REPO_ROOT.glob(pattern):
             if path.is_file() and not any(part in _EXCLUDED_DIRS for part in path.parts):
                 found.append(path)
@@ -339,3 +346,17 @@ def test_readme_plugin_commands_match_the_generated_manifests() -> None:
     assert f"/plugin marketplace add ianshank/{marketplace}" in readme, (
         "README.md no longer shows the marketplace-add command that must precede it"
     )
+
+
+def test_the_adopter_corpus_includes_the_composite_action() -> None:
+    """AC-SA-14: the action pins a planlint version, so it belongs to the same
+    guard as every other place this repository prints an install command.
+
+    It was outside the corpus when it was written. Naming it here rather than
+    trusting the glob means a future reshuffle of `_adopter_files()` cannot
+    quietly drop it again.
+    """
+    names = {p.relative_to(REPO_ROOT).as_posix() for p in ADOPTER_FILES}
+
+    assert ".github/actions/planlint/action.yml" in names, sorted(names)
+    assert ".pre-commit-hooks.yaml" in names, sorted(names)

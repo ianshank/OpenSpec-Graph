@@ -83,6 +83,7 @@ Read-only. Safe to run at any time, on any repository:
 | `graph` | Spec dependency graph, as JSON or Mermaid |
 | `rules` | The rule table this build carries |
 | `waivers` | Every waived rule across the tree |
+| `delta` | Specs whose citations went stale since a saved dialect card |
 
 Writes files. Do not run these unless the user asks:
 

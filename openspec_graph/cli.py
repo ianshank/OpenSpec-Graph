@@ -10,10 +10,11 @@ Verbs:
   detect    read-only report of the target's stack, gates, threshold, dialect
   init      write openspec/specgraph.json + project.md, a snapshot of detected conventions
   new       scaffold a change package in the target's own dialect
-  validate  run the rule engine over every change package
+  validate  run the rule engine over every change package (text, JSON, or SARIF)
   graph     emit the spec dependency graph as JSON or Mermaid (pure projection of validate)
   rules     print the rule table
   waivers   list every waived rule across the tree, with file, line, reason, change
+  delta     list specs whose citations went stale since a saved dialect card
   witness   record proof a stage actually ran (CI-side; see validate --require-witness)
 
 Exit codes: 0 clean, 1 findings at or above the fail level, 2 usage error.
@@ -33,7 +34,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import detect, dialect_card, ledger, mermaid, rules, scaffold, witness
+from . import delta, detect, dialect_card, ledger, mermaid, rules, sarif, scaffold, witness
 from . import graph as graph_module
 from .log import configure as configure_logging
 from .parse import ParsedSpec, SpecReadError, parse_spec
@@ -59,6 +60,13 @@ _DISTRIBUTION = "planlint"
 # an external consumer parses is the drift this repo has paid for before.
 _NOT_A_DIRECTORY = "ERROR target is not a directory: {root}"
 
+# `validate --json` is an alias of `--format json`; pairing it with any other
+# format is a contradiction rather than a preference to resolve silently.
+_JSON_FORMAT_CONFLICT = (
+    "ERROR --json is an alias of `--format json` and cannot be combined with "
+    "`--format {fmt}`; pass one or the other"
+)
+
 # Emitted when a discovered spec exists but cannot be read (AC-RE-1). Single
 # constant for the same reason as _NOT_A_DIRECTORY: three verbs render it and
 # an external consumer reads the wording, so two copies would drift.
@@ -73,6 +81,10 @@ _DETECT_JSON_DEPRECATED = (
     "emits machine-specific absolute paths. Use `detect --format json` for "
     "the portable, schema-versioned dialect card."
 )
+
+# Rendered by every verb that needs a spec tree. The Agent Skill's exit-code
+# reference quotes it verbatim, so it lives once rather than in each verb.
+_NO_SPEC_TREE = "no openspec/ directory and no SpecKit specs/ tree; run ``planlint init`` first"
 
 # `--change` scopes OpenSpec change packages. On a SpecKit-only target the
 # generic "no specs found" reads as "your feature is missing" when the real
@@ -194,19 +206,9 @@ def cmd_detect(args: argparse.Namespace) -> int:
     prof = _profile(args)
 
     if args.diff:
-        baseline_path = Path(args.diff)
-        try:
-            previous = json.loads(baseline_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            print(f"cannot read --diff baseline {baseline_path}: {exc}", file=sys.stderr)
-            return 2
-        if not isinstance(previous, dict):
-            print(
-                f"cannot read --diff baseline {baseline_path}: expected a JSON object, "
-                f"got {type(previous).__name__}",
-                file=sys.stderr,
-            )
-            return 2
+        previous, code = _load_card(args.diff, "--diff baseline")
+        if previous is None:
+            return code
         changes = dialect_card.diff_cards(previous, prof.to_card())
         if changes:
             for change in changes:
@@ -302,6 +304,33 @@ def cmd_new(args: argparse.Namespace) -> int:
     return 0
 
 
+def _load_card(path_str: str, label: str) -> tuple[dict[str, object] | None, int]:
+    """Read a saved dialect card, or render the exit-2 diagnostic for it.
+
+    Shared by ``detect --diff`` and ``delta --baseline``, which both take a
+    card written earlier by ``detect --format json``. ``label`` names the flag
+    in the message so each verb still says which of its own arguments was
+    wrong, without either carrying a second copy of the read-and-validate
+    logic. Returns ``(card, 0)`` on success and ``(None, 2)`` on failure --
+    never exit 1, which is reserved for "the comparison ran and reported
+    something".
+    """
+    path = Path(path_str)
+    try:
+        card = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"cannot read {label} {path}: {exc}", file=sys.stderr)
+        return None, 2
+    if not isinstance(card, dict):
+        print(
+            f"cannot read {label} {path}: expected a JSON object, "
+            f"got {type(card).__name__}",
+            file=sys.stderr,
+        )
+        return None, 2
+    return card, 0
+
+
 def _sort_key(finding: rules.Finding, root: Path) -> tuple[str, str]:
     """Stable render order for findings: root-relative POSIX path, then rule.
 
@@ -357,12 +386,17 @@ def _report_unreadable(exc: SpecReadError, root: Path) -> int:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
+    # Boundary check before any work: `--json` is an alias of `--format json`,
+    # so pairing it with a different --format is a contradiction, not a
+    # preference to resolve. Honouring either silently would hand a caller
+    # output in a format it did not ask for and cannot parse.
+    if args.json and args.format not in (None, "json"):
+        print(_JSON_FORMAT_CONFLICT.format(fmt=args.format), file=sys.stderr)
+        return 2
+
     prof = _profile(args)
     if not prof.openspec_root and not prof.speckit_root:
-        print(
-            "no openspec/ directory and no SpecKit specs/ tree; run ``planlint init`` first",
-            file=sys.stderr,
-        )
+        print(_NO_SPEC_TREE, file=sys.stderr)
         return 2
 
     spec_files = _gather_spec_files(prof)
@@ -414,7 +448,21 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     ordered = sorted(findings, key=lambda f: _sort_key(f, prof.root))
 
-    if args.json:
+    if args.format == "sarif":
+        print(
+            json.dumps(
+                sarif.to_sarif(
+                    ordered,
+                    rules.rule_table(),
+                    root=prof.root,
+                    tool_version=_package_version(),
+                ),
+                indent=2,
+            )
+        )
+        return 1 if blocking else 0
+
+    if args.json or args.format == "json":
         print(
             json.dumps(
                 {
@@ -524,13 +572,70 @@ def cmd_graph(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_delta(args: argparse.Namespace) -> int:
+    """Report specs whose citations went stale because the machinery moved.
+
+    Not a second `validate`: a citation that was already broken at the
+    baseline is G004/G005's finding, not a delta. See `delta.build_delta`.
+    """
+    prof = _profile(args)
+    if not prof.openspec_root and not prof.speckit_root:
+        print(_NO_SPEC_TREE, file=sys.stderr)
+        return 2
+
+    baseline, code = _load_card(args.baseline, "--baseline")
+    if baseline is None:
+        return code
+
+    spec_files = _gather_spec_files(prof)
+    try:
+        specs = [parse_spec(path, args.dialect or prof.dialect) for path in spec_files]
+    except SpecReadError as exc:
+        return _report_unreadable(exc, prof.root)
+
+    entries = delta.build_delta(baseline, prof, specs, prof.root)
+
+    if args.format == "json":
+        print(
+            json.dumps(
+                {
+                    "schema_version": delta.DELTA_SCHEMA_VERSION,
+                    "tool_version": _package_version(),
+                    "target": str(prof.root),
+                    "baseline": str(Path(args.baseline)),
+                    "machinery_changes": dialect_card.diff_cards(baseline, prof.to_card()),
+                    "stale": [e.as_dict() for e in entries],
+                },
+                indent=2,
+            )
+        )
+        return 1 if entries else 0
+
+    # The machinery diff is context, printed even when nothing went stale:
+    # "the floor moved and no spec cited it" is a useful answer, and a silent
+    # pass would leave a reader unsure the baseline was even read.
+    changes = dialect_card.diff_cards(baseline, prof.to_card())
+    if changes:
+        print(f"machinery changed since the baseline ({len(changes)}):")
+        for change in changes:
+            print(f"  {change}")
+    else:
+        print("machinery unchanged since the baseline")
+
+    if not entries:
+        print("\nno spec cites machinery that changed — nothing stale")
+        return 0
+
+    print(f"\n{len(entries)} stale citation(s):")
+    for entry in entries:
+        print(f"  {entry.render()}")
+    return 1
+
+
 def cmd_waivers(args: argparse.Namespace) -> int:
     prof = _profile(args)
     if not prof.openspec_root and not prof.speckit_root:
-        print(
-            "no openspec/ directory and no SpecKit specs/ tree; run ``planlint init`` first",
-            file=sys.stderr,
-        )
+        print(_NO_SPEC_TREE, file=sys.stderr)
         return 2
 
     spec_files = _gather_spec_files(prof)
@@ -649,7 +754,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_val.add_argument("--change", help="limit to one change package")
     p_val.add_argument("--dialect", choices=["harness", "upstream", "speckit", "auto"])
     p_val.add_argument("--fail-on", choices=["INFO", "WARN", "ERROR"], default="ERROR")
-    p_val.add_argument("--json", action="store_true")
+    # --json predates --format and is kept as an exact alias of
+    # `--format json`, so no existing caller or CI template breaks. The two
+    # are mutually exclusive when they disagree (see cmd_validate): silently
+    # honouring one would hand a caller a format it did not ask for.
+    p_val.add_argument("--json", action="store_true", help="alias of `--format json`")
+    p_val.add_argument(
+        "--format", choices=["text", "json", "sarif"], default=None,
+        help="sarif emits SARIF 2.1.0 for GitHub code scanning",
+    )
     p_val.add_argument(
         "--require-witness", action="store_true",
         help="also enforce W001/W002: every cited stage needs a fresh, passing "
@@ -674,6 +787,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_waivers.add_argument("--dialect", choices=["harness", "upstream", "speckit", "auto"])
     p_waivers.add_argument("--format", choices=["text", "json"], default="text")
     p_waivers.set_defaults(func=cmd_waivers)
+
+    p_delta = sub.add_parser(
+        "delta", help="list specs whose citations went stale since a saved dialect card"
+    )
+    p_delta.add_argument(
+        "--baseline", required=True, metavar="CARD.json",
+        help="a dialect card saved earlier by `detect --format json`; for "
+        "'since a git ref', check that ref out with `git worktree add` and "
+        "run `detect --format json` there first",
+    )
+    p_delta.add_argument("--dialect", choices=["harness", "upstream", "speckit", "auto"])
+    p_delta.add_argument("--format", choices=["text", "json"], default="text")
+    p_delta.set_defaults(func=cmd_delta)
 
     p_witness = sub.add_parser("witness", help="record proof a stage actually ran")
     p_witness.add_argument(

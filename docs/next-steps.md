@@ -71,9 +71,18 @@ over-engineering.
 
 ## Medium term
 
-5. **Sarif output** — emit `validate --format sarif` for GitHub code-scanning
-   integration. The findings already carry `path`/`line`/`rule`/`severity`;
-   Sarif is a projection, like the graph.
+5. ~~**Sarif output**~~ — shipped in `add-sarif-and-actions` as
+   `validate --format sarif`, a projection over the findings `validate`
+   already computed, plus a composite Action and `.pre-commit-hooks.yaml`.
+
+   One thing this item's framing got wrong, and it is the interesting part:
+   findings carry `path`/`line`/`rule`/`severity`, but **no rule sets a
+   line** — every finding reaching the CLI has `line == 0`. SARIF's
+   `startLine` minimum is 1, so clamping would have put a wrong annotation on
+   the first line of every file in every pull request, with no way for a
+   reviewer to tell it was wrong. The region is omitted instead. A projection
+   is only as good as the fields it is projecting, which is worth checking
+   before assuming one is mechanical.
 
 6. **Coverage trend gating** — `check_coverage_floor.py` gates against an
    absolute floor. A trend gate (branch coverage must not *decrease* vs.

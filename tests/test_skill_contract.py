@@ -38,6 +38,12 @@ MARKETPLACE_JSON = REPO_ROOT / ".claude-plugin" / "marketplace.json"
 CATALOG = SKILL_DIR / "references" / "rule-catalog.md"
 RENDERER = REPO_ROOT / "tools" / "render_rule_catalog.py"
 
+# Placeholder for a dialect card written outside the target repo. Substituted
+# in the read-only test rather than hardcoded, because the path is only known
+# once tmp_path exists -- and because the file must not live inside the tree
+# whose byte-for-byte stability the test is measuring.
+_BASELINE_PLACEHOLDER = "<BASELINE>"
+
 # Exactly the verbs SKILL.md's own read-only table lists, in its order. If a
 # verb moves between that table and the "writes files" one, this list must
 # move with it -- that is the point.
@@ -53,6 +59,12 @@ READ_ONLY_INVOCATIONS: tuple[tuple[str, ...], ...] = (
     ("rules", "--json"),
     ("waivers",),
     ("waivers", "--format", "json"),
+    # `delta` needs a baseline card. _BASELINE_PLACEHOLDER is substituted at run
+    # time with a path *outside* the target tree, so the read-only digest
+    # below stays a genuine measurement: a baseline written inside the repo
+    # would show up as a created file and mask what the verb itself did.
+    ("delta", "--baseline", _BASELINE_PLACEHOLDER),
+    ("delta", "--baseline", _BASELINE_PLACEHOLDER, "--format", "json"),
     # The only read-only invocation that reaches the witness store at all.
     # Without it the store's directory is never touched during this test, so
     # the empty-directory case above would be untested in practice.
@@ -131,7 +143,14 @@ def test_read_only_verbs_leave_tree_byte_identical(populated_repo: Path) -> None
     before = _tree_digest(populated_repo)
     assert before, "fixture repo is empty; the comparison would be vacuous"
 
+    # One real card, written outside the tree under test.
+    baseline = populated_repo.parent / "read-only-baseline.json"
+    card = run_cli(populated_repo, "detect", "--format", "json")
+    assert card.returncode == 0, card.stderr
+    baseline.write_text(card.stdout, encoding="utf-8")
+
     for argv in READ_ONLY_INVOCATIONS:
+        argv = tuple(str(baseline) if a == _BASELINE_PLACEHOLDER else a for a in argv)
         result = run_cli(populated_repo, *argv)
         # Without this the test passes vacuously if a verb regresses into an
         # immediate refusal: it would touch nothing precisely because it did
