@@ -1,6 +1,6 @@
 ---
 name: planlint-add-rule
-description: Add a new lint rule to planlint (G/H/U/W family) and update every location that must stay in sync with it. Use when adding, renaming, or removing a Rule in openspec_graph/rules_*.py.
+description: Add a new lint rule to planlint (G/H/U/S/W family) and update every location that must stay in sync with it. Use when adding, renaming, or removing a Rule in openspec_graph/rules_*.py.
 ---
 
 # Adding a rule to planlint

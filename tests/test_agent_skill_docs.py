@@ -23,6 +23,7 @@ follows for its own parsing).
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -53,15 +54,35 @@ _MAKEFILE_TARGETS = set(
     re.findall(r"^([a-zA-Z_-]+):", (REPO_ROOT / "Makefile").read_text(encoding="utf-8"), re.MULTILINE)
 )
 
-# Directories excluded from the "does this real file exist anywhere in the
-# repo" fallback below -- generated/cache/VCS content, never a legitimate
-# doc-reference target.
-_IGNORED_DIR_PARTS = {".git", "__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cache", "htmlcov"}
-_ALL_BASENAMES = {
-    p.name
-    for p in REPO_ROOT.rglob("*")
-    if p.is_file() and not _IGNORED_DIR_PARTS.intersection(p.relative_to(REPO_ROOT).parts)
-}
+def _repo_controlled_basenames(root: Path) -> set[str]:
+    """Every filename under ``root``, excluding VCS/cache/build/environment
+    directories -- pruned *before* descending (``os.walk``'s ``dirnames[:]
+    =`` in-place-filter idiom), not filtered after an unbounded
+    ``Path.rglob("*")`` walk already visited them.
+
+    Matters for two reasons, not just speed: an unpruned walk descends into
+    a local ``.venv``/``venv``/``env`` (can hold thousands of files, slowing
+    collection on every contributor's machine) and, worse, a vendored
+    package inside it could ship a file whose *basename* happens to match a
+    bare-filename reference in a doc under test -- silently validating a
+    reference that isn't actually satisfied by anything this repo controls.
+    """
+    ignored_dirs = {
+        ".git", "__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cache", "htmlcov",
+        ".venv", "venv", "env", "build", "dist", ".idea", ".vscode",
+    }
+    names: set[str] = set()
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [
+            d for d in dirnames if d not in ignored_dirs and not d.endswith(".egg-info")
+        ]
+        names.update(filenames)
+    return names
+
+
+# Every file this repo actually controls -- see _repo_controlled_basenames()
+# for why this must prune before descending, not filter after.
+_ALL_BASENAMES = _repo_controlled_basenames(REPO_ROOT)
 
 
 def _frontmatter(text: str) -> dict[str, str]:

@@ -498,12 +498,12 @@ a dedicated fix.
 
 - [x] **AC-SK-12:** `parse_spec()` dispatches `dialect == "speckit"` to
   `parse_speckit()` via its own explicit branch. (R-SK-11)
-  _Verified by:_ `pytest -k test_parse_spec_dispatches_speckit_to_its_own_parser` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_parse_spec_dispatches_speckit_to_its_own_parser` · stage: `make test`
 
 - [x] **AC-SK-13:** `parse_spec()`'s `mixed`/`unknown`/`auto` resolution
   checks upstream, then speckit, then harness, matching
   `detect_dialect()`'s own precedence. (R-SK-12)
-  _Verified by:_ `pytest -k test_parse_spec_auto_resolution_checks_upstream_then_speckit_then_harness` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_parse_spec_auto_resolution_checks_upstream_then_speckit_then_harness` · stage: `make test`
 
 - [x] **AC-SK-14:** `parse_speckit()` maps `FR-00N` bullets to `Requirement`
   entries and `SC-00N` bullets to `Criterion` entries. (R-SK-13, R-SK-14)
@@ -524,10 +524,14 @@ a dedicated fix.
   produces has an empty `requirement_refs` tuple. (C-SK-3, DEC-SK-016)
   _Verified by:_ `pytest -k test_speckit_criteria_have_no_requirement_refs` · stage: `make test`
 
-- [ ] **AC-SK-18:** golden hashes for validate/graph/rules in
-  `test_decomposition.py` are unchanged after the parser milestone
-  (`rules.py` not yet touched). (R-SK-10)
-  _Verified by:_ `pytest tests/test_decomposition.py` · stage: `make test` (test not yet written)
+- [x] **AC-SK-18:** golden hashes for validate/graph/rules in
+  `test_decomposition.py` were unchanged at the parser milestone's own
+  completion (`rules.py` not yet touched at that point) — a real
+  checkpoint that passed, not a claim about the shipped PR's final state.
+  Superseded by AC-SK-37 once the rules milestone landed: `rules.py` was
+  touched, its hash was deliberately re-pinned, and `validate`/`graph`
+  stayed unchanged — recorded there, not contradicting this entry. (R-SK-10)
+  _Verified by:_ `pytest tests/test_decomposition.py` · stage: `make test`
 
 - [x] **AC-SK-19:** `cmd_validate` and `cmd_waivers` succeed against a
   SpecKit-only repo (no `openspec/`, a content-gated `specs/` tree
@@ -617,17 +621,17 @@ a dedicated fix.
 - [x] **AC-SK-37:** `tests/baseline_rules.json` is regenerated and
   `_EXPECTED_HASHES["rules"]` is re-pinned; `["validate"]`/`["graph"]`
   hashes stay unchanged, confirmed empirically. (R-SK-26)
-  _Verified by:_ `pytest tests/test_decomposition.py` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest tests/test_decomposition.py` · stage: `make test`
 
 - [x] **AC-SK-38 (non-success):** no "orphaned requirement" rule exists for
   the speckit dialect; `planlint rules --json` lists exactly S001-S004 as
   the new speckit family. (C-SK-4, DEC-SK-017)
-  _Verified by:_ `pytest -k test_no_orphan_requirement_rule_exists_for_speckit` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_no_orphan_requirement_rule_exists_for_speckit` · stage: `make test`
 
 - [x] **AC-SK-39 (non-success):** `scaffold.py`/`scaffold_templates.py` are
   untouched by this change; `planlint new`/`init` still only offer
   harness/upstream. (C-SK-9)
-  _Verified by:_ `pytest -k test_scaffold_still_only_offers_harness_and_upstream` · stage: `make test` (test not yet written)
+  _Verified by:_ `pytest -k test_scaffold_still_only_offers_harness_and_upstream` · stage: `make test`
 
 - [x] **AC-SK-40:** a hand-authored/collected `good_speckit.md`-style
   fixture, representative of real SpecKit output, produces zero unexpected
