@@ -160,18 +160,32 @@ it is not cargo-culted into the v0.1 surface.
     registry, and the agent reading it is somebody else's, running outside this
     process. The harness still only disposes.
 
-15. **PEP 639 licence metadata** — `pyproject.toml` still uses the
-    `license = { text = ... }` table form, which setuptools 77 deprecated in
-    favour of an SPDX string plus a `license-files` glob, with removal
-    announced. The migration is owed, not optional: a build months from now can
-    warn or fail on a form that was correct when written. It was attempted and
-    backed out because the SPDX form makes setuptools require
-    `packaging>=24.2` at build time, which could not be verified in the
-    environment available (a distro-managed `packaging` 24.0 that cannot be
-    upgraded). Do it as its own change, with a proven clean-environment build,
-    and raise `[build-system] requires` to `setuptools>=77` in the same commit.
-    `Dockerfile` already copies `LICENSE` so the `license-files` glob will not
-    break the image build when it lands.
+15. ~~**PEP 639 licence metadata**~~ — shipped in
+    `migrate-license-metadata-pep639`. `pyproject.toml` now declares the SPDX
+    string `license = "Apache-2.0"` plus `license-files = ["LICENSE"]`, with
+    `[build-system] requires` raised to `setuptools>=77` in the same commit and
+    the redundant `License ::` classifier removed, which PEP 639 forbids
+    alongside an expression. A wheel build went from four deprecation warnings
+    to none.
+
+    The blocker recorded here was that setuptools 77 needs `packaging>=24.2`
+    at build time and the machine had a distro-managed 24.0. That premise was
+    wrong rather than merely stale: `python -m build` resolves build
+    requirements in an *isolated* environment, so the ambient `packaging`
+    version never applied. The lesson is worth more than the item — a
+    "cannot verify here" blocker is only real once you have checked that
+    "here" is where the thing actually runs.
+
+    The obvious fail-closed criterion, that a build with no `LICENSE` file
+    fails, was tested and is **false**: setuptools accepts a `license-files`
+    glob matching nothing and ships a wheel with no licence, silently. So the
+    gate reads the artifact instead — `tools/check_wheel_metadata.py`
+    (`make wheel-check`) fails when the SPDX expression is missing or does not
+    match `pyproject.toml`, when a legacy classifier survives, or when a
+    declared licence file is absent or empty, and exits 2 when there are no
+    wheels at all. It runs in a new `packaging` job on every pull request and
+    in the release workflow before anything reaches an index whose versions
+    are immutable.
 
 16. **CI wiring for the eval suite** — the cases under `evals/` have no job
     running them. `claude plugin eval` needs a plugin runtime CI does not have,

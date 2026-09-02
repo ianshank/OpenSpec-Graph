@@ -35,6 +35,28 @@ not match a change-package directory:
 no specs found for change 'name'
 ```
 
+On a SpecKit target the message says so explicitly, because `--change` scopes
+OpenSpec change packages and does not apply to a SpecKit `specs/` tree. Re-run
+without the flag rather than hunting for a package that was never there:
+
+```
+no specs found for change 'name': --change scopes OpenSpec change packages (openspec/changes/<name>/) and this target is a SpecKit specs/ tree; re-run without --change to validate every feature
+```
+
+**`validate`, `waivers`, or `graph`, unreadable spec.** A spec path exists but
+its bytes cannot be read -- a permission-denied file, a broken mount, a
+directory where a file belongs:
+
+```
+ERROR cannot read spec <path>: <reason>
+```
+
+The path is repository-relative, so the line is identical on two machines that
+cloned the same repository to different directories. This is a precondition
+failure, not a finding: the run aborts rather than reporting on the specs it
+could read, because a spec skipped silently would pass a gate that never saw
+it. Do not retry with a narrower `--change` to route around it; fix the file.
+
 **Any verb, bad target.** The `--target` path does not exist or is not a
 directory:
 

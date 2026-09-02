@@ -28,7 +28,7 @@ from collections.abc import Sequence
 from . import rules_generic
 from .detect import StackProfile
 from .parse import ParsedSpec
-from .rule_types import ERROR, INFO, WARN, Finding, Rule
+from .rule_types import ERROR, FINDINGS_SCHEMA_VERSION, INFO, WARN, Finding, Rule
 from .rules_generic import GENERIC_RULES
 from .rules_harness import HARNESS_RULES
 from .rules_speckit import SPECKIT_RULES
@@ -37,6 +37,7 @@ from .rules_witness import WITNESS_RULES
 
 __all__ = [
     "ERROR",
+    "FINDINGS_SCHEMA_VERSION",
     "INFO",
     "NON_WITNESS_RULES",
     "RULES",

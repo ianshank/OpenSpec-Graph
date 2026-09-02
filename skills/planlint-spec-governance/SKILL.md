@@ -37,7 +37,14 @@ Run `detect` first. It reports the dialect, the coverage-threshold locator,
 and the make targets it found, which is the context every finding is phrased
 against. For structured output use `validate --json` for findings, and
 `detect --format json` for a portable, schema-versioned dialect card --
-`detect --json` is a legacy shape carrying machine-specific absolute paths.
+`detect --json` is a deprecated legacy shape carrying machine-specific
+absolute paths, and warns as much on stderr.
+
+Both structured outputs are portable. `validate --json` carries a
+`schema_version` and the `tool_version` that produced it, its `target` is the
+absolute repository root, and every finding's `path` is relative to that
+target in POSIX form -- so a findings file written on a CI runner still
+resolves when it is read anywhere else.
 
 ## Exit codes
 

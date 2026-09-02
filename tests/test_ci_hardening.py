@@ -353,3 +353,50 @@ def test_rule_set_matches_baseline() -> None:
     )
     # sanity: the baseline is non-empty and covers the rules we rely on
     assert len(baseline) == len(RULES)
+
+
+# --- AC-CH-4 / AC-CH-7: claims about the CI configuration itself -------------
+# Both acceptance criteria describe properties of the committed workflow and
+# Makefile rather than of any Python function, and both cited tests that were
+# never written -- found by tests/test_spec_test_citations.py, the guard that
+# now holds every `_Verified by:` citation to a test that exists. Asserted
+# against the real files so the criteria stop being prose.
+
+
+def test_lint_is_a_hard_gate() -> None:
+    """AC-CH-4 (non-success): `make lint` fails on a violation and offers no
+    "skipping" escape hatch.
+
+    The failure mode this forbids is a gate that degrades to a pass when its
+    tool is missing -- the "configured but not enforced" class this project
+    exists to catch in other repositories.
+    """
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    lint_recipe = [
+        line for line in makefile.splitlines() if line.startswith("\t") and "ruff" in line
+    ]
+
+    assert lint_recipe, "no ruff invocation found in the Makefile's lint target"
+    for line in lint_recipe:
+        assert not line.lstrip("\t").startswith("-"), (
+            f"lint recipe {line!r} is prefixed with '-', which makes make ignore "
+            "its exit code -- the gate would pass on a violation"
+        )
+        assert "|| true" not in line and "|| echo" not in line, (
+            f"lint recipe {line!r} swallows its own failure"
+        )
+        assert "skipping" not in line.lower()
+
+    # And CI runs that same target rather than a laxer inline command.
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "make lint" in workflow, "CI does not run the `make lint` gate"
+
+
+def test_graph_diff_artifact_uploaded() -> None:
+    """AC-CH-7: the graph-diff job publishes the graph and its comparison, so a
+    reviewer can see what changed rather than taking the job's word for it."""
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert "upload-artifact" in workflow, "no artifact upload configured in CI"
+    assert "spec-graph.json" in workflow, "the spec graph is never uploaded"
+    assert "spec-findings.json" in workflow, "the findings artifact is never uploaded"

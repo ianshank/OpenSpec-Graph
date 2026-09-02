@@ -28,7 +28,7 @@ it.
 | `context7.json` committed | Done | repo root |
 | `llms.txt` committed | Done | repo root |
 | Evaluation suite | Done, with defects | `evals/`, see §2 |
-| Machine-readable findings schema | **Not started** | `validate --json` carries no version, §4 slice 2 |
+| Machine-readable findings schema | **Done** | `add-findings-json-envelope`; `validate --json` carries `schema_version` + `tool_version`, paths relative |
 | `AGENTS.md`, name disambiguation | **Not started** | §4 slice 1 |
 | Tag, publish, index, topics | **Not started** | §3 |
 | Wrapper script, `--version --json`, per-agent copies, dataset export | **Cut** | §5 |
@@ -109,7 +109,14 @@ No published contract changes. Files and the test that pins each:
 **Merge gate:** `make pre-pr`, plus both generator `--check` modes, plus a
 self-validation run at the warning level so the graph-diff job cannot regress.
 
-### Slice 2 — findings JSON envelope
+### Slice 2 — findings JSON envelope — **shipped**
+
+> Shipped as `add-findings-json-envelope`, before the first tag, exactly as
+> the sequencing below required. `DEC-FE-001` records the supersession and
+> narrows it honestly: the artifact-upload evidence defeats `DEC-PS-002`'s
+> first argument only, and `Finding.as_dict()`'s default stays absolute for
+> backwards compatibility. `detect --json` was deprecated in the same change,
+> since removing a flag after publication is a break.
 
 Its own change package, because it supersedes a recorded decision. The
 decision held that absolute paths were acceptable because none of the affected

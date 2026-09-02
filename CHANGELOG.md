@@ -3,6 +3,70 @@
 All notable changes to planlint follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed — the exit-code contract now holds for unreadable specs
+
+- **A spec that exists but cannot be read exits 2, not 1.** `parse_spec` read
+  its bytes with no guard, so a permission-denied file, a broken mount, or a
+  directory where a file belongs let an `OSError` escape to the top of
+  `validate`, `waivers`, and `graph`. That printed a traceback and exited 1 —
+  the code the contract reserves for "findings were reported" — so a CI job
+  could not tell a broken checkout from a failing gate. The error is now
+  translated to a typed `SpecReadError` at the one place specs are read, and
+  every verb that parses specs renders it as one line naming the
+  repository-relative path and the reason. The run aborts rather than
+  reporting on the specs it could read: a spec skipped silently would pass a
+  gate that never saw it. Same defect class as `DEC-SD-001`, one verb further
+  in.
+- **`--change` on a SpecKit target says why it found nothing.** The flag
+  scopes OpenSpec change packages; the generic "no specs found" read as "your
+  feature is missing" when the real answer is that the flag does not apply to
+  a SpecKit `specs/` tree yet. Both verbs that accept the flag now render the
+  message through one shared helper.
+
+### Changed — `validate --json` is a portable, versioned artifact
+
+- **The findings envelope carries `schema_version` and `tool_version`, and
+  every finding path is POSIX-relative to the target.** Both the repository's
+  own CI and the adopter-facing `templates/spec-gate.yml` upload this file as
+  a build artifact produced on a runner and read elsewhere, where an absolute
+  `/home/runner/work/...` path resolves to nothing. This supersedes
+  `DEC-PS-002`, which kept the path absolute on the premise that no consumer
+  compares the field across two checkouts; the shipped template refutes that
+  premise. `Finding.as_dict()` takes an optional root and keeps its previous
+  absolute rendering when none is given, so no other caller changed.
+  Breaking for anyone parsing the old shape — and deliberately landed before
+  the first release, while that is nobody.
+- **Findings in the JSON are sorted the way the text renderer already sorted
+  them.** The two renderings of one run agreed on content but not on order.
+- **The package-version lookup is memoized.** argparse resolves it whenever a
+  parser is built and the envelope needs the same value again, so the
+  ambiguous-environment warning could print twice in a single run.
+- **`detect --json` is deprecated** in favour of `detect --format json`, with
+  a stderr notice and removal announced for 1.0. Its stdout is unchanged.
+
+### Changed — licence metadata follows PEP 639
+
+- **`pyproject.toml` declares an SPDX expression and a `license-files` glob**,
+  with the build-system floor raised to `setuptools>=77` in the same commit
+  and the redundant `License ::` classifier removed, which PEP 639 forbids
+  alongside an expression. A wheel build went from four deprecation warnings
+  to none. The migration was previously deferred for want of a provably clean
+  build environment; `python -m build` resolves build requirements in an
+  isolated environment, which makes the ambient `packaging` version
+  irrelevant.
+- **New gate `make wheel-check`** (`tools/check_wheel_metadata.py`) reads the
+  built wheel and fails when the SPDX expression is missing or does not match
+  `pyproject.toml`, when a legacy classifier survives, or when a declared
+  licence file is absent or empty. It exits 2 when there are no wheels at all,
+  because "nothing to check" must never read as "everything passed". The
+  obvious criterion — that a build without a `LICENSE` file fails — was tested
+  and is false: setuptools accepts a glob matching nothing and ships a wheel
+  with no licence, silently. Wired into a new `packaging` job on every pull
+  request, and into the release workflow before anything is uploaded to an
+  index whose versions are immutable.
+
 ## [0.2.0] — 2026-09-02
 
 > `v0.1.0` was tagged in git (`cdc94ca`) under the previous distribution name

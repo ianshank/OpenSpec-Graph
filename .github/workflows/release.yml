@@ -57,6 +57,13 @@ jobs:
           python -m pip install --upgrade pip build
           python -m build
 
+      # Licence metadata is only observable in the artifact: setuptools
+      # accepts a license-files glob that matches nothing and ships a wheel
+      # with no licence at all, silently. PyPI versions are immutable, so
+      # this is checked before anything is uploaded, not after.
+      - name: Confirm the wheel carries its declared licence
+        run: python tools/check_wheel_metadata.py dist
+
       # The console script is the thing users get and the thing no other job
       # here touches. A fresh venv also proves the package really declares no
       # runtime dependencies: a missing one would surface as an ImportError.

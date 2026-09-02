@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -57,8 +58,19 @@ _BOUNDARY_EXEMPT = {"cli", "__init__"}
 # added to RULES). "validate" and "graph" stayed byte-identical across all
 # three changes -- the canonical fixture (tests/fixtures/) has no `specs/`
 # directory, so the speckit dialect never fires against it either.
+
+# Any version string the findings envelope reports, normalized out of the
+# golden hash (see _run_cli). Matches whatever a dev checkout, an editable
+# install or a built wheel resolves to, so the fixture is not pinned to the
+# environment the hash was captured in.
+_TOOL_VERSION = re.compile(r'"tool_version": "[^"]*"')
+
 _EXPECTED_HASHES = {
-    "validate": "0a810b4f791fa5684dbf384df7ab626ddf96c3b62fcd9d8299dc8d774a3b82e0",
+    # Re-pinned once more by `add-findings-json-envelope`, which added the
+    # schema_version/tool_version envelope keys and made findings[].path
+    # root-relative POSIX. tool_version is normalized before hashing, so this
+    # is the last re-pin a release can cause.
+    "validate": "0f3c1d7716421ca7e9436120a1f4c225cf2d91ba07f6d919d4181be305a147d4",
     "graph": "23eea4b474ff9d6d5c4f89dbb86acaac53562544a551d79bceb5c984d2015482",
     "rules": "5dc8af2ecae022e50a145d42d5a13a2f055ec78b7df3962da593180574dcd20b",
 }
@@ -89,7 +101,14 @@ def _run_cli(root: Path, *args: str) -> str:
     # so the raw-form replace above never matches inside JSON. Also try the
     # JSON-escaped form so this stays path-normalized on every OS, not just
     # POSIX ones where a path never needs escaping in the first place.
-    return out.replace(str(root).replace("\\", "\\\\"), "<ROOT>")
+    out = out.replace(str(root).replace("\\", "\\\\"), "<ROOT>")
+    # Normalize the envelope's tool_version the same way, and for the same
+    # reason: it is machine/build state, not spec content. Without this every
+    # release would re-pin _EXPECTED_HASHES["validate"] on a version bump that
+    # changed no output shape at all -- the hash would stop meaning "the
+    # findings projection is stable" and start meaning "nobody bumped the
+    # version" (AC-FE-7).
+    return _TOOL_VERSION.sub('"tool_version": "<VERSION>"', out)
 
 
 def _outputs(root: Path) -> dict[str, str]:
@@ -143,12 +162,18 @@ def _imported_components(path: Path) -> set[str]:
 def test_public_import_compatibility() -> None:
     # Every symbol tests and call sites import must remain importable from the
     # same paths after the facade split.
+    # SpecReadError is exported from the package root alongside
+    # NoOpenSpecTreeError, not only from .parse: both are exceptions a caller
+    # embedding this package must be able to catch, and an asymmetric export
+    # would mean the newer one is catchable only by reaching into a submodule.
+    from openspec_graph import SpecReadError as _RootSpecReadError  # noqa: F401
     from openspec_graph import build_graph  # noqa: F401
     from openspec_graph.parse import (  # noqa: F401
         _MAKE_REF,
         Criterion,
         ParsedSpec,
         Requirement,
+        SpecReadError,
         parse_spec,
     )
     from openspec_graph.rules import (  # noqa: F401

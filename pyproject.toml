@@ -1,14 +1,18 @@
 [build-system]
-# Deliberately still 68, not 77. setuptools 77 deprecated the `license`
-# table form used below in favour of the PEP 639 SPDX string, and that
-# migration is real work owed -- but it also makes setuptools require
-# `packaging>=24.2` at build time, which could not be verified here (the
-# environment ships a distro-managed packaging 24.0 that cannot be
-# upgraded). Shipping an unverifiable packaging change on the release path
-# is worse than a deprecation warning, so the migration is tracked in
-# docs/next-steps.md instead of guessed at. Raise this floor and switch the
-# form together, once a build with packaging>=24.2 has been proven.
-requires = ["setuptools>=68"]
+# 77 is the floor that understands the PEP 639 `license` SPDX string and
+# `license-files` glob used below. The migration was previously deferred
+# because setuptools 77 also requires `packaging>=24.2` at build time, and
+# that could not be verified against this machine's distro-managed
+# packaging 24.0. That premise no longer holds: `python -m build` resolves
+# the build requirements in an isolated environment, which installs a
+# modern setuptools and packaging regardless of what the ambient
+# interpreter ships, and the wheel builds clean there.
+#
+# Raised together with the form switch, in one commit, exactly as
+# docs/next-steps.md required: a floor without the SPDX string buys
+# nothing, and the SPDX string without the floor fails to build on an old
+# setuptools instead of merely warning.
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -21,7 +25,13 @@ name = "planlint"
 dynamic = ["version"]
 description = "Lint implementation plans and specs against a repository's executable facts."
 readme = "README.md"
-license = { text = "Apache-2.0" }
+# PEP 639: an SPDX expression, not the deprecated table form, plus the glob
+# naming the files that carry the licence text. `license-files` is what puts
+# LICENSE inside the wheel's .dist-info/licenses/ directory; the classifier
+# that used to duplicate this claim is gone, because PEP 639 forbids pairing
+# a `License ::` classifier with an SPDX expression.
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 # Deliberately empty, and load-bearing: see docs/architecture/c4.md and
 # docs/hooks.md's "Adding a new pure derived-output module" convention.
@@ -31,7 +41,8 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
+    # No "License ::" classifier: PEP 639 forbids one alongside the SPDX
+    # `license` expression above, and setuptools>=77 rejects the pair.
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",

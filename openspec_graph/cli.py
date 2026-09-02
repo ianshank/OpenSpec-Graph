@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import functools
 import importlib.metadata
 import json
 import logging
@@ -35,7 +36,7 @@ from pathlib import Path
 from . import detect, dialect_card, ledger, mermaid, rules, scaffold, witness
 from . import graph as graph_module
 from .log import configure as configure_logging
-from .parse import ParsedSpec, parse_spec
+from .parse import ParsedSpec, SpecReadError, parse_spec
 
 # A make-target identifier -- the same shape MAKE_REF accepts, so a
 # malformed --stage can never match a citation anyway (fail fast instead
@@ -58,8 +59,52 @@ _DISTRIBUTION = "planlint"
 # an external consumer parses is the drift this repo has paid for before.
 _NOT_A_DIRECTORY = "ERROR target is not a directory: {root}"
 
+# Emitted when a discovered spec exists but cannot be read (AC-RE-1). Single
+# constant for the same reason as _NOT_A_DIRECTORY: three verbs render it and
+# an external consumer reads the wording, so two copies would drift.
+_UNREADABLE_SPEC = "ERROR cannot read spec {path}: {reason}"
+
+# Printed once when the legacy `detect --json` shape is selected. Deprecated
+# before the first release rather than after it: removing a flag an adopter
+# already depends on is a break, and this shape emits absolute paths that
+# cannot survive the trip between two machines.
+_DETECT_JSON_DEPRECATED = (
+    "WARNING: `detect --json` is deprecated and will be removed in 1.0; it "
+    "emits machine-specific absolute paths. Use `detect --format json` for "
+    "the portable, schema-versioned dialect card."
+)
+
+# `--change` scopes OpenSpec change packages. On a SpecKit-only target the
+# generic "no specs found" reads as "your feature is missing" when the real
+# answer is "this flag does not apply here yet" -- the first thing a SpecKit
+# adopter hits following the Agent Skill's repair loop. Both spellings are
+# constants because tests/test_skill_contract.py pins them against the
+# exit-code reference the Agent Skill ships.
+_NO_SPECS_FOR_CHANGE = "no specs found for change {change!r}"
+_CHANGE_IS_OPENSPEC_ONLY = (
+    "no specs found for change {change!r}: --change scopes OpenSpec change "
+    "packages (openspec/changes/<name>/) and this target is a SpecKit specs/ "
+    "tree; re-run without --change to validate every feature"
+)
+
 
 def _version_string() -> str:
+    """The argparse ``--version`` template. Formatting only; see
+    :func:`_package_version` for the lookup both it and the findings
+    envelope's ``tool_version`` share."""
+    return f"%(prog)s {_package_version()}"
+
+
+@functools.cache
+def _package_version() -> str:
+    # Cached, and that is load-bearing rather than an optimization. argparse
+    # evaluates `version=_version_string()` when build_parser() runs -- on
+    # every invocation of every verb -- and cmd_validate needs the same value
+    # again for the findings envelope's tool_version. Without the cache the
+    # ambiguous-environment WARNING below would print twice in one
+    # `validate --json` run, in exactly the stale-install case it exists to
+    # report (R-FE-8). One lookup, one warning, one answer.
+    #
     # Resolve the version through the distribution that provides this import
     # name, rather than restating pyproject's [project] name as a literal.
     #
@@ -97,7 +142,7 @@ def _version_string() -> str:
         # `pip install -e .`): fall back to the package's own constant
         # rather than a third hardcoded copy.
         from . import __version__ as version
-    return f"%(prog)s {version}"
+    return version
 
 
 def _profile(args: argparse.Namespace) -> detect.StackProfile:
@@ -175,6 +220,13 @@ def cmd_detect(args: argparse.Namespace) -> int:
         return 0
 
     if args.json:
+        # Deprecated, and said so before anyone could depend on it: this
+        # shape carries machine-specific absolute paths, so it cannot be
+        # compared across two checkouts the way --format json's card can.
+        # Removing a flag after the first release is a break for real
+        # adopters; a stderr line now costs nothing and stdout stays
+        # byte-identical, so any existing caller keeps working (AC-FE-7).
+        print(_DETECT_JSON_DEPRECATED, file=sys.stderr)
         print(json.dumps(prof.as_dict(), indent=2))
         return 0
     thr = prof.threshold
@@ -250,6 +302,60 @@ def cmd_new(args: argparse.Namespace) -> int:
     return 0
 
 
+def _sort_key(finding: rules.Finding, root: Path) -> tuple[str, str]:
+    """Stable render order for findings: root-relative POSIX path, then rule.
+
+    detect.to_posix_relative (not str(f.path)) so two findings at different
+    paths sort in the same relative order on every OS -- "\\" sorts after
+    digits/uppercase letters while "/" sorts before them, so e.g. sibling
+    change dirs "add-thing"/"add-thing2" could otherwise render in opposite
+    order on Windows vs. POSIX for an identical repo. `f.path` is None only in
+    principle (G006/G009 always set a real path instead, DEC-WL-004) --
+    str(None) == "None" preserved verbatim as the fallback so that guarantee
+    isn't relied on silently.
+
+    Module-level and shared: the text renderer sorted while ``--json`` emitted
+    evaluation order, so the two renderings of one run disagreed on ordering
+    (DEC-FE-002). Any third projection built on findings gets the same order
+    by calling this, not by re-deriving it.
+    """
+    path_str = detect.to_posix_relative(finding.path, root) if finding.path else "None"
+    return (path_str, finding.rule)
+
+
+def _report_no_specs_for_change(prof: detect.StackProfile, change: str) -> int:
+    """Render an unmatched ``--change`` and the exit-2 code.
+
+    Shared by ``validate`` and ``graph``: both accept the flag, so two inline
+    copies of the wording would drift, and the Agent Skill's exit-code
+    reference quotes it verbatim.
+    """
+    template = (
+        _CHANGE_IS_OPENSPEC_ONLY
+        if prof.speckit_root and not prof.openspec_root
+        else _NO_SPECS_FOR_CHANGE
+    )
+    print(template.format(change=change), file=sys.stderr)
+    return 2
+
+
+def _report_unreadable(exc: SpecReadError, root: Path) -> int:
+    """Render an unreadable spec as one line and the exit-2 code (AC-RE-1).
+
+    Shared by every verb that parses specs so the wording and the exit code
+    cannot drift between them. Root-relative so the line is identical on two
+    machines that cloned the same repo to different paths.
+    """
+    logger.debug("aborting: unreadable spec %s (%s)", exc.path, exc.reason)
+    print(
+        _UNREADABLE_SPEC.format(
+            path=detect.to_posix_relative(exc.path, root), reason=exc.reason
+        ),
+        file=sys.stderr,
+    )
+    return 2
+
+
 def cmd_validate(args: argparse.Namespace) -> int:
     prof = _profile(args)
     if not prof.openspec_root and not prof.speckit_root:
@@ -263,8 +369,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     if args.change:
         spec_files = detect.filter_by_change(spec_files, args.change)
         if not spec_files:
-            print(f"no specs found for change {args.change!r}", file=sys.stderr)
-            return 2
+            return _report_no_specs_for_change(prof, args.change)
 
     # W001/W002 are evaluated only under --require-witness -- this rule_set
     # swap is the single mechanism that both gates them here and excludes
@@ -283,11 +388,14 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     findings: list[rules.Finding] = []
     specs: list[ParsedSpec] = []
-    for path in spec_files:
-        logger.debug("evaluating %s", path)
-        spec = parse_spec(path, args.dialect or prof.dialect)
-        specs.append(spec)
-        findings.extend(rules.evaluate(spec, prof, rule_set))
+    try:
+        for path in spec_files:
+            logger.debug("evaluating %s", path)
+            spec = parse_spec(path, args.dialect or prof.dialect)
+            specs.append(spec)
+            findings.extend(rules.evaluate(spec, prof, rule_set))
+    except SpecReadError as exc:
+        return _report_unreadable(exc, prof.root)
 
     if args.change:
         # G006/G009 are whole-tree properties (DEC-WL-001/DEC-AD-003);
@@ -304,13 +412,24 @@ def cmd_validate(args: argparse.Namespace) -> int:
     fail_at = SEVERITY_ORDER[args.fail_on]
     blocking = [f for f in findings if SEVERITY_ORDER[f.severity] >= fail_at]
 
+    ordered = sorted(findings, key=lambda f: _sort_key(f, prof.root))
+
     if args.json:
         print(
             json.dumps(
                 {
+                    # Version the envelope before anyone can depend on it
+                    # (R-FE-1/DEC-FE-010). The CI template uploads this file as a
+                    # build artifact produced on one machine and read on
+                    # another, so a consumer needs to know which shape it got
+                    # and which build produced it.
+                    "schema_version": rules.FINDINGS_SCHEMA_VERSION,
+                    "tool_version": _package_version(),
+                    # Absolute by design: it is the base the relative
+                    # findings paths below resolve against.
                     "target": str(prof.root),
                     "specs_checked": len(spec_files),
-                    "findings": [f.as_dict() for f in findings],
+                    "findings": [f.as_dict(prof.root) for f in ordered],
                     "blocking": len(blocking),
                 },
                 indent=2,
@@ -318,20 +437,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
         )
         return 1 if blocking else 0
 
-    def _sort_key(f: rules.Finding) -> tuple[str, str]:
-        # detect.to_posix_relative (not str(f.path)) so two findings at
-        # different paths sort in the same relative order on every OS --
-        # "\\" sorts after digits/uppercase letters while "/" sorts before
-        # them, so e.g. sibling change dirs "add-thing"/"add-thing2" could
-        # otherwise render in opposite order on Windows vs. POSIX for an
-        # identical repo. `f.path` is None only in principle (G006/G009
-        # always set a real path instead, DEC-WL-004) -- str(None) == "None"
-        # preserved verbatim as the fallback so that guarantee isn't relied
-        # on silently.
-        path_str = detect.to_posix_relative(f.path, prof.root) if f.path else "None"
-        return (path_str, f.rule)
-
-    for finding in sorted(findings, key=_sort_key):
+    for finding in ordered:
         print(finding.render(prof.root))
 
     counts = {sev: sum(1 for f in findings if f.severity == sev) for sev in SEVERITY_ORDER}
@@ -379,8 +485,7 @@ def cmd_graph(args: argparse.Namespace) -> int:
             return 2
         spec_files = detect.filter_by_change(detect.find_spec_files(prof.openspec_root), args.change)
         if not spec_files:
-            print(f"no specs found for change {args.change!r}", file=sys.stderr)
-            return 2
+            return _report_no_specs_for_change(prof, args.change)
         # Unlike `validate --change` (which skips G006/G009 outright,
         # DEC-WL-003/DEC-AD-004), `graph --change` keeps evaluate_tree()
         # running unscoped and folds its results into broken_links
@@ -405,6 +510,12 @@ def cmd_graph(args: argparse.Namespace) -> int:
         # empty graph (AC-GR-2).
         print(str(exc), file=sys.stderr)
         return 2
+    except SpecReadError as exc:
+        # build_graph parses every spec in the tree, so it inherits the same
+        # unreadable-spec precondition failure validate/waivers guard
+        # (AC-RE-1). Caught here, not inside build_graph, because the graph
+        # layer sits below the CLI and must not own exit codes.
+        return _report_unreadable(exc, prof.root)
 
     if args.format == "mermaid":
         print(mermaid.to_mermaid(graph), end="")
@@ -423,7 +534,10 @@ def cmd_waivers(args: argparse.Namespace) -> int:
         return 2
 
     spec_files = _gather_spec_files(prof)
-    specs = [parse_spec(path, args.dialect or prof.dialect) for path in spec_files]
+    try:
+        specs = [parse_spec(path, args.dialect or prof.dialect) for path in spec_files]
+    except SpecReadError as exc:
+        return _report_unreadable(exc, prof.root)
     entries = ledger.build_ledger(specs, prof.root)
 
     if args.format == "json":

@@ -253,6 +253,13 @@ def build_graph(profile: StackProfile, spec_files: Sequence[Path] | None = None)
     non-zero with a message naming the missing director(y/ies) rather than
     emitting an empty graph.
 
+    Propagates ``parse.SpecReadError`` when a discovered spec exists but its
+    bytes cannot be read (AC-RE-1). Deliberately not caught here: this module
+    sits below the CLI and does not own exit codes, and swallowing it would
+    emit a graph that silently omits a spec it could not read -- the same
+    "passed a gate that never saw it" lie the read guard exists to prevent.
+    ``cmd_graph`` catches it beside ``NoOpenSpecTreeError`` and exits 2.
+
     ``spec_files``, if given (e.g. ``--change``-filtered), scopes which specs
     get rendered as nodes/edges -- but never what feeds
     ``rules.evaluate_tree()``, which always sees the full, unscoped tree

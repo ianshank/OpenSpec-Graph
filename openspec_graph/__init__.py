@@ -16,7 +16,7 @@ __version__ = "0.2.0"
 
 from .detect import StackProfile, detect_dialect, profile
 from .graph import NoOpenSpecTreeError, build_graph
-from .parse import Criterion, ParsedSpec, Requirement, parse_spec
+from .parse import Criterion, ParsedSpec, Requirement, SpecReadError, parse_spec
 from .rules import RULES, Finding, evaluate, rule_table
 from .scaffold import plan_change, plan_init
 
@@ -27,6 +27,7 @@ __all__ = [
     "NoOpenSpecTreeError",
     "ParsedSpec",
     "Requirement",
+    "SpecReadError",
     "StackProfile",
     "__version__",
     "build_graph",
