@@ -81,14 +81,23 @@ def check_wheel(wheel: Path, expression: str, license_files: list[str]) -> list[
                     "with an SPDX License-Expression (PEP 639)"
                 )
 
+        # Anchored to *this wheel's own* .dist-info/licenses/, derived from the
+        # METADATA entry found above rather than reconstructed from the
+        # distribution name and version. Matching on "licenses/" appearing
+        # anywhere in the path would accept a `src/licenses/LICENSE` shipped
+        # as package data while `.dist-info/licenses/` was missing entirely --
+        # a gate that reports a licence the installer will never register.
+        licenses_root = f"{metadata_names[0][: -len('/METADATA')]}/{_LICENSE_DIR}"
         for declared in license_files:
             matches = [
-                n for n in names if _LICENSE_DIR in n and n.endswith(f"/{Path(declared).name}")
+                n
+                for n in names
+                if n.startswith(licenses_root) and n.endswith(f"/{Path(declared).name}")
             ]
             if not matches:
                 problems.append(
                     f"{wheel.name}: {declared!r} is declared in license-files but no "
-                    f"matching file was packaged under .dist-info/{_LICENSE_DIR}"
+                    f"matching file was packaged under {licenses_root}"
                 )
                 continue
             if not archive.read(matches[0]).strip():

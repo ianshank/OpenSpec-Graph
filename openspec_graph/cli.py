@@ -316,7 +316,7 @@ def _sort_key(finding: rules.Finding, root: Path) -> tuple[str, str]:
 
     Module-level and shared: the text renderer sorted while ``--json`` emitted
     evaluation order, so the two renderings of one run disagreed on ordering
-    (DEC-FE-002). Any third projection built on findings gets the same order
+    (DEC-FE-007). Any third projection built on findings gets the same order
     by calling this, not by re-deriving it.
     """
     path_str = detect.to_posix_relative(finding.path, root) if finding.path else "None"

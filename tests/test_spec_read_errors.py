@@ -1,5 +1,5 @@
 """A discovered spec that cannot be read is a precondition failure (exit 2),
-never a finding (exit 1) and never a silent pass (exit 0) — `AC-RE-1..6`.
+never a finding (exit 1) and never a silent pass (exit 0) — `AC-RE-1..12`.
 
 The defect these pin: `parse.parse_spec` read its bytes with no guard, so a
 spec path that exists but cannot be opened (a permission-denied file, a
@@ -79,7 +79,7 @@ def test_unreadable_spec_exits_2_from_every_parsing_verb(tmp_path: Path, verb: t
 
 @pytest.mark.parametrize("verb", PARSING_VERBS, ids=lambda v: " ".join(v))
 def test_unreadable_spec_never_prints_a_traceback(tmp_path: Path, verb: tuple) -> None:
-    """AC-RE-2: a clean one-line diagnostic, not a stack dump."""
+    """AC-RE-1: a clean one-line diagnostic, not a stack dump."""
     repo = _repo(tmp_path)
     _make_unreadable(repo)
 
@@ -93,7 +93,7 @@ def test_unreadable_spec_never_prints_a_traceback(tmp_path: Path, verb: tuple) -
 
 
 def test_message_names_the_path_root_relative_and_the_reason(tmp_path: Path) -> None:
-    """AC-RE-3: the line identifies which spec and why, without leaking the
+    """AC-RE-2: the line identifies which spec and why, without leaking the
     absolute checkout path (two machines cloning the same repo to different
     directories get the identical line)."""
     repo = _repo(tmp_path)
@@ -111,7 +111,7 @@ def test_message_names_the_path_root_relative_and_the_reason(tmp_path: Path) -> 
 
 
 def test_json_output_is_not_emitted_alongside_the_error(tmp_path: Path) -> None:
-    """AC-RE-4: a consumer piping stdout gets nothing to misparse as a clean
+    """AC-RE-5: a consumer piping stdout gets nothing to misparse as a clean
     result — the failure is not half a report."""
     repo = _repo(tmp_path)
     _make_unreadable(repo)
@@ -125,7 +125,7 @@ def test_json_output_is_not_emitted_alongside_the_error(tmp_path: Path) -> None:
 
 
 def test_a_spec_with_real_findings_still_exits_1(tmp_path: Path) -> None:
-    """AC-RE-5 (non-success): the new exit-2 path must not capture ordinary
+    """AC-RE-4 (non-success): the new exit-2 path must not capture ordinary
     rule failures. A spec that genuinely violates a rule still exits 1 — if
     this ever returns 2, the guard has started eating findings."""
     repo = _repo(tmp_path)
@@ -138,7 +138,7 @@ def test_a_spec_with_real_findings_still_exits_1(tmp_path: Path) -> None:
 
 
 def test_a_clean_tree_still_exits_0(tmp_path: Path) -> None:
-    """AC-RE-5 (non-success): and it must not turn a passing repo into a
+    """AC-RE-4 (non-success): and it must not turn a passing repo into a
     failure either."""
     repo = _repo(tmp_path)
 
@@ -148,7 +148,7 @@ def test_a_clean_tree_still_exits_0(tmp_path: Path) -> None:
 
 
 def test_one_unreadable_spec_does_not_let_the_others_pass_silently(tmp_path: Path) -> None:
-    """AC-RE-6: the run aborts rather than reporting on the specs it could
+    """AC-RE-5: the run aborts rather than reporting on the specs it could
     read. Skipping the unreadable one would let a spec pass a gate that never
     actually saw it — the exact lie this project exists to catch."""
     repo = _repo(tmp_path)
@@ -164,7 +164,7 @@ def test_one_unreadable_spec_does_not_let_the_others_pass_silently(tmp_path: Pat
 
 
 def test_spec_read_error_carries_path_and_reason(tmp_path: Path) -> None:
-    """AC-RE-7: callers render the diagnostic from typed attributes rather
+    """AC-RE-3: callers render the diagnostic from typed attributes rather
     than re-parsing the message string."""
     unreadable = tmp_path / "spec.md"
     unreadable.mkdir()
@@ -178,7 +178,7 @@ def test_spec_read_error_carries_path_and_reason(tmp_path: Path) -> None:
 
 
 def test_spec_read_error_chains_the_original_oserror(tmp_path: Path) -> None:
-    """AC-RE-7: the OS error is translated, not discarded — `--verbose` and a
+    """AC-RE-3: the OS error is translated, not discarded — `--verbose` and a
     debugger both still reach the original cause."""
     unreadable = tmp_path / "spec.md"
     unreadable.mkdir()
@@ -204,7 +204,7 @@ def test_a_readable_spec_still_parses(tmp_path: Path) -> None:
 
 
 def test_change_on_a_speckit_only_target_names_the_limitation(tmp_path: Path) -> None:
-    """AC-RE-8: `--change` scopes OpenSpec change packages. On a SpecKit tree
+    """AC-RE-7: `--change` scopes OpenSpec change packages. On a SpecKit tree
     the generic "no specs found" reads as "your feature is missing"; the real
     answer is that the flag does not apply here yet. This is the first thing a
     SpecKit adopter hits following the Agent Skill's repair loop."""

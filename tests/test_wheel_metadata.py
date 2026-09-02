@@ -28,7 +28,11 @@ sys.path.insert(0, str(TOOLS))
 
 from check_wheel_metadata import check_wheel, main  # noqa: E402
 
-DIST_INFO = "planlint-0.2.0.dist-info"
+# Deliberately not this project's own name or version. The gate derives the
+# .dist-info directory from the wheel it is handed and must not depend on
+# either, so a fixture naming them would both hide that and need editing on
+# every routine version bump.
+DIST_INFO = "example_dist-9.9.9.dist-info"
 
 GOOD_METADATA = """\
 Metadata-Version: 2.4
@@ -45,14 +49,21 @@ def _wheel(
     *,
     metadata: str = GOOD_METADATA,
     license_text: str | None = "Apache License\n",
-    name: str = "planlint-0.2.0-py3-none-any.whl",
+    name: str = "example_dist-9.9.9-py3-none-any.whl",
+    extra: dict[str, str] | None = None,
 ) -> Path:
-    """A minimal but structurally real wheel."""
+    """A minimal but structurally real wheel.
+
+    ``extra`` writes additional archive members verbatim, for fixtures that
+    need to place a file somewhere other than the licence directory.
+    """
     path = tmp_path / name
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(f"{DIST_INFO}/METADATA", metadata)
         if license_text is not None:
             archive.writestr(f"{DIST_INFO}/licenses/LICENSE", license_text)
+        for member, content in (extra or {}).items():
+            archive.writestr(member, content)
     return path
 
 
@@ -99,6 +110,39 @@ def test_a_missing_license_file_is_caught(tmp_path: Path) -> None:
     )
 
     assert any("license-files" in p for p in problems)
+
+
+def test_a_licence_outside_dist_info_does_not_satisfy_the_check(tmp_path: Path) -> None:
+    """A licence shipped as package data is not a packaged licence.
+
+    The first version of this gate matched any archive member whose path
+    contained "licenses/", so a `src/licenses/LICENSE` satisfied it while
+    `.dist-info/licenses/` was missing entirely — the installer registers no
+    licence, and the gate reported one. Found in review of this gate's own
+    pull request, which is the point: a check that cannot fail is worse than
+    no check, because it is believed.
+    """
+    wheel = _wheel(
+        tmp_path,
+        license_text=None,
+        extra={"src/licenses/LICENSE": "Apache License\n"},
+    )
+
+    problems = check_wheel(wheel, "Apache-2.0", ["LICENSE"])
+
+    assert any("license-files" in p for p in problems), problems
+
+
+def test_the_dist_info_directory_name_is_not_assumed(tmp_path: Path) -> None:
+    """The gate reads the wheel it is handed. A differently-named
+    distribution must pass on its own merits, so the anchoring fix cannot
+    have hard-coded this project's own dist-info name."""
+    path = tmp_path / "other_project-1.2.3-py3-none-any.whl"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("other_project-1.2.3.dist-info/METADATA", GOOD_METADATA)
+        archive.writestr("other_project-1.2.3.dist-info/licenses/LICENSE", "Apache License\n")
+
+    assert check_wheel(path, "Apache-2.0", ["LICENSE"]) == []
 
 
 def test_an_empty_license_file_is_caught(tmp_path: Path) -> None:
