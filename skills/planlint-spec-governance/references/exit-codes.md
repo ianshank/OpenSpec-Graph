@@ -64,6 +64,27 @@ directory:
 ERROR target is not a directory: <path>
 ```
 
+**`delta`, unusable baseline.** The `--baseline` file is missing, is not
+valid JSON, or is valid JSON that is not an object. All three exit 2, because
+the comparison never ran:
+
+```
+cannot read --baseline <path>: <reason>
+cannot read --baseline <path>: expected a JSON object, got list
+```
+
+The baseline is a dialect card saved earlier by `detect --format json`. If
+you have no card, `delta` cannot answer its question; that is a missing input,
+not a finding about the specs.
+
+**`validate --json` with a different `--format`.** `--json` is an alias of
+`--format json`, so pairing it with another format is a contradiction rather
+than a preference the tool will resolve for you:
+
+```
+ERROR --json is an alias of `--format json` and cannot be combined with `--format sarif`; pass one or the other
+```
+
 **`graph --format dot`.** Rendering is deliberately out of scope; the message
 names the supported format.
 

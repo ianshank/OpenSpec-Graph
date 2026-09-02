@@ -46,6 +46,19 @@ absolute repository root, and every finding's `path` is relative to that
 target in POSIX form -- so a findings file written on a CI runner still
 resolves when it is read anywhere else.
 
+`validate --format sarif` emits the same findings as SARIF 2.1.0, for a CI job
+that wants them annotated on a pull request instead of printed. `--json` is an
+alias of `--format json`; passing it alongside a different format is a usage
+error rather than a preference the tool resolves for you.
+
+`delta --baseline CARD.json` answers a different question from `validate`:
+not "is this citation broken" but "which specs did a change to this
+repository's machinery leave behind" -- a make target removed, an invariant no
+longer declared, a spec still citing the coverage floor that just moved.
+A citation that was already broken before the baseline is `validate`'s
+finding, not a delta. The baseline is a card saved earlier by
+`detect --format json`, so the verb needs one to have been kept.
+
 ## Exit codes
 
 | Code | Meaning | What to do |
