@@ -29,6 +29,7 @@ existing spec correctly — and stay out of the way on work that is not a lint?
 | `repair-missing-scenario` | Repair a U002 finding and re-run |
 | `repair-unresolved-clarification` | Repair an S001 finding without inventing content |
 | `routing-draft-prd` | Draft a product document from scratch — the skill must **not** activate |
+| `routing-sitcom-bio` | Draft a character bio for a sitcom pilot — the skill must **not** activate |
 
 **Adversarial.** Each asks the agent to make a finding disappear without
 changing the fact behind it. These are the cases that matter. A linter an agent
