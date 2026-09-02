@@ -12,7 +12,7 @@ import json
 import logging
 import re
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from . import dialect_card, machinery, witness
@@ -486,8 +486,61 @@ def detect_dialect(spec_paths: list[Path]) -> str:
     return "unknown"
 
 
+def _dedupe_by_identity(paths: Iterable[Path]) -> list[Path]:
+    """One entry per underlying file, keeping the first logical path.
+
+    ``Path.glob()`` follows a *valid* directory symlink, so a
+    ``specs/002-alias -> specs/001-foo`` link yields two distinct ``Path``
+    entries for the same ``spec.md``. Unfixed, that one spec is parsed twice:
+    ``change_dirs``/``feature_dirs`` over-count, ``validate``'s
+    ``specs_checked`` over-reports, and ``build_graph`` renders duplicate
+    ``FR-001``/``SC-001`` nodes for a single requirement.
+
+    Identity is ``Path.resolve()``, not content: two genuinely separate files
+    with identical text are two specs and both must be linted.
+
+    The survivor is the path that *is* its own real path — the real directory,
+    not an alias pointing at it. Keeping the first entry in sorted order
+    instead would be deterministic but arbitrary, and measurably wrong: with
+    ``changes/alias -> changes/real``, "alias" sorts first, so the real
+    package became unaddressable by its own name (``--change real`` reported
+    "no specs found" while ``--change alias`` passed). Whichever name a
+    reviewer would recognise has to be the one that survives.
+
+    Ordering still decides between two aliases that both point elsewhere, so
+    the result stays stable across runs for any input.
+
+    A candidate whose real path cannot be determined keeps its logical path
+    instead of being dropped. Discovery never silently loses a spec; whether
+    it can actually be read is the read guard's decision downstream
+    (``parse.SpecReadError``), and a spec that vanished here would pass a gate
+    that never saw it.
+    """
+    by_identity: dict[Path, Path] = {}
+    order: list[Path] = []
+    for path in paths:
+        try:
+            identity = path.resolve()
+        except OSError as exc:  # pragma: no cover - platform-dependent
+            logger.debug("cannot resolve %s (%s); keeping the logical path", path, exc)
+            identity = path
+        incumbent = by_identity.get(identity)
+        if incumbent is None:
+            by_identity[identity] = path
+            order.append(identity)
+            continue
+        # Same underlying file. Prefer the real path over an alias; otherwise
+        # the incumbent stands, so ordering breaks the remaining ties.
+        if incumbent != identity and path == identity:
+            logger.debug("preferring real path %s over alias %s", path, incumbent)
+            by_identity[identity] = path
+        else:
+            logger.debug("skipping %s: same file as %s", path, incumbent)
+    return [by_identity[identity] for identity in order]
+
+
 def find_spec_files(openspec_root: Path) -> list[Path]:
-    return sorted(openspec_root.glob("changes/*/specs/*/spec.md"))
+    return _dedupe_by_identity(sorted(openspec_root.glob("changes/*/specs/*/spec.md")))
 
 
 def find_speckit_spec_files(speckit_root: Path) -> list[Path]:
@@ -506,7 +559,7 @@ def find_speckit_spec_files(speckit_root: Path) -> list[Path]:
     """
     found: list[Path] = []
     skipped: list[str] = []
-    for path in sorted(speckit_root.glob("*/spec.md")):
+    for path in _dedupe_by_identity(sorted(speckit_root.glob("*/spec.md"))):
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
@@ -613,8 +666,19 @@ def profile(root: Path) -> StackProfile:
     openspec_root = root / "openspec"
     has_openspec = openspec_root.is_dir()
     openspec_spec_files = find_spec_files(openspec_root) if has_openspec else []
+    # Deduplicated by real-path identity for the same reason the spec-file
+    # globs are: a `changes/alias -> changes/real` directory symlink is two
+    # entries for one change package, and every count derived from this
+    # (`detect`'s own report, the dialect card) would report work that does
+    # not exist. Kept as its own glob rather than derived from
+    # openspec_spec_files, because a change package with no spec.md yet is
+    # still a change package.
     change_dirs = (
-        tuple(sorted(p for p in (openspec_root / "changes").glob("*") if p.is_dir()))
+        tuple(
+            _dedupe_by_identity(
+                sorted(p for p in (openspec_root / "changes").glob("*") if p.is_dir())
+            )
+        )
         if has_openspec and (openspec_root / "changes").is_dir()
         else ()
     )

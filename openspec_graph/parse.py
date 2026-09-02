@@ -20,6 +20,7 @@ keep working (R-DG-1).
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from .parse_harness import parse_harness as _parse_harness
@@ -55,6 +56,7 @@ __all__ = [
     "Criterion",
     "ParsedSpec",
     "Requirement",
+    "SpecReadError",
     "Waiver",
     "parse_spec",
     "parse_waivers",
@@ -62,9 +64,46 @@ __all__ = [
     "threshold_values",
 ]
 
+logger = logging.getLogger("planlint.parse")
+
+
+class SpecReadError(Exception):
+    """A discovered spec path exists but its bytes could not be read.
+
+    Translation of ``OSError`` at the one place specs are read, so every
+    caller can distinguish "this repo could not be inspected" (exit 2) from
+    "this repo's specs have findings" (exit 1). Letting the raw ``OSError``
+    escape produced a traceback and exit 1 -- the code the contract reserves
+    for findings -- so a CI job could not tell a broken mount from a failing
+    gate. Same defect class as DEC-SD-001 (``init``/``new`` on an unwritable
+    target), one verb further in; ``detect.py`` already handled its own reads
+    this way (``_threshold``/``_invariants``/``_adrs``).
+
+    Carries the offending ``path`` and the underlying ``reason`` so callers
+    render one line without re-deriving either from the message text.
+
+    The exception's own ``str()`` is deliberately terse and *not* the
+    operator-facing wording: that lives once, in ``cli._UNREADABLE_SPEC``
+    (R-RE-6). A second copy here would be a copy that differs -- this one has
+    only the absolute path, which the CLI renders root-relative -- and the
+    Agent Skill's exit-code reference quotes the CLI's version verbatim.
+    """
+
+    def __init__(self, path: Path, reason: str) -> None:
+        super().__init__(f"{path}: {reason}")
+        self.path = path
+        self.reason = reason
+
 
 def parse_spec(path: Path, dialect: str) -> ParsedSpec:
-    text = path.read_text(encoding="utf-8", errors="replace")
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        # Translated, never swallowed: a spec that cannot be read is a
+        # precondition failure, not an absent finding. Silently skipping it
+        # would let a permission-denied spec pass a gate that never saw it.
+        logger.debug("unreadable spec %s: %s", path, exc.strerror or exc)
+        raise SpecReadError(path, exc.strerror or str(exc)) from exc
     resolved = dialect
     if resolved in {"mixed", "unknown", "auto"}:
         if is_upstream_marked(text):

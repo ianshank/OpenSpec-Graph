@@ -1,0 +1,112 @@
+# A composite action so a repository can gate its specs without copying a
+# workflow and keeping it in step with this project's flags. Time to a first
+# red X on a foreign repository is the number this exists to move: add the
+# step, push, see the findings on the diff.
+#
+# It uploads SARIF rather than printing findings, because a CI log is a place
+# nobody looks and the pull request is a place everybody already does.
+name: planlint
+description: Lint implementation plans and specs against a repository's real machinery.
+
+inputs:
+  target:
+    description: >-
+      Repository path to lint. Finding paths in the SARIF are relative to this
+      target, and code scanning resolves them against the repository root, so
+      a target other than "." will place annotations relative to the wrong
+      base. Lint a subdirectory by running the action with a working
+      directory instead.
+    required: false
+    default: "."
+  version:
+    description: >-
+      planlint version specifier. Pinned by default: an action that floats to
+      the newest release can turn a green pull request red without anybody
+      changing a line of the repository it is gating.
+    required: false
+    default: ">=0.2.0,<1"
+  fail-on:
+    description: Lowest severity that fails the job (INFO, WARN, or ERROR).
+    required: false
+    default: "ERROR"
+  python-version:
+    description: Python used to install and run the CLI.
+    required: false
+    default: "3.12"
+  upload-sarif:
+    description: >-
+      Upload results to GitHub code scanning. Requires `security-events: write`
+      on the calling job, and `actions: read` as well on a private repository.
+      Set to "false" where code scanning is not enabled, so the upload step
+      cannot fail on permissions rather than on anything about the specs.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install planlint
+      shell: bash
+      run: python -m pip install --quiet "planlint${{ inputs.version }}"
+
+    # Detection first, and unconditionally: every finding is phrased against
+    # the conventions detected here, so a reader who disagrees with a finding
+    # needs this output to see which assumption produced it.
+    - name: Report detected conventions
+      shell: bash
+      run: planlint --target "${{ inputs.target }}" detect
+
+    # One invocation, and that matters. Running validate twice -- once for the
+    # SARIF, once for the exit code -- would spend double the work to ask the
+    # same question, and the two runs could in principle disagree. The exit
+    # code is captured here and re-applied after the upload, so findings reach
+    # the diff even when the gate fails.
+    - name: Validate and emit SARIF
+      id: validate
+      shell: bash
+      run: |
+        # `set +e` rather than `continue-on-error:`, which composite action
+        # steps do not support: GitHub runs these with `bash -e`, so a
+        # non-zero planlint would abort the step before the exit code could
+        # be recorded and the SARIF uploaded.
+        set +e
+        planlint --target "${{ inputs.target }}" validate \
+          --fail-on "${{ inputs.fail-on }}" --format sarif > planlint.sarif
+        gate=$?
+        set -e
+        echo "gate=$gate" >> "$GITHUB_OUTPUT"
+
+    # Guarded on the file being non-empty: an exit-2 usage error (no spec tree,
+    # a bad target) writes nothing, and uploading an empty file fails inside
+    # the upload action -- which would abort the run before the gate step could
+    # report the real reason.
+    - name: Upload SARIF
+      if: ${{ inputs.upload-sarif == 'true' && hashFiles('planlint.sarif') != '' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: planlint.sarif
+        category: planlint
+
+    # Last, so findings are visible on the diff even when the gate fails.
+    # Exit 2 is reported distinctly: it means planlint could not run at all,
+    # and calling that "findings were reported" would send a reader looking
+    # for specs to fix that do not exist.
+    - name: Apply the gate
+      shell: bash
+      run: |
+        case "${{ steps.validate.outputs.gate }}" in
+          0) ;;
+          1)
+            echo "planlint reported findings at or above ${{ inputs.fail-on }}"
+            exit 1
+            ;;
+          *)
+            echo "planlint could not run (exit ${{ steps.validate.outputs.gate }});"
+            echo "this is a precondition or usage error, not a spec failure."
+            exit 1
+            ;;
+        esac

@@ -44,16 +44,16 @@ emitted as an artifact but nothing fails if a PR introduces a broken edge.
 - [ ] **AC-CH-1:** `make ci` runs coverage with `--cov-fail-under` read from
   `pyproject.toml:[tool.coverage.report].fail_under`, and fails when coverage is
   below the floor. (R-CH-1)
-  _Verified by:_ `pytest -k test_ci_enforces_coverage_floor` · stage: `make validate`
+  _Verified by:_ `pytest -k "test_cov_floor_threshold_is_read_from_pyproject_not_hardcoded or test_coverage_floor_fails_below_threshold_pytest"` · stage: `make validate`
 
 - [ ] **AC-CH-2 (non-success):** A coverage drop below the floor fails `make ci`
   with a non-zero exit naming the floor and the actual percentage, rather than
   passing silently. (R-CH-1, C-CH-2)
-  _Verified by:_ `pytest -k test_ci_fails_below_coverage_floor` · stage: `make validate`
+  _Verified by:_ `pytest -k test_cov_floor_fails_below_threshold` · stage: `make validate`
 
 - [ ] **AC-CH-3:** `make ci` enforces a branch-coverage floor in addition to the
   line-coverage floor. (R-CH-2)
-  _Verified by:_ `pytest -k test_ci_enforces_branch_coverage` · stage: `make validate`
+  _Verified by:_ `pytest -k test_branch_check_fails_below_floor` · stage: `make validate`
 
 - [ ] **AC-CH-4 (non-success):** When `ruff` reports a violation, `make lint`
   exits non-zero and does not print the "skipping" fallback. (R-CH-3)
@@ -75,7 +75,7 @@ emitted as an artifact but nothing fails if a PR introduces a broken edge.
 - [ ] **AC-CH-8:** The rule set is unchanged: the rule IDs and severities reported
   by `planlint rules` match the base branch, confirming no rules were added or
   removed by this change. (C-CH-1)
-  _Verified by:_ `pytest -k test_rule_set_unchanged` · stage: `make validate`
+  _Verified by:_ `pytest -k test_rule_set_matches_baseline` · stage: `make validate`
 
 ## Invariants Touched
 

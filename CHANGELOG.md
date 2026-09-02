@@ -3,6 +3,140 @@
 All notable changes to planlint follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — `delta`, which reports what *your change* broke
+
+- **`planlint delta --baseline CARD.json`** compares a saved dialect card
+  (`detect --format json`) against the live repository and lists every spec
+  whose citations the machinery moved out from under: a make target removed
+  since the baseline, an invariant or ADR no longer declared, or — the case
+  the roadmap names — a spec still citing the coverage floor you just changed.
+  Text or JSON, with the same schema-versioned envelope every other
+  machine-readable output carries.
+- **It is not a second `validate`.** A citation must have been *supported at
+  the baseline* and be unsupported now. One that was already broken before the
+  comparison began is `validate`'s finding (G004/G005/G008), not a delta.
+  Without that attribution the verb would report the same things under a
+  different name and leave a reader unable to tell which of them their own
+  commit caused, so it is a requirement with its own test rather than a note.
+- The baseline is a saved card rather than a git ref, deliberately. Reading
+  machinery at a ref needs a second subprocess call site taking a
+  user-supplied argument, which the existing safety argument for the only
+  such call does not cover; and threshold, invariant and ADR discovery are
+  multi-file scans over a root, not single files to `git show`. "Since a ref"
+  is already available through the worktree pattern the graph-diff job uses.
+
+### Added — SARIF output, a composite action, and pre-commit hooks
+
+- **`validate --format sarif`** emits SARIF 2.1.0, so findings land inline on
+  the pull-request diff a team already reviews instead of in a CI log nobody
+  opens. `--json` is kept as an exact alias of `--format json`; pairing it
+  with a different format exits 2 rather than silently picking one.
+- The projection consumes the findings `validate` already computed, so "the
+  same findings as `--json`" is true by construction rather than by a second
+  implementation somebody has to keep in step. All three renderings share one
+  sort order.
+- **A `line` of 0 omits the region entirely, never clamping to 1.** This is
+  the common path, not an edge case: no rule sets a line today, so clamping
+  would put a wrong annotation on the first line of every file in every pull
+  request — and a reviewer could not tell it was wrong. A finding with no path
+  is emitted with an empty `locations` array rather than dropped; losing a
+  result to satisfy a schema is the one failure this format must not add.
+- **`.github/actions/planlint/action.yml`**, a composite action that installs
+  a pinned planlint, reports detected conventions, and uploads SARIF — with
+  the gate applied *after* the upload, so findings reach the diff even when
+  the job fails. **`.pre-commit-hooks.yaml`** gives adopters a hook definition;
+  it is distinct from this repository's own contributor-facing
+  `.pre-commit-config.yaml`, and never invokes a `make` target an adopter
+  does not have.
+- **The adopter-URL guard now covers both.** Its corpus stopped at the skill
+  tree and `templates/`, so the action's pinned install line would have been
+  unguarded — the same gap that let a rename leave eight files printing a
+  command for a name that no longer existed.
+
+### Fixed — one spec on disk is discovered once
+
+- **A symlinked change or feature directory no longer double-counts a spec.**
+  `Path.glob()` follows a valid directory symlink, so a
+  `specs/002-alias -> specs/001-foo` link yielded two distinct paths for one
+  `spec.md`: `feature_dirs` reported two features for one, `specs_checked`
+  over-reported, and the graph rendered duplicate `FR-001`/`SC-001` nodes for a
+  single requirement. Both discovery functions and `profile()`'s separate
+  `change_dirs` glob now deduplicate by real-path identity through one shared
+  helper. Identity is the file, not its content: two distinct specs that read
+  the same are still two specs.
+- **The surviving name is the real directory's, not an alias's.** The first
+  implementation kept the first path in sorted order, which was deterministic
+  but arbitrary — `alias-change` sorts before `real-change`, so the alias
+  survived and `--change real-change` reported "no specs found" while
+  `--change alias-change` passed. The real path now wins, with ordering
+  breaking ties only where no candidate is a real path. Two directories that
+  are one package are addressable by one name, and it is the recognisable one;
+  the alias name exits 2.
+
+### Fixed — the exit-code contract now holds for unreadable specs
+
+- **A spec that exists but cannot be read exits 2, not 1.** `parse_spec` read
+  its bytes with no guard, so a permission-denied file, a broken mount, or a
+  directory where a file belongs let an `OSError` escape to the top of
+  `validate`, `waivers`, and `graph`. That printed a traceback and exited 1 —
+  the code the contract reserves for "findings were reported" — so a CI job
+  could not tell a broken checkout from a failing gate. The error is now
+  translated to a typed `SpecReadError` at the one place specs are read, and
+  every verb that parses specs renders it as one line naming the
+  repository-relative path and the reason. The run aborts rather than
+  reporting on the specs it could read: a spec skipped silently would pass a
+  gate that never saw it. Same defect class as `DEC-SD-001`, one verb further
+  in.
+- **`--change` on a SpecKit target says why it found nothing.** The flag
+  scopes OpenSpec change packages; the generic "no specs found" read as "your
+  feature is missing" when the real answer is that the flag does not apply to
+  a SpecKit `specs/` tree yet. Both verbs that accept the flag now render the
+  message through one shared helper.
+
+### Changed — `validate --json` is a portable, versioned artifact
+
+- **The findings envelope carries `schema_version` and `tool_version`, and
+  every finding path is POSIX-relative to the target.** Both the repository's
+  own CI and the adopter-facing `templates/spec-gate.yml` upload this file as
+  a build artifact produced on a runner and read elsewhere, where an absolute
+  `/home/runner/work/...` path resolves to nothing. This supersedes
+  `DEC-PS-002`, which kept the path absolute on the premise that no consumer
+  compares the field across two checkouts; the shipped template refutes that
+  premise. `Finding.as_dict()` takes an optional root and keeps its previous
+  absolute rendering when none is given, so no other caller changed.
+  Breaking for anyone parsing the old shape — and deliberately landed before
+  the first release, while that is nobody.
+- **Findings in the JSON are sorted the way the text renderer already sorted
+  them.** The two renderings of one run agreed on content but not on order.
+- **The package-version lookup is memoized.** argparse resolves it whenever a
+  parser is built and the envelope needs the same value again, so the
+  ambiguous-environment warning could print twice in a single run.
+- **`detect --json` is deprecated** in favour of `detect --format json`, with
+  a stderr notice and removal announced for 1.0. Its stdout is unchanged.
+
+### Changed — licence metadata follows PEP 639
+
+- **`pyproject.toml` declares an SPDX expression and a `license-files` glob**,
+  with the build-system floor raised to `setuptools>=77` in the same commit
+  and the redundant `License ::` classifier removed, which PEP 639 forbids
+  alongside an expression. A wheel build went from four deprecation warnings
+  to none. The migration was previously deferred for want of a provably clean
+  build environment; `python -m build` resolves build requirements in an
+  isolated environment, which makes the ambient `packaging` version
+  irrelevant.
+- **New gate `make wheel-check`** (`tools/check_wheel_metadata.py`) reads the
+  built wheel and fails when the SPDX expression is missing or does not match
+  `pyproject.toml`, when a legacy classifier survives, or when a declared
+  licence file is absent or empty. It exits 2 when there are no wheels at all,
+  because "nothing to check" must never read as "everything passed". The
+  obvious criterion — that a build without a `LICENSE` file fails — was tested
+  and is false: setuptools accepts a glob matching nothing and ships a wheel
+  with no licence, silently. Wired into a new `packaging` job on every pull
+  request, and into the release workflow before anything is uploaded to an
+  index whose versions are immutable.
+
 ## [0.2.0] — 2026-09-02
 
 > `v0.1.0` was tagged in git (`cdc94ca`) under the previous distribution name

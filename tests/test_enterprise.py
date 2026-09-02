@@ -354,19 +354,33 @@ def test_finding_render_when_path_outside_root() -> None:
 
 
 def test_finding_as_dict_path_field_stays_absolute_and_native() -> None:
-    # Deliberate, not an oversight (DEC-PS-002): Finding.path is always
-    # absolute (every construction site derives it from a resolved
-    # openspec_root), the same category as StackProfile.root/openspec_root
-    # and validate --json's top-level "target" field -- none of which this
-    # fix posix-ifies, since an absolute path is never portable across
-    # machines regardless of separator. Unlike render()'s root-relative
-    # text, as_dict()'s "path" field has no normally-relative case to stay
-    # consistent with, so there is nothing for the separator to be
-    # inconsistent *within*.
+    # DEC-PS-002 originally made this absolute rendering unconditional, on the
+    # premise that no consumer compares the field across two checkouts.
+    # DEC-FE-001 superseded that premise for the CLI's own output -- the
+    # shipped CI template uploads `validate --json` as a build artifact
+    # produced on a runner and read elsewhere -- but only by adding an opt-in
+    # `root` argument.
+    #
+    # This test keeps its original name and its original subject: the
+    # *default*, which is unchanged. A caller that passes no root still gets
+    # the absolute, native-separator path, which is why the supersession
+    # needed no breaking change at any other call site. The relative rendering
+    # has its own test next to it, rather than being bolted on here where the
+    # name would no longer describe half the body.
     f = Finding(
         rule="G004", severity="ERROR", message="x", path=Path("/elsewhere/spec.md"), line=1
     )
     assert f.as_dict()["path"] == str(Path("/elsewhere/spec.md"))
+
+
+def test_finding_as_dict_with_a_root_renders_posix_relative() -> None:
+    # The other half of DEC-FE-001: given a root, the same finding renders
+    # relative to it in POSIX form, which is what makes the uploaded findings
+    # artifact resolvable on a machine that never had the runner's paths.
+    rooted = Finding(
+        rule="G004", severity="ERROR", message="x", path=Path("/repo/openspec/spec.md"), line=1
+    )
+    assert rooted.as_dict(Path("/repo"))["path"] == "openspec/spec.md"
 
 
 def test_init_dry_run_writes_nothing(repo: Path) -> None:

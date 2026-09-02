@@ -35,11 +35,54 @@ not match a change-package directory:
 no specs found for change 'name'
 ```
 
+On a SpecKit target the message says so explicitly, because `--change` scopes
+OpenSpec change packages and does not apply to a SpecKit `specs/` tree. Re-run
+without the flag rather than hunting for a package that was never there:
+
+```
+no specs found for change 'name': --change scopes OpenSpec change packages (openspec/changes/<name>/) and this target is a SpecKit specs/ tree; re-run without --change to validate every feature
+```
+
+**`validate`, `waivers`, or `graph`, unreadable spec.** A spec path exists but
+its bytes cannot be read -- a permission-denied file, a broken mount, a
+directory where a file belongs:
+
+```
+ERROR cannot read spec <path>: <reason>
+```
+
+The path is repository-relative, so the line is identical on two machines that
+cloned the same repository to different directories. This is a precondition
+failure, not a finding: the run aborts rather than reporting on the specs it
+could read, because a spec skipped silently would pass a gate that never saw
+it. Do not retry with a narrower `--change` to route around it; fix the file.
+
 **Any verb, bad target.** The `--target` path does not exist or is not a
 directory:
 
 ```
 ERROR target is not a directory: <path>
+```
+
+**`delta`, unusable baseline.** The `--baseline` file is missing, is not
+valid JSON, or is valid JSON that is not an object. All three exit 2, because
+the comparison never ran:
+
+```
+cannot read --baseline <path>: <reason>
+cannot read --baseline <path>: expected a JSON object, got list
+```
+
+The baseline is a dialect card saved earlier by `detect --format json`. If
+you have no card, `delta` cannot answer its question; that is a missing input,
+not a finding about the specs.
+
+**`validate --json` with a different `--format`.** `--json` is an alias of
+`--format json`, so pairing it with another format is a contradiction rather
+than a preference the tool will resolve for you:
+
+```
+ERROR --json is an alias of `--format json` and cannot be combined with `--format sarif`; pass one or the other
 ```
 
 **`graph --format dot`.** Rendering is deliberately out of scope; the message

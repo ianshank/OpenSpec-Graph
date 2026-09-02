@@ -37,7 +37,27 @@ Run `detect` first. It reports the dialect, the coverage-threshold locator,
 and the make targets it found, which is the context every finding is phrased
 against. For structured output use `validate --json` for findings, and
 `detect --format json` for a portable, schema-versioned dialect card --
-`detect --json` is a legacy shape carrying machine-specific absolute paths.
+`detect --json` is a deprecated legacy shape carrying machine-specific
+absolute paths, and warns as much on stderr.
+
+Both structured outputs are portable. `validate --json` carries a
+`schema_version` and the `tool_version` that produced it, its `target` is the
+absolute repository root, and every finding's `path` is relative to that
+target in POSIX form -- so a findings file written on a CI runner still
+resolves when it is read anywhere else.
+
+`validate --format sarif` emits the same findings as SARIF 2.1.0, for a CI job
+that wants them annotated on a pull request instead of printed. `--json` is an
+alias of `--format json`; passing it alongside a different format is a usage
+error rather than a preference the tool resolves for you.
+
+`delta --baseline CARD.json` answers a different question from `validate`:
+not "is this citation broken" but "which specs did a change to this
+repository's machinery leave behind" -- a make target removed, an invariant no
+longer declared, a spec still citing the coverage floor that just moved.
+A citation that was already broken before the baseline is `validate`'s
+finding, not a delta. The baseline is a card saved earlier by
+`detect --format json`, so the verb needs one to have been kept.
 
 ## Exit codes
 
@@ -76,6 +96,7 @@ Read-only. Safe to run at any time, on any repository:
 | `graph` | Spec dependency graph, as JSON or Mermaid |
 | `rules` | The rule table this build carries |
 | `waivers` | Every waived rule across the tree |
+| `delta` | Specs whose citations went stale since a saved dialect card |
 
 Writes files. Do not run these unless the user asks:
 

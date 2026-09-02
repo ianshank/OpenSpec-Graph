@@ -71,6 +71,31 @@ jobs:
             spec-graph.json
             spec-findings.json
 
+  packaging:
+    # The licence metadata is only observable in a built artifact, and the
+    # release workflow is the only place that ever built one — so a packaging
+    # regression could not surface until a tag was already pushed, against an
+    # index whose versions are immutable. This runs the same check on every
+    # pull request instead.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build frontend
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Build the wheel in an isolated environment
+        run: python -m build --wheel --outdir dist
+
+      - name: Confirm the wheel carries its declared licence
+        run: python tools/check_wheel_metadata.py dist
+
   graph-diff:
     # Fail a PR whose spec graph regresses: more broken_links than the merge-base,
     # or a new orphan requirement (AC-CH-5, AC-CH-6). The base is the merge-base
