@@ -1,4 +1,4 @@
-"""Tests for openspec-graph.
+"""Tests for planlint.
 
 The important tests are the negative ones: a linter that never fails is a
 decoration. Each rule gets a fixture that violates it and an assertion that

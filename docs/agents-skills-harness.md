@@ -4,9 +4,10 @@ This document is about `planlint`'s own product architecture — what the tool
 *is*. It is unrelated to `.claude/agents/` and `.claude/skills/` (Claude Code
 dev-tooling used to *develop* planlint itself — spec-drafter, spec-adversary,
 planlint-verifier, and the `planlint-add-rule` skill; see docs/hooks.md's
-"Claude Code hooks" section): same words, two different, non-overlapping
-meanings — one about the shipped CLI, one about this repo's own contributor
-workflow.
+"Claude Code hooks" section): same word, three different meanings — one about
+the shipped CLI's rules, one about this repo's own contributor workflow, and
+one about the distributable Agent Skill under `skills/` (see "A third
+meaning", below).
 
 `planlint` is deliberately **not** an autonomous agent. There is no LLM in the
 loop, no tool selection, no planning step. What it provides is a deterministic
@@ -27,7 +28,9 @@ they are not confused with autonomous-agent abstractions.
   their `Rule.check` is an inert registry stub (so they still list in
   `planlint rules`) and their real logic lives in `rules.evaluate_tree()`
   instead, called once per run over every parsed spec (see below).
-- **Agent** — *not present in this repo.* An agent (in the broader Mango
+- **Agent** — *not present in this repo.* (The Agent Skill under `skills/`
+  is a document written *for* someone else's agent; it is not an agent this
+  repo contains or runs.) An agent (in the broader Mango
   sense) would propose work; here, the harness only *evaluates* proposed work
   (specs) and reports. Cognitive/proposal logic is out of scope and stays
   outside `planlint` by design (INV-16 analogue: the harness disposes, it does

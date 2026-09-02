@@ -7,14 +7,19 @@ core `make ci` gate with the enterprise gates (typecheck, security, docs).
 
 | Command | What it checks | Failure mode |
 |---|---|---|
-| `make test` | pytest + line & branch coverage | below floor → exit 1 |
+| `make test` | pytest + line & branch coverage + generated-artifact freshness | below floor, or a stale rule catalog / plugin manifest → exit 1 |
 | `make lint` | ruff across `openspec_graph`, `tests`, `tools` | any violation → exit 1 |
 | `make typecheck` | mypy (config in `pyproject.toml`) | type error → exit 1 |
 | `make security` | gitleaks (or deterministic fallback) | committed secret → exit 1 |
 | `make validate` | `planlint validate --fail-on ERROR` | spec rule violation → exit 1 |
 | `make docs-check` | required docs exist + linked from README | missing/unlinked → exit 1 |
 | `make pre-pr` | all of the above + no-hardcoded-thresholds | any → exit 1 |
-| `make skill-catalog` | regenerates the distributable skill's rule catalog | writer only; freshness is gated by `make test` |
+
+`make skill-artifacts` (and its halves `make skill-catalog` and `make
+skill-manifests`) are **writers, not gates** — they regenerate the distributable
+skill's rule catalog and the `.claude-plugin/` manifests. They are deliberately
+absent from the table above because they never fail: staleness is caught by
+`make test`, which is where a gate belongs.
 
 ## Quality-gate thresholds live in config, not in CI
 
@@ -108,3 +113,16 @@ planlint --target . validate --fail-on WARN   # warnings too, if desired
 CI runs the same gates across Python 3.10–3.13, plus a self-validation hard
 gate (`planlint` validates its own `openspec/` tree) and a graph-diff
 regression gate on PRs.
+
+One gate `make pre-pr` cannot reproduce: a `v*` tag additionally runs
+`.github/workflows/release.yml`, which builds the wheel, installs it into an
+empty virtualenv, and runs the `planlint` **console script**. The test suite
+only ever invokes `python -m openspec_graph.cli`, so nothing else exercises the
+script a user actually gets, or proves the wheel really needs no runtime
+dependencies. Reproduce it locally with:
+
+```bash
+python -m build
+python -m venv /tmp/smoke && /tmp/smoke/bin/pip install dist/*.whl
+/tmp/smoke/bin/planlint --version
+```

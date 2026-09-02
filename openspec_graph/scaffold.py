@@ -122,7 +122,7 @@ def plan_init(profile: StackProfile) -> list[WritePlan]:
     }
     project_md = f"""# Project conventions
 
-Detected by `openspec-graph` at `init` time — a snapshot for humans, not a
+Detected by `planlint` at `init` time — a snapshot for humans, not a
 live config. `planlint` always re-derives these conventions fresh from the
 repo on every `detect`/`validate` run rather than reading this file back,
 so edit it freely to correct a misdetection, but note that doing so does

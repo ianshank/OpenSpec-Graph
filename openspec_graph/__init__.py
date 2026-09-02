@@ -1,4 +1,4 @@
-"""openspec-graph — port an OpenSpec discipline onto a cloned repository.
+"""planlint — lint implementation plans against a repository's executable facts.
 
 The framework detects what the target repo already does (build stages,
 coverage floor location, invariant source, spec dialect) and then enforces

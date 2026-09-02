@@ -3,7 +3,7 @@
 All notable changes to planlint follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0]
+## [0.2.0] — 2026-09-02
 
 > `0.1.0` was recorded in this changelog but never tagged in git; `v0.2.0` is
 > the first tagged release and the first published to PyPI.
@@ -25,7 +25,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   tree byte-identical by hashing every file before and after (not `git status`,
   which is blind to ignored paths and useless on a non-git target), pins the
   per-verb exit-2 messages the skill quotes, and checks manifest agreement.
-- **`context7.json` and `evals/`**: retrieval scoping for agent-facing docs,
+- **`context7.json`, `llms.txt` and `evals/`**: retrieval scoping and a plain-text
+  index for agent-facing docs,
   and an evaluation suite whose adversarial half tests that the skill refuses
   to make findings disappear.
 
@@ -42,7 +43,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   it had just installed.
 - **`tools/check_no_hardcoded_thresholds.py` scans every workflow.** It named
   `ci.yml` alone, so any workflow added later escaped the guard while it still
-  printed PASS.
+  printed PASS. Both YAML spellings are covered.
+- **`planlint init` no longer writes the old distribution name** into the
+  `project.md` it scaffolds. Every repository scaffolded before this fix carries
+  a reference to a package that no longer exists.
+- **`--version` no longer picks a distribution by list position.** With a stale
+  `openspec-graph` install alongside `planlint`, two distributions provide the
+  same import name and the lookup order is undefined, so the reported version
+  could be the old code indefinitely. The expected distribution is now selected
+  by name, and an ambiguous environment prints a warning to stderr.
 
 ### Changed
 
@@ -52,6 +61,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   name make the `--version` lookup pick between them in undefined order.
 - **One version source.** `pyproject.toml` reads `openspec_graph.__version__`
   via setuptools' `attr:` mechanism instead of carrying a second literal.
+- **`make docs-check` now requires** `skills/planlint-spec-governance/SKILL.md` to
+  exist and be linked from the README; deleting or unlinking the skill fails the
+  gate. `make skill-artifacts` regenerates the skill's rule catalog and manifests.
+- **Two error messages changed text.** `validate` and `waivers` on a repository
+  with no spec tree now say `no openspec/ directory and no SpecKit specs/ tree`
+  (previously `no openspec/ directory`), and the bad-target message gained an
+  `ERROR ` prefix. Anything grepping the old strings needs updating; anything
+  reading exit codes is unaffected apart from the 1→2 change above.
 - **Packaging metadata** for a package index (readme, license, classifiers,
   project URLs) plus a tag-triggered release workflow using trusted publishing,
   gated on `make pre-pr` and a clean-environment console-script smoke test.
@@ -593,4 +610,4 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   graph-diff regression gate on PRs.
 
 [0.2.0]: https://github.com/ianshank/planlint/releases/tag/v0.2.0
-[0.1.0]: https://github.com/ianshank/planlint/blob/main/CHANGELOG.md#010--2025-xx-xx
+[0.1.0]: https://github.com/ianshank/planlint/blob/main/CHANGELOG.md#010--2026-08-30

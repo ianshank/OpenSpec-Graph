@@ -1,4 +1,4 @@
-.PHONY: help test lint typecheck security validate graph graph-mermaid ci pre-pr docs-check thresholds skill-catalog clean
+.PHONY: help test lint typecheck security validate graph graph-mermaid ci pre-pr docs-check thresholds skill-catalog skill-manifests skill-artifacts clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-14s %s\n", $$1, $$2}'
@@ -41,6 +41,12 @@ thresholds: ## Confirm no hard-coded thresholds in the Makefile or workflow YAML
 
 skill-catalog: ## Regenerate the distributable skill's rule catalog from the registry
 	python tools/render_rule_catalog.py --write
+
+skill-manifests: ## Regenerate .claude-plugin/ manifests from the package version + SKILL.md
+	python tools/render_plugin_manifests.py --write
+
+skill-artifacts: skill-catalog skill-manifests ## Regenerate every generated agent-facing artifact
+	@echo "skill-artifacts: catalog and manifests regenerated"
 
 clean: ## Remove build, cache, and coverage artifacts
 	rm -rf build dist *.egg-info .pytest_cache .ruff_cache .mypy_cache htmlcov

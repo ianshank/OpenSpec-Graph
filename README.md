@@ -51,6 +51,19 @@ planlint --target /path/to/clone graph --format mermaid  # a picture, not just J
 planlint --version                           # print the installed version and exit
 ```
 
+### Exit codes
+
+| Exit | Meaning |
+|---|---|
+| 0 | No findings at or above `--fail-on` |
+| 1 | Findings were reported — a real spec failure |
+| 2 | Precondition or usage error: no spec tree, an unknown `--change`, or a `--target` that is not a directory. **Not** a spec failure |
+
+> **Changed in 0.2.0:** a `--target` that is not a directory now exits 2, not 1.
+> CI that treats any nonzero code as failure is unaffected; anything that
+> distinguished 1 from 2 should be re-read (`DEC-SD-001`). Two error message
+> strings also changed — see the changelog.
+
 > Contributors upgrading from before the distribution rename should run
 > `pip uninstall openspec-graph` first. Two distributions providing the same
 > import name make `--version`'s distribution lookup pick between them in
@@ -121,8 +134,10 @@ unfamiliar clone.
   (`tests/test_cli_surface.py`) fails if an authoring verb is added.
 - **Not an IDE or a UI.** No editor integration, no dashboard. It is a CLI with
   an exit code, designed to live behind `openspec validate` in CI.
-- **Not an MCP server.** It does not expose tools to other agents. It is the
-  gate those agents' output must pass.
+- **Not an MCP server.** It exposes no tools and runs no server. The Agent
+  Skill below is prose an agent *reads* so it can invoke the CLI itself;
+  there is no callable tool surface. It remains the gate those agents'
+  output must pass.
 - **Not a coverage tool.** It reads the coverage floor the repo already
   configures; it does not run tests or compute coverage.
 - **No dependencies.** Stdlib only, so grafting into an arbitrary repo adds no
@@ -260,6 +275,15 @@ generates a package in both dialects and validates it, so the templates cannot
 drift from the rules; `test_apply_is_idempotent_and_refuses_to_clobber` proves a
 hand-edited spec survives re-running `planlint new`.
 
+The agent-facing surface is held to the same bar rather than trusted as prose.
+`tests/test_skill_contract.py` proves every verb the skill calls read-only
+leaves a target tree byte-identical, by hashing every file before and after
+rather than reading `git status` (which is blind to ignored paths and useless
+on a non-git target), and pins the exact exit-code messages the skill quotes.
+`tests/test_agent_artifacts.py` validates the evaluation suite, the retrieval
+config, and the release workflow, because those are read only by tools outside
+this repo and would otherwise fail first in someone else's runner.
+
 ## Enterprise AQA gate
 
 `make pre-pr` runs the full quality bar in one command — the same bar CI
@@ -272,6 +296,7 @@ enforces:
 | typecheck | `make typecheck` | mypy (config in `pyproject.toml`) |
 | security | `make security` | gitleaks (or deterministic fallback) |
 | validate | `make validate` | `planlint validate --fail-on ERROR` |
+| thresholds | `make thresholds` | no hard-coded coverage floors or tool-version pins in the Makefile or any workflow |
 | docs | `make docs-check` | required docs present + linked from README |
 
 No numeric threshold lives in the Makefile or CI YAML — floors are read from
@@ -324,6 +349,12 @@ so it cannot drift from the engine. Agents that read the open Agent Skills
 format can also use the directory directly by copying it into their own skills
 folder; it carries no repository-relative references.
 
+Twenty evaluation cases live in [`evals/`](evals/README.md); half are
+adversarial, each asking the agent to make a finding disappear without changing
+the fact behind it. They grade on tool calls and file state, not on what the
+agent said, and they are the evidence that the skill cannot be talked into a
+false pass.
+
 The skill is deliberately allowed to repair an existing spec and re-run the
 gate, and deliberately forbidden from making a finding disappear without
 changing the fact behind it: no agent-written waivers, no recorded witnesses,
@@ -373,6 +404,8 @@ change package.
   a deterministic governance harness, not an autonomous agent
 - [Agent Skill](skills/planlint-spec-governance/SKILL.md) — the distributable
   skill a coding agent installs: verbs, exit codes, and the repair boundary
+- [Evaluation suite](evals/README.md) — twenty cases, half adversarial, proving
+  the skill refuses to make findings disappear
 - [Next steps](docs/next-steps.md) — what is deliberately out of scope
 - [Differentiation roadmap](docs/differentiation-roadmap.md) — the wedge, the
   comparison, and the candidate change packages

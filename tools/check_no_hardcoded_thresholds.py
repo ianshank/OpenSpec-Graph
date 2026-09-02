@@ -72,17 +72,28 @@ def check_workflow(path: Path) -> list[str]:
     return findings
 
 
+def targets() -> list[Path]:
+    """Every file this guard scans.
+
+    A named function, not an inline list inside ``main``, so a test can assert
+    on the *selection* rather than re-deriving it. That distinction is the
+    whole bug this function exists to prevent: the guard previously named
+    ``ci.yml`` literally, so any workflow added later escaped it while the
+    guard still printed PASS -- and a test that re-globbed the directory
+    itself would have passed against the broken version too (R-SD-10).
+
+    Both YAML spellings are included: GitHub Actions accepts ``.yml`` and
+    ``.yaml``, and a guard that covers only one is the same bug one rename
+    away. Sorted for a stable report order across filesystems.
+    """
+    workflows_dir = REPO_ROOT / ".github" / "workflows"
+    workflows = sorted(workflows_dir.glob("*.yml")) + sorted(workflows_dir.glob("*.yaml"))
+    return [REPO_ROOT / "Makefile", *workflows]
+
+
 def main(argv: list[str]) -> int:
-    # Every workflow, not just ci.yml. Naming one file meant any workflow
-    # added later (a release job, a scheduled scan) escaped this guard
-    # silently -- the guard would still print PASS while the new file pinned
-    # a coverage floor or a tool version (R-SD-10). Sorted for a stable
-    # report order across filesystems.
-    workflows = sorted((REPO_ROOT / ".github" / "workflows").glob("*.yml"))
-    workflows += sorted((REPO_ROOT / ".github" / "workflows").glob("*.yaml"))
-    targets = [REPO_ROOT / "Makefile", *workflows]
     findings: list[str] = []
-    for target in targets:
+    for target in targets():
         findings.extend(check_makefile(target) if target.name == "Makefile" else check_workflow(target))
 
     if findings:

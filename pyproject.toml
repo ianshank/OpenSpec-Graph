@@ -1,4 +1,13 @@
 [build-system]
+# Deliberately still 68, not 77. setuptools 77 deprecated the `license`
+# table form used below in favour of the PEP 639 SPDX string, and that
+# migration is real work owed -- but it also makes setuptools require
+# `packaging>=24.2` at build time, which could not be verified here (the
+# environment ships a distro-managed packaging 24.0 that cannot be
+# upgraded). Shipping an unverifiable packaging change on the release path
+# is worse than a deprecation warning, so the migration is tracked in
+# docs/next-steps.md instead of guessed at. Raise this floor and switch the
+# form together, once a build with packaging>=24.2 has been proven.
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 

@@ -53,7 +53,16 @@ READ_ONLY_INVOCATIONS: tuple[tuple[str, ...], ...] = (
     ("rules", "--json"),
     ("waivers",),
     ("waivers", "--format", "json"),
+    # The only read-only invocation that reaches the witness store at all.
+    # Without it the store's directory is never touched during this test, so
+    # the empty-directory case above would be untested in practice.
+    ("validate", "--require-witness"),
 )
+
+# Exit codes a read-only verb may legitimately return: 0 (clean) or 1
+# (findings). A 2 means it refused to run, which would make the
+# tree-unchanged assertion true for the wrong reason.
+_ALLOWED_READ_ONLY_EXITS = frozenset({0, 1})
 
 # The two messages the skill quotes verbatim for a repo with no spec tree.
 _NO_TREE_SHORT = (
@@ -71,7 +80,16 @@ def _tree_digest(root: Path) -> dict[str, str]:
     for the same reason.
     """
     digest: dict[str, str] = {}
-    for dirpath, _dirnames, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root):
+        # Directories are recorded too. The likeliest read-only regression is
+        # not a stray file but a stray `mkdir`: witness.py creates
+        # `.planlint/witnesses/` with parents=True before writing, so a verb
+        # that started touching the witness store would leave an *empty*
+        # directory a file-only digest cannot see -- and the witness store is
+        # the exact case this function's docstring claims to cover.
+        for name in dirnames:
+            rel = (Path(dirpath) / name).relative_to(root).as_posix()
+            digest[rel + "/"] = "<dir>"
         for name in filenames:
             path = Path(dirpath) / name
             rel = path.relative_to(root).as_posix()
@@ -114,7 +132,14 @@ def test_read_only_verbs_leave_tree_byte_identical(populated_repo: Path) -> None
     assert before, "fixture repo is empty; the comparison would be vacuous"
 
     for argv in READ_ONLY_INVOCATIONS:
-        run_cli(populated_repo, *argv)
+        result = run_cli(populated_repo, *argv)
+        # Without this the test passes vacuously if a verb regresses into an
+        # immediate refusal: it would touch nothing precisely because it did
+        # nothing, and the read-only claim would look proven.
+        assert result.returncode in _ALLOWED_READ_ONLY_EXITS, (
+            f"{' '.join(argv)} exited {result.returncode}, so it never ran; "
+            f"an unchanged tree proves nothing here. stderr: {result.stderr!r}"
+        )
 
     after = _tree_digest(populated_repo)
     created = sorted(set(after) - set(before))
@@ -138,14 +163,95 @@ def test_read_only_invocations_cover_every_verb_the_skill_calls_read_only() -> N
     )
 
 
+def _skill_verb_tables() -> tuple[set[str], set[str]]:
+    """The read-only and write verb sets SKILL.md documents.
+
+    Asserts each section marker exists before splitting: a bare ``split(...)[1]``
+    raises IndexError rather than failing an assertion if a heading is reworded,
+    which reports a crash instead of the drift that caused it.
+    """
+    text = SKILL_MD.read_text(encoding="utf-8")
+    for marker in ("Read-only.", "Writes files.", "## Repairing"):
+        assert marker in text, f"SKILL.md no longer contains the {marker!r} marker"
+    read_only = text.split("Read-only.", 1)[1].split("Writes files.", 1)[0]
+    writes = text.split("Writes files.", 1)[1].split("## Repairing", 1)[0]
+    row = re.compile(r"^\| `([a-z]+)` \|", re.MULTILINE)
+    return set(row.findall(read_only)), set(row.findall(writes))
+
+
 def test_write_verbs_are_documented_as_writing() -> None:
     """The complement: every verb that writes is in the writes-files table."""
-    text = SKILL_MD.read_text(encoding="utf-8")
-    writes_section = text.split("Writes files.", 1)[1].split("## Repairing", 1)[0]
-    documented = set(re.findall(r"^\| `([a-z]+)` \|", writes_section, re.MULTILINE))
+    _, documented = _skill_verb_tables()
     assert documented == {"init", "new", "witness"}, (
         f"SKILL.md's write-verb table lists {sorted(documented)}"
     )
+
+
+def test_skill_tables_cover_every_verb_the_cli_actually_has() -> None:
+    """No verb may exist that the skill classifies as neither read nor write.
+
+    The two table tests each compare a section against a known set, so both
+    stay green when a *new* verb is added to the CLI and documented nowhere --
+    and an agent reading the skill would then treat an unlisted verb as safe
+    by omission. This closes that gap by asking the parser itself.
+    """
+    import argparse
+
+    from openspec_graph.cli import build_parser
+
+    subparsers = next(
+        action for action in build_parser()._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    real = set(subparsers.choices)
+    read_only, writes = _skill_verb_tables()
+    documented = read_only | writes
+
+    assert not (real - documented), (
+        f"CLI verb(s) {sorted(real - documented)} appear in neither of SKILL.md's "
+        "tables; an agent would treat them as safe by omission"
+    )
+    assert not (documented - real), (
+        f"SKILL.md documents verb(s) {sorted(documented - real)} the CLI does not have"
+    )
+    assert not (read_only & writes), (
+        f"verb(s) {sorted(read_only & writes)} are in both tables"
+    )
+
+
+def test_dry_run_writes_nothing(populated_repo: Path) -> None:
+    """SKILL.md tells agents `--dry-run` previews safely; prove it.
+
+    The existing CLI tests assert only that these exit 0. That is not the
+    claim an agent acts on: the claim is that the tree is untouched, and it is
+    the claim that makes `--dry-run` the safe way to inspect scaffolding.
+    """
+    before = _tree_digest(populated_repo)
+    for argv in (("init", "--dry-run"),
+                 ("new", "preview-only", "--capability", "preview-cap", "--dry-run")):
+        result = run_cli(populated_repo, *argv)
+        assert result.returncode == 0, f"{argv} failed: {result.stderr!r}"
+        assert "dry run" in result.stdout.lower()
+    assert _tree_digest(populated_repo) == before, (
+        "a --dry-run invocation modified the target tree"
+    )
+
+
+def test_write_verbs_actually_write(populated_repo: Path) -> None:
+    """The affirmative complement, so the read-only test cannot pass by inertia.
+
+    If `init` and `new` also left the tree untouched, every read-only
+    assertion here would be trivially true and prove nothing about the
+    read/write split the skill is built on.
+    """
+    before = _tree_digest(populated_repo)
+    assert run_cli(populated_repo, "init").returncode == 0
+    assert run_cli(
+        populated_repo, "new", "really-written", "--capability", "written-cap"
+    ).returncode == 0
+    after = _tree_digest(populated_repo)
+    created = set(after) - set(before)
+    assert created, "init and new wrote nothing; the read/write split is not real"
 
 
 # --- AC-SD-5 / AC-SD-6: the exit-code contract ------------------------------
@@ -216,6 +322,23 @@ def test_a_real_finding_still_exits_one(populated_repo: Path) -> None:
 # --- AC-SD-2 / AC-SD-3: the generated catalog -------------------------------
 
 
+def _load_tool(name: str, filename: str):
+    """Import a ``tools/`` script by path, in-process.
+
+    In-process rather than by subprocess for two reasons: coverage sees it
+    (``tools/`` scripts invoked as subprocesses are measured by nothing), and
+    module attributes can be monkeypatched so a test never has to write to a
+    tracked file to exercise a failure path.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(name, REPO_ROOT / "tools" / filename)
+    assert spec and spec.loader, f"cannot load tools/{filename}"
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _run_renderer(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(RENDERER), *args],
@@ -231,16 +354,41 @@ def test_rule_catalog_is_fresh() -> None:
     )
 
 
-def test_rule_catalog_check_fails_when_stale(tmp_path: Path) -> None:
-    """AC-SD-3 (non-success): --check reports staleness rather than hiding it."""
-    original = CATALOG.read_text(encoding="utf-8")
-    try:
-        CATALOG.write_text(original + "| Z999 | ERROR | any | invented |\n", encoding="utf-8")
-        result = _run_renderer("--check")
-        assert result.returncode == 1
-        assert "STALE" in result.stderr
-    finally:
-        CATALOG.write_text(original, encoding="utf-8")
+def test_rule_catalog_check_fails_when_stale(tmp_path: Path, monkeypatch) -> None:
+    """AC-SD-3 (non-success): --check reports staleness rather than hiding it.
+
+    Runs against a redirected copy under tmp_path, never the tracked file. An
+    earlier version mutated the real catalog and restored it in a ``finally``:
+    a hard interrupt then left an invented rule row in the contributor's tree,
+    it raced the two sibling tests that read the same file under xdist, and it
+    failed outright on a read-only checkout.
+    """
+    module = _load_tool("rrc", "render_rule_catalog.py")
+    staged = tmp_path / "rule-catalog.md"
+    monkeypatch.setattr(module, "CATALOG_PATH", staged)
+
+    # Missing entirely.
+    assert module.main(["--check"]) == 1
+
+    # Present but stale.
+    staged.write_text(module.render() + "| Z999 | ERROR | any | invented |\n", encoding="utf-8")
+    assert module.main(["--check"]) == 1
+
+    # Written by the generator, then fresh -- proves --write and --check agree.
+    assert module.main(["--write"]) == 0
+    assert module.main(["--check"]) == 0
+    assert CATALOG.read_text(encoding="utf-8"), "the tracked catalog must be untouched"
+
+
+def test_rule_catalog_render_is_deterministic() -> None:
+    """The pure function's own contract, exercised in-process.
+
+    Every other check here runs the tool as a subprocess, which measures no
+    coverage of the module and cannot see this property at all.
+    """
+    module = _load_tool("rrc", "render_rule_catalog.py")
+    assert module.render() == module.render()
+    assert module.render().endswith("\n")
 
 
 def test_rule_catalog_lists_every_registered_rule() -> None:
@@ -330,7 +478,8 @@ def test_distributable_skill_is_not_copied_into_claude_skills() -> None:
     assert SKILL_DIR.name not in dev_skills, (
         f"{SKILL_DIR.name} must not be duplicated under .claude/skills/"
     )
-    assert dev_skills == {"planlint-add-rule"}
+    # Deliberately not asserting the exact set: a second legitimate
+    # contributor skill is fine, a copy of the distributable one is not.
 
 
 # --- AC-SD-12 / AC-SD-13 / AC-SD-14: packaging and gate coverage ------------
@@ -380,43 +529,38 @@ def test_threshold_guard_scans_every_workflow() -> None:
     PASS. Asserting on the resolved target list rather than on a temp file
     keeps this honest: the bug was in target selection, not in matching.
     """
-    import importlib.util
+    mod = _load_tool("nht", "check_no_hardcoded_thresholds.py")
 
-    spec = importlib.util.spec_from_file_location(
-        "nht", REPO_ROOT / "tools" / "check_no_hardcoded_thresholds.py"
+    # Assert on the guard's OWN target selection. Re-globbing the directory
+    # here instead would pass against the broken version too: the bug was
+    # never in matching, it was in which files were handed to the matcher.
+    selected = {p.name for p in mod.targets()}
+    assert {"Makefile", "ci.yml", "release.yml"} <= selected, (
+        f"the guard scans {sorted(selected)}; it must cover every workflow, "
+        "not a named subset"
     )
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-
-    workflows = sorted((REPO_ROOT / ".github" / "workflows").glob("*.yml"))
-    assert len(workflows) > 1, (
-        "this repo has only one workflow, so the glob fix is untestable here"
+    on_disk = {p.name for p in (REPO_ROOT / ".github" / "workflows").glob("*.y*ml")}
+    assert on_disk <= selected, (
+        f"workflow(s) {sorted(on_disk - selected)} exist but are not scanned"
     )
-
-    # The guard must flag a pinned floor in *any* workflow, not just ci.yml.
-    for workflow in workflows:
-        findings = mod.check_workflow(workflow)
-        assert findings == [], f"{workflow.name} already trips the guard: {findings}"
-
-    probe = REPO_ROOT / ".github" / "workflows" / "release.yml"
-    assert probe.exists(), "release.yml is the non-ci workflow this pins"
-    assert mod.check_workflow(probe) == []
+    for target in mod.targets():
+        checker = mod.check_makefile if target.name == "Makefile" else mod.check_workflow
+        assert checker(target) == [], f"{target.name} already trips the guard"
 
 
 def test_threshold_guard_flags_a_pinned_floor_in_a_non_ci_workflow(tmp_path: Path) -> None:
     """The matching half of AC-SD-13, on a file that is not ci.yml."""
-    import importlib.util
+    mod = _load_tool("nht", "check_no_hardcoded_thresholds.py")
 
-    spec = importlib.util.spec_from_file_location(
-        "nht", REPO_ROOT / "tools" / "check_no_hardcoded_thresholds.py"
-    )
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-
-    fake = tmp_path / "release.yml"
-    fake.write_text("jobs:\n  x:\n    steps:\n      - run: pytest --cov-fail-under=90\n")
-    findings = mod.check_workflow(fake)
-    assert findings, "a pinned coverage floor in a release workflow must be flagged"
+    body = "jobs:\n  x:\n    steps:\n      - run: pytest --cov-fail-under=90\n"
+    # Both spellings GitHub Actions accepts. A guard covering only one is the
+    # same bug one rename away.
+    for name in ("release.yml", "scheduled.yaml"):
+        fake = tmp_path / name
+        fake.write_text(body, encoding="utf-8")
+        assert mod.check_workflow(fake), (
+            f"a pinned coverage floor in {name} must be flagged"
+        )
 
 
 def test_required_docs_are_linked() -> None:
@@ -451,3 +595,87 @@ def test_skill_quotes_no_credential_shaped_literals() -> None:
                 f"{path.relative_to(REPO_ROOT)} contains a credential-shaped "
                 f"literal matching {pattern!r}; make security scans this file"
             )
+
+
+# --- backwards compatibility: the distribution rename ------------------------
+
+
+def test_version_lookup_prefers_the_named_distribution_over_list_order(monkeypatch) -> None:
+    """A stale `openspec-graph` install must not be able to report its version.
+
+    Two distributions can provide the import name `openspec_graph` at once --
+    exactly what an upgrade from before the rename leaves behind if the old
+    editable install is not removed. `packages_distributions()` returns them in
+    no defined order, so selecting by index could report the old code's version
+    indefinitely. `--version` is the preflight step the Agent Skill tells every
+    agent to run first, which makes a wrong answer here the worst one
+    available.
+    """
+    import importlib.metadata as md
+
+    from openspec_graph import cli
+
+    monkeypatch.setattr(
+        md, "packages_distributions",
+        lambda: {"openspec_graph": ["openspec-graph", "planlint"]},
+    )
+    monkeypatch.setattr(
+        md, "version",
+        lambda dist: "0.0.1-stale" if dist == "openspec-graph" else __version__,
+    )
+    captured: list[str] = []
+    monkeypatch.setattr(
+        cli, "print",
+        lambda *a, **k: captured.append(" ".join(str(x) for x in a)),
+        raising=False,
+    )
+
+    result = cli._version_string()
+    assert __version__ in result, f"reported {result!r} instead of the live version"
+    assert "0.0.1-stale" not in result
+    assert any("WARNING" in line for line in captured), (
+        "an ambiguous environment must say so; silence hides a stale install"
+    )
+
+
+def test_version_lookup_is_silent_when_one_distribution_is_listed_twice(monkeypatch) -> None:
+    """Duplicate entries for one name are not ambiguity, and must not warn.
+
+    A repeated editable install can leave several metadata directories for the
+    same distribution. Warning there would fire on every invocation of every
+    verb for an environment that is in fact fine -- noise that trains a reader
+    to ignore the warning that matters.
+    """
+    import importlib.metadata as md
+
+    from openspec_graph import cli
+
+    monkeypatch.setattr(
+        md, "packages_distributions",
+        lambda: {"openspec_graph": ["planlint", "planlint"]},
+    )
+    monkeypatch.setattr(md, "version", lambda dist: __version__)
+    captured: list[str] = []
+    monkeypatch.setattr(
+        cli, "print",
+        lambda *a, **k: captured.append(" ".join(str(x) for x in a)),
+        raising=False,
+    )
+
+    assert __version__ in cli._version_string()
+    assert not captured, f"warned about a non-ambiguous environment: {captured}"
+
+
+def test_scaffolded_project_doc_names_the_current_distribution() -> None:
+    """`planlint init` must not write a package name that no longer exists.
+
+    The scaffold template named `openspec-graph` -- the distribution the 0.2.0
+    notes tell users to uninstall -- so every repository scaffolded by this
+    release would have carried a reference to a package that is gone, and
+    contradicted itself two lines later where it says `planlint`.
+    """
+    source = (REPO_ROOT / "openspec_graph" / "scaffold.py").read_text(encoding="utf-8")
+    assert "openspec-graph" not in source, (
+        "scaffold.py still writes the pre-rename distribution name into "
+        "scaffolded repositories"
+    )

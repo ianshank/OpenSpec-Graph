@@ -27,7 +27,11 @@ jobs:
           python-version: "3.12"
 
       - name: Install planlint
-        run: pip install --quiet planlint
+        # Pinned to a compatible range, not bare: this workflow is copied
+        # into other repositories, where an unpinned install would pull a
+        # future major with a different exit-code contract straight into
+        # their CI. Requires planlint on PyPI (published by the v* tag).
+        run: pip install --quiet "planlint>=0.2.0,<1"
 
       - name: Report detected conventions
         run: planlint detect

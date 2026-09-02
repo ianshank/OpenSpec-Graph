@@ -49,14 +49,26 @@ ALL_FILES = AGENT_FILES + SKILL_FILES
 # are ordinary markdown the skill body points at, so they are checked for
 # path/make-target drift like every other file here but not for frontmatter.
 SKILL_MANIFESTS = [p for p in SKILL_FILES if p.name == "SKILL.md"]
+DIST_SKILL_MANIFESTS = [p for p in DIST_SKILL_FILES if p.name == "SKILL.md"]
 
 # Frontmatter keys whose value is a nested block rather than a scalar. Only
 # `metadata` qualifies today; see _frontmatter's own docstring.
 _NESTED_KEYS = frozenset({"metadata"})
 
-# The Agent Skills format's own documented limits.
+# The Agent Skills format's own documented limits, from the SKILL.md
+# frontmatter reference at https://agentskills.io (name <= 64 chars and
+# lowercase-hyphen only; description <= 1024; compatibility <= 500). There is
+# no in-repo locator to derive these from -- the format is external -- so they
+# are literals with a citation rather than an unsourced guess.
+_MAX_NAME = 64
 _MAX_DESCRIPTION = 1024
 _MAX_COMPATIBILITY = 500
+
+# A semantic version as this repo writes them: exactly three numeric parts.
+# Anything else (a pre-release tag, a two-part version) is rejected outright
+# rather than silently truncated by a lenient parser -- "0.3.0rc1" and
+# "0.3.0" must not compare equal when one gates the other.
+_SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 
 # A backtick span that looks like a real repo-relative file path: only
 # path-safe characters (no `<`/`>` template placeholders, no `*` globs, no
@@ -128,6 +140,13 @@ def _frontmatter(text: str) -> dict[str, str]:
     block = text[4:end]
     fields: dict[str, str] = {}
     parent: str | None = None
+    # The indent of the first child under the current parent. Every later
+    # child must match it exactly: comparing against a remembered width is
+    # what makes "one level" real. Testing only `indent > 0` would accept a
+    # doubly-indented key and flatten it to the same `parent.child` slot as a
+    # correctly-indented one -- silently mis-parsing the very malformation
+    # this parser exists to refuse.
+    child_indent: int | None = None
     for line in block.splitlines():
         if not line.strip():
             continue
@@ -137,12 +156,25 @@ def _frontmatter(text: str) -> dict[str, str]:
         value = value.strip()
         if indent == 0:
             parent = key if (not value and key in _NESTED_KEYS) else None
+            child_indent = None
             if value or key not in _NESTED_KEYS:
                 fields[key] = value
             continue
         assert parent is not None, (
             f"indented frontmatter line {line!r} has no nestable parent key; "
             f"only {sorted(_NESTED_KEYS)} may nest"
+        )
+        if child_indent is None:
+            child_indent = indent
+        assert indent == child_indent, (
+            f"frontmatter line {line!r} is indented {indent} spaces under "
+            f"{parent!r}, but its siblings use {child_indent}; only one level "
+            "of nesting is supported and deeper nesting is rejected rather "
+            "than flattened"
+        )
+        assert value, (
+            f"frontmatter key {parent}.{key} has no value; a nested key whose "
+            "value is itself a block is deeper nesting, which is not supported"
         )
         fields[f"{parent}.{key}"] = value
     return fields
@@ -207,6 +239,10 @@ def test_skill_frontmatter_fields_are_within_format_limits(path: Path) -> None:
     assert re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", fields["name"]), (
         f"{path.relative_to(REPO_ROOT)}: name {fields['name']!r} must be "
         "lowercase alphanumerics separated by single hyphens"
+    )
+    assert len(fields["name"]) <= _MAX_NAME, (
+        f"{path.relative_to(REPO_ROOT)}: name is {len(fields['name'])} chars, "
+        f"over the {_MAX_NAME} limit"
     )
 
 
@@ -320,6 +356,41 @@ def test_frontmatter_rejects_nesting_under_an_unnestable_key() -> None:
         _frontmatter("---\nname: demo\n  stray: value\n---\n\nbody\n")
 
 
+def test_frontmatter_rejects_nesting_deeper_than_one_level() -> None:
+    """Reported in review: depth was never actually checked.
+
+    The parser only distinguished "indented" from "not indented", so a
+    doubly-indented key landed in the same ``parent.child`` slot as a
+    correctly-indented sibling. That is worse than accepting it outright: the
+    file looks parsed, the assertion that reads the value passes, and the real
+    structure is gone. Each of these must raise.
+    """
+    deeper = (
+        "---\nname: demo\ndescription: d\n"
+        "metadata:\n  version: 1\n    deeper: 2\n---\n\nbody\n"
+    )
+    with pytest.raises(AssertionError, match="deeper nesting is rejected"):
+        _frontmatter(deeper)
+
+    # A nested key whose own value is a block is also deeper nesting.
+    block_valued = (
+        "---\nname: demo\ndescription: d\n"
+        "metadata:\n  nested:\n    key: v\n---\n\nbody\n"
+    )
+    with pytest.raises(AssertionError):
+        _frontmatter(block_valued)
+
+
+def test_frontmatter_accepts_consistently_indented_siblings() -> None:
+    """The complement: a well-formed nested block still parses."""
+    parsed = _frontmatter(
+        "---\nname: demo\ndescription: d\n"
+        "metadata:\n  version: 1.2.3\n  planlint-min-version: 0.2.0\n---\n\nbody\n"
+    )
+    assert parsed["metadata.version"] == "1.2.3"
+    assert parsed["metadata.planlint-min-version"] == "0.2.0"
+
+
 def test_skill_relative_references_resolve() -> None:
     """AC-SD-8: a skill addresses its own files the way its consumers do.
 
@@ -340,22 +411,59 @@ def test_skill_relative_references_resolve() -> None:
         )
 
 
-def test_skill_min_version_is_not_ahead_of_the_package() -> None:
-    """A skill demanding a version this repo has not shipped is unusable."""
+@pytest.mark.parametrize("path", DIST_SKILL_MANIFESTS, ids=_ids(DIST_SKILL_MANIFESTS))
+def test_skill_min_version_is_not_ahead_of_the_package(path: Path) -> None:
+    """A skill demanding a version this repo has not shipped is unusable.
+
+    Required, not optional: an earlier version skipped when the key was
+    absent, so renaming or dropping it turned the check vacuous rather than
+    failing. Only the *distributable* manifests are covered -- the contributor
+    skills under .claude/ carry no version floor by design.
+    """
     from openspec_graph import __version__
 
-    def _tuple(v: str) -> tuple[int, ...]:
-        return tuple(int(part) for part in v.split(".") if part.isdigit())
+    fields = _frontmatter(path.read_text(encoding="utf-8"))
+    required = fields.get("metadata.planlint-min-version")
+    assert required, (
+        f"{path.relative_to(REPO_ROOT)}: a distributable skill must declare "
+        "metadata.planlint-min-version so an agent can refuse an old CLI"
+    )
+    assert _SEMVER.match(required), (
+        f"{path.relative_to(REPO_ROOT)}: planlint-min-version {required!r} must be "
+        "three numeric parts; a pre-release tag would compare unpredictably"
+    )
+    assert _SEMVER.match(__version__), f"package version {__version__!r} is not semver"
 
-    for path in SKILL_MANIFESTS:
-        fields = _frontmatter(path.read_text(encoding="utf-8"))
-        required = fields.get("metadata.planlint-min-version")
-        if not required:
-            continue
-        assert _tuple(required) <= _tuple(__version__), (
-            f"{path.relative_to(REPO_ROOT)} requires planlint {required}, "
-            f"but this tree is {__version__}"
-        )
+    def _tuple(v: str) -> tuple[int, ...]:
+        return tuple(int(part) for part in v.split("."))
+
+    assert _tuple(required) <= _tuple(__version__), (
+        f"{path.relative_to(REPO_ROOT)} requires planlint {required}, "
+        f"but this tree is {__version__}"
+    )
+
+
+@pytest.mark.parametrize("path", DIST_SKILL_MANIFESTS, ids=_ids(DIST_SKILL_MANIFESTS))
+def test_compatibility_prose_matches_the_declared_minimum(path: Path) -> None:
+    """Two numbers, one meaning -- so they must be bound, not both written.
+
+    `compatibility` is prose an agent reads at install time and
+    `metadata.planlint-min-version` is the value it compares against. Written
+    independently, a bump to one silently leaves the other advertising a
+    different floor.
+    """
+    fields = _frontmatter(path.read_text(encoding="utf-8"))
+    compat = fields.get("compatibility", "")
+    match = re.search(r"(\d+\.\d+\.\d+)", compat)
+    assert match, (
+        f"{path.relative_to(REPO_ROOT)}: compatibility must name the minimum "
+        f"version numerically so it can be checked; got {compat!r}"
+    )
+    assert match.group(1) == fields["metadata.planlint-min-version"], (
+        f"{path.relative_to(REPO_ROOT)}: compatibility advertises "
+        f"{match.group(1)} but planlint-min-version is "
+        f"{fields['metadata.planlint-min-version']}"
+    )
 
 
 def test_rule_ids_cited_by_skills_exist_in_the_registry() -> None:

@@ -45,7 +45,7 @@ coverage suite, so it is slower than the commit-time hook. Pre-commit + CI
 already cover the common case; the pre-push hook is for contributors who want
 a local net before the round-trip to CI.
 
-## CI hooks (`.github/workflows/ci.yml`)
+## CI hooks (`.github/workflows/`)
 
 | Job | Trigger | Gate |
 |---|---|---|
@@ -82,6 +82,12 @@ commit or push time. It targets drift classes that recurred multiple times in
 this repo's own history and are easy for an agent (or a human) to forget
 mid-edit:
 
+- Editing `skills/planlint-spec-governance/**` or `.claude-plugin/**` → reminds to
+  run `pytest tests/test_skill_contract.py tests/test_agent_skill_docs.py`. These
+  are prose and metadata an *external* agent acts on, so no other gate catches
+  drift in them. The glob names the distributable skill specifically: a bare
+  `*/skills/*` also matched `.claude/skills/`, nudging contributors toward a test
+  that does not cover their file.
 - Editing `openspec_graph/rules.py` or `rules_*.py` → reminds to regenerate
   `tests/baseline_rules.json` and run `tests/test_rule_registry_docs.py`
   (see the `planlint-add-rule` skill below).
@@ -96,7 +102,7 @@ mid-edit:
   merely describes — a self-referential trap this repo has hit more than
   once while writing specs *about* its own dialect grammar.
 
-`.claude/hooks/nudge_rule_registry.sh` implements all three checks via a
+`.claude/hooks/nudge_rule_registry.sh` implements all four checks via a
 single shell script (no `jq` dependency — not guaranteed to be on `PATH` in
 every dev environment this repo is used from). Despite the JSON key's name,
 `"decision": "block"` does **not** undo the edit — `PostToolUse` fires after

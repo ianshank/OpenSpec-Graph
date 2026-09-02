@@ -48,6 +48,7 @@ base.json
 # drift from the installed CLI.
 skills
 evals
+.claude
 .claude-plugin
 context7.json
 llms.txt
