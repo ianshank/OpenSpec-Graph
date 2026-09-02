@@ -48,6 +48,10 @@ SC_ID = re.compile(r"\bSC-\d+\b")
 # immediately after the opening `**`, not after an `N`.
 FR_DECL = re.compile(r"^-\s*\*\*(FR-\d+)\*\*\s*:\s*(.+?)\s*$", re.MULTILINE)
 SC_DECL = re.compile(r"^-\s*\*\*(SC-\d+)\*\*\s*:\s*(.+?)\s*$", re.MULTILINE)
+# The bare (unannotated) heading name speckit_section_body() looks up --
+# shared by parse_speckit.py's own Success Criteria lookup and this module's
+# hard_coded() exemption below, so the two can't independently drift.
+SPECKIT_SUCCESS_CRITERIA_HEADING = "Success Criteria"
 NEEDS_CLARIFICATION = re.compile(r"\[NEEDS CLARIFICATION(?:\s*:\s*(.*?))?\]", re.IGNORECASE)
 USER_STORY_HEADING = re.compile(r"^###\s+User Story\s+(\d+)\b.*$", re.MULTILINE | re.IGNORECASE)
 # "1. **Given** ..., **When** ..., **Then** ..." -- SpecKit's own documented
@@ -266,7 +270,7 @@ def hard_coded(text: str, dialect: str = "") -> tuple[str, ...]:
     """
     scan_text = text
     if dialect == "speckit":
-        span = speckit_section_body(text, "Success Criteria")
+        span = speckit_section_body(text, SPECKIT_SUCCESS_CRITERIA_HEADING)
         if span:
             start = text.index(span)
             scan_text = text[:start] + " " * len(span) + text[start + len(span) :]

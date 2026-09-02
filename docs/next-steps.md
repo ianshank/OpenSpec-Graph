@@ -38,6 +38,37 @@ over-engineering.
    stale-cached-belief problem this project exists to catch in target repos).
    Worth doing only with a clear answer to that question in hand.
 
+4a. **Symlinked feature/change directories double-count a spec** — `detect.py`'s
+   `find_spec_files()`/`find_speckit_spec_files()` both glob (`changes/*/specs/*/spec.md`,
+   `specs/*/spec.md`); `Path.glob()` follows a *valid* directory symlink, so a
+   `specs/002-alias -> specs/001-foo` symlink yields two distinct `Path`
+   entries for the same underlying `spec.md`. Confirmed by construction
+   (add-speckit-dialect PR review): `StackProfile.feature_dirs` reports 2
+   features for 1 real one, and `graph.build_graph()` renders duplicate
+   `FR-001`/`SC-001` nodes. Not SpecKit-specific — `find_spec_files()` has
+   the identical latent behavior for `openspec/changes/`. Deferred rather
+   than patched into the SpecKit PR: the fix (dedup by `Path.resolve()`
+   identity, keep first-encountered logical path) is symmetric across both
+   discovery functions, so it belongs in its own scoped change, not a
+   dialect-specific patch that would leave the two paths asymmetric.
+
+4b. **A `Functional Requirements`/`Success Criteria` heading at the wrong
+   level silently yields zero extracted requirements/criteria, with no
+   diagnostic** — `parse_speckit.py` correctly scopes its scan to the exact
+   heading level SpecKit's own template uses (R-SK-30/AC-SK-49, closing a
+   real over-matching bug), but the flip side is: a hand-edited spec with
+   `## Functional Requirements` (H2, not the nested H3) yields `reqs: ()`
+   with no warning, and still passes `S002`/`S003` cleanly (there's nothing
+   to check). `G001` ("no requirements and no verifiable criteria
+   recognized") only catches this if *both* are empty — a spec with working
+   Success Criteria or GWT scenarios but a wrong-level FR heading passes
+   silently. A candidate fix (e.g. a new WARN-level check surfacing "dialect
+   is speckit but zero FR-/SC- bullets were extracted despite a `Requirements`-
+   shaped section existing") needs the same spec-drafter → spec-adversary
+   design pass the rest of this rule family got, not a rushed addition —
+   false-positive risk against a legitimately FR-less, user-story-only draft
+   spec needs real design work, not a guess.
+
 ## Medium term
 
 5. **Sarif output** — emit `validate --format sarif` for GitHub code-scanning

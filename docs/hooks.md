@@ -61,6 +61,43 @@ version is type-checked), not as a standalone job.
 The `graph-diff` job checks out the PR head SHA (not the synthetic merge
 commit) so `merge-base` resolves to the true branch point (DEC-CH-001).
 
+## Claude Code hooks (`.claude/hooks/`)
+
+A third, distinct layer from pre-commit/CI above: a
+[Claude Code](https://claude.com/claude-code) `PostToolUse(Edit|Write)` hook,
+wired in `.claude/settings.json`, that fires inside an agentic coding session
+right after a file write — before the agent considers the change done, not at
+commit or push time. It targets drift classes that recurred multiple times in
+this repo's own history and are easy for an agent (or a human) to forget
+mid-edit:
+
+- Editing `openspec_graph/rules.py` or `rules_*.py` → reminds to regenerate
+  `tests/baseline_rules.json` and run `tests/test_rule_registry_docs.py`
+  (see the `planlint-add-rule` skill below).
+- Editing the `Makefile` or a `.github/workflows/*.yml` file → reminds to run
+  `make thresholds`.
+- Editing a change package's `spec.md`
+  (`openspec/changes/*/specs/*/spec.md`) → reminds to run
+  `planlint validate --fail-on ERROR` before finishing. This file is the
+  exact one planlint dialect-sniffs; prose that quotes a dialect's own
+  marker strings (e.g. a heading name in backticks, while *documenting* that
+  dialect rather than writing it) can misclassify the spec as the dialect it
+  merely describes — a self-referential trap this repo has hit more than
+  once while writing specs *about* its own dialect grammar.
+
+`.claude/hooks/nudge_rule_registry.sh` implements all three checks via a
+single shell script (no `jq` dependency — not guaranteed to be on `PATH` in
+every dev environment this repo is used from). Despite the JSON key's name,
+`"decision": "block"` does **not** undo the edit — `PostToolUse` fires after
+the write already landed — it is `PostToolUse`'s contract for surfacing
+`reason` to the agent prominently, i.e. a strong reminder, not an actual
+block.
+
+See also `.claude/agents/` (spec-drafter, spec-adversary, planlint-verifier —
+this repo's own dogfooded OpenSpec change-package workflow) and
+`.claude/skills/planlint-add-rule/` (the step-by-step checklist the first
+hook case above points at).
+
 ## Adding a custom rule
 
 Rules live in `openspec_graph/rules.py` as `Rule(ident, severity, dialects,

@@ -5,6 +5,47 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — SpecKit as a third dialect (`add-speckit-dialect` change package)
+
+- **`speckit` dialect**: `planlint validate`/`graph`/`waivers` now discover,
+  parse, and lint a repo using GitHub SpecKit's own conventions —
+  `specs/<feature>/spec.md` at the repo root (no `openspec/` ancestor
+  required), `FR-00N`/`SC-00N` requirement/success-criteria bullets, and
+  inline numbered Given/When/Then acceptance scenarios inside prioritized
+  user stories. A repo may have an `openspec/` tree, a SpecKit `specs/`
+  tree, both, or neither; `speckit_root`/`feature_dirs` on `StackProfile`
+  are content-gated (a bare `specs/` directory alone proves nothing — the
+  fingerprint requires an actual SpecKit-marked `spec.md` inside it) so an
+  unrelated `specs/` folder (OpenAPI, RSpec, JSON-schema conventions all
+  use the same name) is never misdetected.
+- **New rule family `S001`–`S004`** (`rules_speckit.py`): an unresolved
+  `[NEEDS CLARIFICATION]` marker (ERROR), a duplicate `FR-`/`SC-`
+  identifier (ERROR), a functional requirement with no SHALL/MUST (WARN),
+  and an acceptance scenario missing WHEN/THEN (WARN — kept below ERROR
+  pending validation against a larger real-world corpus). 26 rules total.
+- **Mandatory scoping fix, not optional polish**: `G002` (requires at
+  least one negative-phrased criterion) is narrowed to `harness`/
+  `upstream` only, and `G003` (hard-coded-threshold scan) exempts a
+  speckit spec's `Success Criteria` section — a conventional bullet like
+  `SC-001: 95% of users complete onboarding in under 5 minutes` is a
+  legitimate measurable outcome, not a hard-coded value smuggled past
+  governance config. Without this, `validate --fail-on ERROR` (the
+  default) would fail nearly every well-formed real SpecKit spec.
+  Harness/upstream behavior is byte-unchanged.
+- `--dialect` gains `"speckit"` on `validate`/`waivers`; `cmd_detect`
+  reports SpecKit presence; `new`/`init` scaffolding is deliberately
+  untouched (read-only dialect support — SpecKit's own CLI already
+  scaffolds `spec.md`).
+- **Node-id qualification (`graph.py`)**: a requirement/criterion graph
+  node id is qualified by its owning spec when `dialect == "speckit"`, so
+  two features that both restart numbering at `FR-001`/`SC-001` (SpecKit's
+  own canonical convention — every feature starts over) don't collapse
+  into one node. Harness/upstream node ids are unaffected (already
+  spec-unique by authoring convention, since the capability abbreviation
+  is folded into the id itself).
+- Full design/implementation record:
+  `openspec/changes/add-speckit-dialect/` (proposal, spec, tasks).
+
 ### Fixed — stdout encoding crash under a non-UTF-8 console (`fix-stdout-encoding-crash` change package)
 
 - **`cli.py`'s `main()`**: `print()` calls — hardcoded punctuation

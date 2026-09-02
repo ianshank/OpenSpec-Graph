@@ -13,6 +13,7 @@ from .parse_semantics import (
     GWT_SCENARIO,
     SC_DECL,
     SECTION,
+    SPECKIT_SUCCESS_CRITERIA_HEADING,
     USER_STORY_HEADING,
     line_of,
     speckit_section_body,
@@ -46,7 +47,7 @@ def parse_speckit(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion, 
     # function guards on `crit.note` being non-empty for exactly this
     # reason -- every SC bullet would otherwise report as "missing
     # WHEN/THEN", which was never a claim it made).
-    sc_body = speckit_section_body(text, "Success Criteria")
+    sc_body = speckit_section_body(text, SPECKIT_SUCCESS_CRITERIA_HEADING)
     for m in SC_DECL.finditer(sc_body):
         criteria.append(
             Criterion(

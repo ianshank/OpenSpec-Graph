@@ -343,7 +343,8 @@ change package.
 - [CHANGELOG](CHANGELOG.md) — releases and notable changes
 - [Architecture (C4)](docs/architecture/c4.md) — context, container, component, code
 - [AQA guide](docs/aqa.md) — the full quality bar and how to reproduce it
-- [Hooks](docs/hooks.md) — pre-commit + CI gates, and how to add a rule
+- [Hooks](docs/hooks.md) — pre-commit + CI gates, the `.claude/` Claude Code
+  hooks/agents/skills dev-tooling layer, and how to add a rule
 - [Agents, skills, and the harness](docs/agents-skills-harness.md) — why this is
   a deterministic governance harness, not an autonomous agent
 - [Next steps](docs/next-steps.md) — what is deliberately out of scope
