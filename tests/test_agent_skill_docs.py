@@ -105,7 +105,7 @@ def _repo_controlled_basenames(root: Path) -> set[str]:
         ".venv", "venv", "env", "build", "dist", ".idea", ".vscode",
     }
     names: set[str] = set()
-    for dirpath, dirnames, filenames in os.walk(root):
+    for _dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [
             d for d in dirnames if d not in ignored_dirs and not d.endswith(".egg-info")
         ]

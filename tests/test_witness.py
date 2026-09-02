@@ -260,3 +260,67 @@ def test_matching_witnesses_filters_by_stage_and_sha_only_not_exit_code() -> Non
     w_failing = _witness(exit_code=1)
     result = witness.matching_witnesses([w_match, w_wrong_stage, w_wrong_sha, w_failing], "test", SHA)
     assert set(result) == {w_match, w_failing}
+
+
+# --- The atomic-write rollback (DEC-WM-012) ---------------------------------
+#
+# `write_witness` writes to a temp file and `os.replace`s it into place so a
+# crash mid-write can never leave a partially-written record that a later run
+# would read as real. The rollback arm of that -- unlinking the temp file when
+# the write or the replace fails -- had never executed under test, which meant
+# the guarantee the whole tempfile dance exists to provide was asserted only in
+# a docstring.
+
+
+def test_write_witness_removes_its_temp_file_when_the_replace_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed write leaves no debris in the witness store."""
+    record = Witness(
+        schema_version=witness.WITNESS_SCHEMA_VERSION,
+        stage="test", exit_code=0, coverage=None, sha="a" * 40,
+        recorded_at="2026-01-01T00:00:00Z",
+    )
+
+    def _fail(*_args: object, **_kwargs: object) -> None:
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(witness.os, "replace", _fail)
+    with pytest.raises(OSError):
+        witness.write_witness(tmp_path, record)
+
+    store = tmp_path / witness.WITNESS_DIR_NAME
+    leftovers = sorted(p.name for p in store.iterdir()) if store.exists() else []
+    assert leftovers == [], (
+        f"a failed write left {leftovers} behind; the temp file must be removed so "
+        "the store never accumulates debris that looks like a partial record"
+    )
+
+
+def test_write_witness_reraises_the_original_error_not_the_cleanup_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cleanup is best-effort; the caller must still see what actually failed.
+
+    If the rollback's own ``unlink`` raises, suppressing it is correct -- the
+    disk-full error is the diagnosis, and replacing it with a
+    file-not-found from the cleanup path would send the reader after the
+    wrong problem.
+    """
+    record = Witness(
+        schema_version=witness.WITNESS_SCHEMA_VERSION,
+        stage="test", exit_code=0, coverage=None, sha="b" * 40,
+        recorded_at="2026-01-01T00:00:00Z",
+    )
+
+    def _fail_replace(*_args: object, **_kwargs: object) -> None:
+        raise OSError(28, "No space left on device")
+
+    def _fail_unlink(*_args: object, **_kwargs: object) -> None:
+        raise OSError(2, "No such file or directory")
+
+    monkeypatch.setattr(witness.os, "replace", _fail_replace)
+    monkeypatch.setattr(witness.os, "unlink", _fail_unlink)
+    with pytest.raises(OSError) as caught:
+        witness.write_witness(tmp_path, record)
+    assert "No space left on device" in str(caught.value)

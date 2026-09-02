@@ -29,6 +29,7 @@ SKILL_DIR = REPO_ROOT / "skills" / "planlint-spec-governance"
 CONTEXT7 = REPO_ROOT / "context7.json"
 LLMS_TXT = REPO_ROOT / "llms.txt"
 PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"
+AGENTS_MD = REPO_ROOT / "AGENTS.md"
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 
 # A case is a directory carrying a prompt, not "any directory that is not one
@@ -66,6 +67,24 @@ _TAGS = frozenset({
     "authority", "destructive", "dialect", "exit-codes", "machinery",
     "negative", "preflight", "threshold", "waiver", "witness",
 })
+
+
+def _load_tool(name: str, filename: str):
+    """Import a ``tools/`` script by path, in-process.
+
+    In-process rather than as a subprocess so coverage sees the module and so
+    its attributes can be read directly. Mirrors the helper of the same name in
+    ``tests/test_skill_contract.py``; the two files stay independent on purpose
+    (importing one test module from another makes collection order load-bearing),
+    but within this file it is one helper rather than a copy per call site.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(name, REPO_ROOT / "tools" / filename)
+    assert spec and spec.loader, f"cannot load tools/{filename}"
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _ids(paths: list[Path]) -> list[str]:
@@ -308,13 +327,48 @@ def test_context7_indexes_the_skill_and_excludes_the_evals() -> None:
 # --- llms.txt ---------------------------------------------------------------
 
 
-def test_llms_txt_links_resolve() -> None:
-    """Every path it advertises must exist, or the index sends readers nowhere."""
-    text = LLMS_TXT.read_text(encoding="utf-8")
-    links = re.findall(r"\]\(([^)]+)\)", text)
-    assert links, "llms.txt advertises no documents at all"
+# Every index an agent reads on its own initiative, rather than because a human
+# pointed at it. A dead link here is worse than a dead link in the README: no
+# human opens these files, so nothing surfaces the breakage.
+AGENT_INDEXES = (LLMS_TXT, AGENTS_MD)
+
+
+@pytest.mark.parametrize("path", AGENT_INDEXES, ids=[p.name for p in AGENT_INDEXES])
+def test_agent_index_links_resolve(path: Path) -> None:
+    """Every path advertised must exist, or the index sends readers nowhere."""
+    links = re.findall(r"\]\(([^)]+)\)", path.read_text(encoding="utf-8"))
+    assert links, f"{path.name} advertises no documents at all"
     missing = [ref for ref in links if not (REPO_ROOT / ref).exists()]
-    assert not missing, f"llms.txt links to missing path(s): {missing}"
+    assert not missing, f"{path.name} links to missing path(s): {missing}"
+
+
+def test_agents_md_declares_no_invariant_ids() -> None:
+    """A self-referential trap this repository is uniquely able to walk into.
+
+    ``AGENTS.md`` is the last candidate in ``detect.INVARIANT_SOURCES``: for a
+    target repository with no dedicated contract file, it is where planlint
+    looks for ``INV-n`` declarations. Discovery is content-gated, so an
+    ``AGENTS.md`` carrying none is skipped and this repo's own
+    ``invariant_source`` stays empty -- which is the state ``make validate``
+    currently passes in.
+
+    Write a single ``INV-1`` into this file, though, and planlint's self-run
+    adopts it as the invariant source, at which point the bidirectional
+    invariant rules start firing against a document that was never meant to
+    declare anything. Cheaper to forbid the id here than to debug the gate
+    later.
+    """
+    from openspec_graph import detect
+
+    assert "AGENTS.md" in detect.INVARIANT_SOURCES, (
+        "this guard assumes AGENTS.md is an invariant-source candidate; if that "
+        "changed, the trap is gone and so is the reason for this test"
+    )
+    found = re.findall(r"\bINV-\d+\b", AGENTS_MD.read_text(encoding="utf-8"))
+    assert not found, (
+        f"AGENTS.md declares invariant id(s) {found}, which makes planlint's own "
+        "detect adopt it as this repository's invariant source"
+    )
 
 
 def test_llms_txt_states_the_exit_code_contract() -> None:
@@ -413,13 +467,7 @@ def test_release_workflow_is_gated_and_uses_trusted_publishing() -> None:
 
 def test_every_workflow_is_scanned_by_the_threshold_guard() -> None:
     """Wiring check: the guard's target list must cover what actually exists."""
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(
-        "nht", REPO_ROOT / "tools" / "check_no_hardcoded_thresholds.py"
-    )
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    mod = _load_tool("nht", "check_no_hardcoded_thresholds.py")
     # Both spellings GitHub Actions accepts. Globbing only *.yml here would let
     # a workflow added as .yaml escape this wiring check entirely -- the same
     # single-spelling assumption the guard itself was just fixed for.
@@ -470,13 +518,7 @@ def test_manifest_generator_rejects_a_folded_description(tmp_path: Path) -> None
     A published manifest whose description reads ">-" is worse than a build
     failure, so the generator raises instead of defaulting.
     """
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(
-        "rpm", REPO_ROOT / "tools" / "render_plugin_manifests.py"
-    )
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    mod = _load_tool("rpm", "render_plugin_manifests.py")
 
     with pytest.raises(ValueError):
         mod.skill_description("---\nname: x\ndescription: >-\n  folded text\n---\n\nbody\n")
@@ -527,5 +569,39 @@ def test_agent_artifacts_are_excluded_from_the_docker_context() -> None:
         for line in (REPO_ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.startswith("#")
     }
-    for entry in ("skills", "evals", ".claude-plugin", "context7.json", "llms.txt"):
+    for entry in ("skills", "evals", ".claude", ".claude-plugin", "context7.json", "llms.txt"):
         assert entry in ignored, f".dockerignore does not exclude {entry!r}"
+
+    # Root-level markdown is excluded by pattern rather than by name, so a
+    # name-by-name check above can never see it. The realistic mistake is a
+    # helpful re-inclusion: `!AGENTS.md` alongside `!README.md` is a one-line
+    # diff that silently ships agent prose into the runtime image.
+    assert "*.md" in ignored, ".dockerignore no longer excludes markdown by pattern"
+    negations = {entry for entry in ignored if entry.startswith("!")}
+    assert negations == {"!README.md"}, (
+        f".dockerignore re-includes {sorted(negations)}; only README.md belongs in "
+        "the build context, and every other root markdown file is agent-facing prose"
+    )
+
+
+def test_every_root_markdown_file_is_wired_into_the_docs_gate() -> None:
+    """The check that would have caught AGENTS.md landing as an orphan.
+
+    A markdown file at the repository root is, by position, something a reader
+    or an agent finds without being told. Adding one is therefore a promise to
+    keep it current, and the mechanism for that here is
+    ``tools/check_docs.py``: required to exist, and required to be linked from
+    the README. `AGENTS.md` shipped wired into neither, and every gate stayed
+    green, because nothing enumerated this directory.
+
+    README.md is the target of the linking rather than a subject of it.
+    """
+    module = _load_tool("check_docs", "check_docs.py")
+    required = set(module.REQUIRED_DOCS)
+    on_disk = {p.name for p in REPO_ROOT.glob("*.md")}
+    unwired = sorted(on_disk - required - {"README.md"})
+    assert not unwired, (
+        f"root markdown file(s) {unwired} are in no gate: add them to "
+        "tools/check_docs.py REQUIRED_DOCS (and link them from README.md), or "
+        "move them under docs/ where they are not a front-page promise"
+    )

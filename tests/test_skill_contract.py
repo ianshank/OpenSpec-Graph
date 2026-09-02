@@ -394,6 +394,46 @@ def test_witness_boundary_checks_exit_two(populated_repo: Path, argv, why: str) 
     )
 
 
+@pytest.mark.parametrize(
+    "argv",
+    [("init",), ("new", "some-change", "--capability", "some-cap")],
+    ids=["init", "new"],
+)
+def test_write_verbs_exit_two_when_the_target_cannot_be_written(
+    populated_repo: Path, monkeypatch: pytest.MonkeyPatch, argv: tuple[str, ...],
+) -> None:
+    """An unwritable target is a precondition failure, not a spec failure.
+
+    ``witness`` already guarded its own store this way and returned 2. ``init``
+    and ``new`` let the ``OSError`` escape, which printed a traceback and
+    exited **1** -- the code the contract reserves for "findings were reported
+    at or above --fail-on". A read-only checkout or a full disk was therefore
+    indistinguishable from a failing gate to any caller reading only the exit
+    code, which is the defect DEC-SD-001 fixed for a bad ``--target``.
+
+    The fault is injected rather than produced with ``chmod``: the test runner
+    here is root, for whom the permission bits on a directory are advisory, so
+    a filesystem-level reproduction would silently succeed and assert nothing.
+    """
+    from openspec_graph import cli, scaffold
+
+    def _explode(*_args: object, **_kwargs: object) -> list[Path]:
+        raise OSError(30, "Read-only file system")
+
+    monkeypatch.setattr(scaffold, "apply", _explode)
+    code = cli.main(["--target", str(populated_repo), *argv])
+    assert code == 2, f"{argv[0]} on an unwritable target must exit 2, got {code}"
+
+
+def test_write_verbs_still_exit_zero_when_the_target_is_writable(
+    populated_repo: Path,
+) -> None:
+    """The affirmative half, so the guard above cannot pass by refusing always."""
+    from openspec_graph import cli
+
+    assert cli.main(["--target", str(populated_repo), "init"]) == 0
+
+
 # --- AC-SD-2 / AC-SD-3: the generated catalog -------------------------------
 
 

@@ -324,7 +324,7 @@ def test_graph_dot_is_still_rejected_after_mermaid_ships(repo: Path, capsys) -> 
     exit_code = main(["--target", str(repo), "graph", "--format", "dot"])
     assert exit_code == 2
     err = capsys.readouterr().err
-    assert "error: --format dot is not supported; graph rendering is a " "downstream, out-of-scope concern. Use --format json." in err
+    assert "error: --format dot is not supported; graph rendering is a downstream, out-of-scope concern. Use --format json." in err
 
 
 def test_graph_change_scopes_which_specs_are_rendered(repo: Path, capsys) -> None:
@@ -551,7 +551,7 @@ def test_cli_init_writes_config_and_project(repo: Path) -> None:
 def test_cli_init_force_overwrites(repo: Path) -> None:
     main(["--target", str(repo), "init"])
     cfg = repo / "openspec" / "specgraph.json"
-    cfg.write_text("{\"stale\": true}")
+    cfg.write_text('{"stale": true}')
     assert main(["--target", str(repo), "init", "--force"]) == 0
     import json as _json
     data = _json.loads(cfg.read_text())

@@ -89,8 +89,7 @@ def _run_cli(root: Path, *args: str) -> str:
     # so the raw-form replace above never matches inside JSON. Also try the
     # JSON-escaped form so this stays path-normalized on every OS, not just
     # POSIX ones where a path never needs escaping in the first place.
-    out = out.replace(str(root).replace("\\", "\\\\"), "<ROOT>")
-    return out
+    return out.replace(str(root).replace("\\", "\\\\"), "<ROOT>")
 
 
 def _outputs(root: Path) -> dict[str, str]:
