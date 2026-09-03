@@ -95,7 +95,14 @@ def _build_repo(root: Path) -> None:
 def _run_cli(root: Path, *args: str) -> str:
     r = subprocess.run(
         [sys.executable, "-m", "openspec_graph.cli", "--target", str(root), *args],
-        capture_output=True, text=True, check=False,
+        # Decode as UTF-8 explicitly: cli.main() forces its own stdout to UTF-8
+        # (Defect D fix), so the platform default is wrong on any host whose
+        # codepage isn't UTF-8 -- notably the GitHub windows-latest runner
+        # (cp1252), where the absolute `target` path's escaped backslashes
+        # decode-then-reencode to different bytes and only the `validate` hash
+        # (the one verb carrying that path) drifts off golden. run_cli() in
+        # tests/support.py already pins UTF-8 for the same reason.
+        capture_output=True, text=True, encoding="utf-8", check=False,
     )
     assert r.returncode == 0, f"{' '.join(args)} failed: {r.stderr}"
     # Raw + JSON-escaped path normalization lives in the shared helper -- a

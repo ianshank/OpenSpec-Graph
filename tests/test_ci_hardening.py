@@ -396,9 +396,11 @@ def test_lint_is_a_hard_gate() -> None:
 def test_graph_diff_artifact_uploaded() -> None:
     """AC-CH-7: the graph-diff job publishes the graph and its comparison, so a
     reviewer can see what changed rather than taking the job's word for it."""
-    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-
-    assert "upload-artifact" in workflow, "no artifact upload configured in CI"
+    blocks = _ci_job_blocks(_ci_workflow_text())
+    graph_diff = blocks.get("graph-diff", "")
+    assert "upload-artifact" in graph_diff, "graph-diff job uploads no artifact"
+    assert "base.json" in graph_diff, "graph-diff never uploads base.json"
+    assert "head.json" in graph_diff, "graph-diff never uploads head.json"
 
 
 # --- harden-two-track-e2e-aqa: the two-track e2e gates exist and stay synced ---
@@ -496,9 +498,15 @@ def test_ci_workflow_has_an_encoding_stress_job() -> None:
 def test_hooks_ci_table_lists_every_ci_job() -> None:
     """AC-AQA-4 (non-success): a ci.yml job absent from docs/hooks.md's CI
     hooks table fails the suite -- the `packaging` drift this package
-    backfills is a hard error on recurrence, never a silent doc gap."""
+    backfills is a hard error on recurrence, never a silent doc gap.
+
+    Matches the job id only as a backtick-quoted table cell, not anywhere in
+    prose -- `graph-diff` and `release` are named in the body text below the
+    table, so a bare substring check would false-pass on a missing row."""
     jobs = set(_ci_job_blocks(_ci_workflow_text()))
     assert jobs, "parsed no jobs from ci.yml -- the parser, not the table, is broken"
     hooks = (REPO_ROOT / "docs" / "hooks.md").read_text(encoding="utf-8")
-    missing = sorted(job for job in jobs if job not in hooks)
-    assert not missing, f"docs/hooks.md CI hooks table is missing jobs: {missing}"
+    # A job row looks like `| \`job-name\` ... |` in the CI hooks table.
+    table_cells = set(re.findall(r"^\|\s*`([\w-]+)`", hooks, re.MULTILINE))
+    missing = sorted(job for job in jobs if job not in table_cells)
+    assert not missing, f"docs/hooks.md CI hooks table is missing rows for jobs: {missing}"
