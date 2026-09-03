@@ -17,34 +17,16 @@ human-readable report can never disagree about what was measured.
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
-from types import ModuleType
 
 import pytest
+
+from tests.support import load_tool
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CORPUS_DIR = REPO_ROOT / "tests" / "fixtures" / "phrasing"
 
-
-def _load_tool(name: str, filename: str) -> ModuleType:
-    """Import a ``tools/`` script by path, in-process.
-
-    Mirrors the helper of the same name in ``test_skill_contract.py`` and
-    ``test_agent_artifacts.py``: in-process rather than as a subprocess so
-    coverage sees the module and its functions can be called directly.
-    """
-    path = REPO_ROOT / "tools" / filename
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec and spec.loader, f"cannot load {path}"
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-accuracy = _load_tool("matcher_accuracy", "matcher_accuracy.py")
+accuracy = load_tool("matcher_accuracy", "matcher_accuracy.py")
 
 
 @pytest.fixture(scope="module")
@@ -252,3 +234,57 @@ def test_annotation_tier_never_fires_on_prose() -> None:
 
     assert "annotated_non_success" in negation_matches("non-success", "anything")
     assert "annotated_non_success" not in negation_matches("", "Negative numbers are formatted.")
+
+
+# --- the scorer's own failure paths ----------------------------------------
+
+
+def test_load_rows_rejects_malformed_corpus_files(tmp_path: Path) -> None:
+    """A malformed row must be a loud corpus error, never a silent negative."""
+    import pytest as _pytest
+
+    with _pytest.raises(FileNotFoundError):
+        accuracy.load_rows(tmp_path / "missing.jsonl")
+    for body, fragment in (
+        ("[1]\n", "expected an object"),
+        ('{"label": true}\n', "missing or empty 'text'"),
+        ('{"text": "x", "label": "yes"}\n', "'label' must be true or false"),
+        ("{not json}\n", "not valid JSON"),
+    ):
+        path = tmp_path / "bad.jsonl"
+        path.write_text(body, encoding="utf-8")
+        with _pytest.raises(ValueError, match=fragment):
+            accuracy.load_rows(path)
+    (tmp_path / "ok.jsonl").write_text('{"text": "a", "label": true}\n\n', encoding="utf-8")
+    assert len(accuracy.load_rows(tmp_path / "ok.jsonl")) == 1
+
+
+def test_floor_comparison_is_exact_at_the_boundary() -> None:
+    """``int(0.29 * 100)`` is 28; a matcher exactly on its floor must pass."""
+    score = accuracy.Score("G002", true_positives=29, false_positives=71, false_negatives=0, true_negatives=0)
+    assert score.precision_meets(29)
+    assert not score.precision_meets(30)
+    assert score.recall_meets(100)
+
+
+def test_check_reports_a_missing_floor_and_a_breach(
+    monkeypatch: pytest.MonkeyPatch, criteria_rows: list[dict[str, object]]
+) -> None:
+    score = accuracy.score_criteria(criteria_rows)
+    monkeypatch.setattr(accuracy, "_floor", lambda key: None)
+    missing = accuracy._check(score)
+    assert len(missing) == 2 and all("configured" in m for m in missing)
+    monkeypatch.setattr(accuracy, "_floor", lambda key: 100)
+    breached = accuracy._check(score)
+    assert breached and all("below the configured floor" in m for m in breached)
+
+
+def test_main_report_and_check_exit_codes(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert accuracy.main(["matcher_accuracy.py", "--patterns"]) == 0
+    out = capsys.readouterr().out
+    assert "G002:" in out and "pattern" in out and "tier" in out
+    monkeypatch.setattr(accuracy, "_floor", lambda key: 100)
+    assert accuracy.main(["matcher_accuracy.py", "--check"]) == 1
+    assert "FAIL:" in capsys.readouterr().err

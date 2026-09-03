@@ -288,7 +288,8 @@ These are also regression tests now, under `tests/corpus/targets/` and
    criterion exists, a single false positive silenced the rule for the whole
    document. The matcher is now tiered (an author's `(non-success)` marker,
    then structural grammar, then anchored verb forms) and held to floors in
-   `pyproject.toml`; measured precision 0.933. In the same pass U004's
+   `pyproject.toml`; measured precision 0.919 on a corpus half of whose
+   negatives were written to trip the matcher. In the same pass U004's
    substring test, which read "shallow clone" as normative, became
    word-bounded.
 
@@ -318,6 +319,13 @@ on a non-git target), and pins the exact exit-code messages the skill quotes.
 `tests/test_agent_artifacts.py` validates the evaluation suite, the retrieval
 config, and the release workflow, because those are read only by tools outside
 this repo and would otherwise fail first in someone else's runner.
+
+Two labelled corpora sit under the same gate: `tests/corpus/targets/` holds
+synthetic target repositories with the dialect card a correct `detect` should
+emit, and `tests/fixtures/phrasing/` holds hand-labelled sentences the G002 and
+U004 matchers are scored against, with floors read from `pyproject.toml`. Both
+run inside `make test`, which needs the dev extras (`pip install -e ".[dev]"`;
+Hypothesis powers `tests/test_properties.py`).
 
 ## Enterprise AQA gate
 
@@ -449,6 +457,8 @@ change package.
   defers to the Agent Skill above rather than restating it
 - [Evaluation suite](evals/README.md) — activation, repair and adversarial
   cases proving the skill refuses to make findings disappear
+- [Eval corpus plan](docs/eval-corpus-plan.md) — the peer-reviewed plan behind
+  the labelled corpora and property tests, and what was deferred and why
 - [Next steps](docs/next-steps.md) — what is deliberately out of scope
 - [Differentiation roadmap](docs/differentiation-roadmap.md) — the wedge, the
   comparison, and the candidate change packages

@@ -84,3 +84,36 @@
 {"label": false, "text": "Denied-list entries are shown in grey."}
 {"label": false, "text": "The zero-based index is converted to one-based for display."}
 {"label": false, "text": "Blocking I/O is moved off the event loop."}
+{"label": false, "text": "The user can skip the tutorial."}
+{"label": false, "text": "The pipeline skips unchanged files."}
+{"label": false, "text": "Drop-down menus render in the header."}
+{"label": false, "text": "Users may drop tables they own."}
+{"label": false, "text": "The run raises the coverage floor to the configured value."}
+{"label": false, "text": "Raising a PR triggers CI."}
+{"label": false, "text": "The kill switch is documented in the runbook."}
+{"label": false, "text": "Timeouts are configurable via TIMEOUT_SECONDS."}
+{"label": false, "text": "The importer ignores leading whitespace."}
+{"label": false, "text": "Never-expiring tokens are supported for service accounts."}
+{"label": false, "text": "The window remains the same size after rotation."}
+{"label": false, "text": "The gateway gets 500 requests per second."}
+{"label": false, "text": "The daemon exits 10 seconds after SIGTERM."}
+{"label": false, "text": "The column is not nullable."}
+{"label": false, "text": "The build does not require a Makefile."}
+{"label": false, "text": "The tool has not been run yet."}
+{"label": true, "text": "Timed-out jobs are retried once."}
+{"label": true, "text": "HTTP 500 is returned when the backend is unreachable."}
+{"label": true, "text": "A 404 is returned for an unknown id."}
+{"label": true, "text": "The request results in a 403 when the token is expired."}
+{"label": true, "text": "The process exits with status 1 when the manifest is missing."}
+{"label": true, "text": "The job is skipped when the cache is warm."}
+{"label": true, "text": "Uncommitted changes are dropped on rollback."}
+{"label": true, "text": "The command raises ValueError on a malformed id."}
+{"label": true, "text": "On failure the partial output is deleted."}
+{"label": true, "text": "The tag list is not modified when the push is rejected."}
+{"label": true, "text": "A second witness is not written for the same stage."}
+{"label": true, "text": "The temporary file does not exist after cleanup."}
+{"label": true, "text": "The client will not retry a request that returned a 4xx."}
+{"label": true, "text": "The baseline does not change when only prose changes."}
+{"label": true, "text": "The target tree is left unchanged by every read-only verb."}
+{"label": false, "text": "Unchanged files are listed first in the report."}
+{"label": false, "text": "An untouched draft can be resumed from the dashboard."}

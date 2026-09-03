@@ -96,13 +96,21 @@ def _card_list(card: dict[str, object], field: str) -> list[str] | None:
     return [str(item) for item in value]
 
 
-def _baseline_threshold(card: dict[str, object]) -> int | None:
-    """The baseline's coverage floor, or ``None`` if it had none recorded."""
+def _baseline_threshold(card: dict[str, object]) -> int | float | None:
+    """The baseline's coverage floor, or ``None`` if it had none recorded.
+
+    Accepts a fractional floor: ``detect`` reports ``85.5`` faithfully since
+    `fix-detect-corpus-defects`, and a baseline card carrying one must not
+    make this verb silently skip every threshold delta. ``bool`` is excluded
+    explicitly because it is an ``int`` subclass and ``true`` is not a floor.
+    """
     threshold = card.get("threshold")
     if not isinstance(threshold, dict):
         return None
     value = threshold.get("value")
-    return value if isinstance(value, int) else None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return value
 
 
 def build_delta(
@@ -214,7 +222,7 @@ def build_delta(
     return entries
 
 
-def _mentions_value(literal: str, value: int) -> bool:
+def _mentions_value(literal: str, value: int | float) -> bool:
     """Whether a spec line states ``value`` as its single threshold.
 
     Delegates to ``parse_semantics.threshold_values`` — the same helper G003

@@ -118,7 +118,7 @@ branch_fail_under = 80
 # the coverage gates already use, instead of adding a second config parser.
 # Set below the measured figures, not at them: a floor equal to the current
 # value turns every future pattern addition into a failure even when it is an
-# improvement. Measured when these landed -- G002 0.933/0.977, U004 0.875/1.000.
+# improvement. Measured when these landed -- G002 0.919/0.983, U004 0.875/1.000.
 #
 # Raising a floor is a deliberate act. Lowering one needs a reason in the
 # commit message, because it means the matcher got worse.

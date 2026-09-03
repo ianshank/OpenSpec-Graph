@@ -4,7 +4,7 @@ Hand-labelled sentences used to measure the accuracy of two matchers:
 
 | File | Rows | Feeds |
 |---|---|---|
-| `criteria.jsonl` | 86 | `Criterion.is_negative` (rule **G002**) |
+| `criteria.jsonl` | 119 | `Criterion.is_negative` (rule **G002**) |
 | `criteria-ambiguous.jsonl` | 11 | nothing — see below |
 | `requirements.jsonl` | 21 | `Requirement.is_normative` (rules **U004**, **S003**) |
 | `requirements-modal-variants.jsonl` | 11 | nothing — see below |
@@ -27,12 +27,12 @@ question a reader might assume:
 
 ## Measured
 
-Recorded when the tiering landed, and kept current by
-`tools/matcher_accuracy.py`:
+Recorded when the tiering landed; re-measured with `make matcher-accuracy`
+and updated here by hand:
 
 | Rule | Precision | Recall | Before |
 |---|---|---|---|
-| G002 | 0.933 | 0.977 | 0.38 / 0.42 |
+| G002 | 0.919 | 0.983 | 0.38 / 0.42 |
 | U004 | 0.875 | 1.000 | 0.47 / 0.39 |
 
 U004's one remaining false positive is the interrogative "Shall we keep the

@@ -7,11 +7,13 @@ because each variant asserts behavior specific to its content.
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from types import ModuleType
 
 _PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 
@@ -40,6 +42,25 @@ def supports_symlinks() -> bool:
             # failure this capability probe exists to avoid.
             return False
         return True
+
+
+def load_tool(name: str, filename: str) -> ModuleType:
+    """Import a ``tools/`` script by path, in-process, under ``name``.
+
+    In-process rather than as a subprocess so coverage sees the module and
+    its functions can be called directly. Registered in ``sys.modules`` so a
+    script that imports a sibling (``from _common import ...``) resolves it
+    the same way twice. Shared by the three test modules that exercise the
+    gate scripts; the previous three verbatim copies are exactly what this
+    file exists to hold.
+    """
+    path = Path(__file__).resolve().parent.parent / "tools" / filename
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec and spec.loader, f"cannot load {path}"
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def write_spec(repo: Path, change: str, capability: str, body: str) -> Path:

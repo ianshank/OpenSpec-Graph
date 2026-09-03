@@ -19,12 +19,17 @@ docstring or its design:
 * The upstream parser recognises exactly the requirement headings present,
   independent of heading depth (the drift U005 exists to *report* must not
   change the count U002 works from).
-* ``Criterion.is_negative`` depends on wording, not on casing or surrounding
-  whitespace -- every negation pattern is compiled with ``re.IGNORECASE``.
+* ``Criterion.is_negative`` depends on wording, not on ASCII casing or
+  surrounding whitespace -- every negation pattern is compiled with
+  ``re.IGNORECASE``. (ASCII deliberately: a few Unicode letters case-map to
+  more than one code point, which is Python's business, not the matcher's.)
 
 ``derandomize=True`` is deliberate. This is a merge gate, and a gate that
 fails on one run in fifty gets overridden and then deleted; a fixed example
-set makes a failure reproducible from the failure message alone. It trades
+set makes a failure reproducible from the failure message alone. Fixed per
+interpreter, strictly: ``st.text()`` samples from the running Python's own
+Unicode tables, so 3.10 and 3.13 draw different characters -- each version
+is reproducible with itself, which is what a gate needs. It trades
 ongoing exploration for that, so widening the search is an explicit local
 activity rather than a surprise in CI:
 
@@ -200,7 +205,13 @@ _negation_words = st.lists(
     ),
     max_size=40,
 ).map("".join)
-_criterion_text = st.one_of(_negation_words, st.text(max_size=80))
+# Printable ASCII only for the casing property: the invariant is about the
+# regexes, not about Unicode. U+0130 (İ) lowercases to two code points and
+# breaks `\bis\s+not` under `.lower()` -- a real Python behaviour, not a
+# matcher defect, and not something G002 can or should promise about.
+_criterion_text = st.one_of(
+    _negation_words, st.text(alphabet=st.characters(min_codepoint=32, max_codepoint=126), max_size=80)
+)
 # Escaped rather than literal: U+00A0 (no-break space) and U+2009 (thin space)
 # are indistinguishable from a plain space in source, and both are `isspace()`
 # so a criterion really can arrive padded with them.

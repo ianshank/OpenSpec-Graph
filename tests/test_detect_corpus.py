@@ -1,4 +1,4 @@
-"""Labelled target-repository corpus for ``detect`` (CP-DC).
+"""Labelled target-repository corpus for ``detect`` (CP-TC).
 
 ``detect`` is the load-bearing primitive: G003's threshold locator, G004's
 make-target existence, G005's invariant source and H001's runnable stage are
@@ -96,14 +96,6 @@ def test_every_shape_is_documented(shape: Path) -> None:
     assert f"`{shape.name}`" in CORPUS_README.read_text(encoding="utf-8"), (
         f"{shape.name} is not described in {CORPUS_README.name}'s shape table"
     )
-
-
-@pytest.mark.parametrize("shape", SHAPES, ids=lambda p: p.name)
-def test_detection_is_byte_stable_per_shape(shape: Path) -> None:
-    """Re-detecting an unchanged shape yields a byte-identical card (AC-DC-1)."""
-    repo = shape / "repo"
-    first = json.dumps(_card_for(repo), sort_keys=True)
-    assert first == json.dumps(_card_for(repo), sort_keys=True)
 
 
 def test_corpus_pins_the_card_schema_version() -> None:

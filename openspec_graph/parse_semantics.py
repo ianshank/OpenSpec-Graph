@@ -126,7 +126,13 @@ ADR_REF = re.compile(r"\bADR-\d+\b")
 PYTEST_SEL = re.compile(r"pytest\s+-k\s+(\S+)")
 
 # A bare percentage or >= NN in criterion text, which should come from config.
-HARD_THRESHOLD = re.compile(r"(?:≥|>=|>)\s*\d{2,3}\s*%?|\b\d{2,3}\s*%")
+# The number may carry a decimal fraction: coverage.py accepts a fractional
+# floor, `detect` now reports one faithfully, and G003's "cites the exact
+# detected floor" suppression has to be able to see 85.5 as 85.5 rather than
+# as 85 -- otherwise the one repo whose floor is fractional gets a false G003
+# on every criterion that cites it correctly.
+HARD_THRESHOLD = re.compile(r"(?:≥|>=|>)\s*\d{2,3}(?:\.\d+)?\s*%?|\b\d{2,3}(?:\.\d+)?\s*%")
+_THRESHOLD_NUMBER = re.compile(r"\d{2,3}(?:\.\d+)?")
 THRESHOLD_ALLOWLIST = (
     "governance-policy.json",
     "pyproject.toml",
@@ -153,7 +159,8 @@ THRESHOLD_ALLOWLIST = (
 # *silence*: G002 asks only whether a spec has at least ONE non-success
 # criterion, so a single false positive anywhere in the document switches the
 # rule off. "The block renders below the header" used to satisfy it. Measured
-# again after this tiering: precision 0.93, recall 0.98.
+# again after this tiering and a second adversarial round: precision 0.92,
+# recall 0.98.
 #
 #   annotation -- the author said so. Harness-dialect criteria carry a
 #                 parenthesised marker ("**AC-WM-3 (non-success):**"), which is
@@ -202,15 +209,20 @@ NEGATION_PATTERNS: tuple[NegationPattern, ...] = (
     _negation("annotated_non_success", ANNOTATION_TIER, r"\b(?:non-success|negative)\b"),
     # -- structural ---------------------------------------------------------
     _negation("non_success", STRUCTURAL_TIER, r"\bnon-success\b"),
-    # "IS NOT NULL" is a SQL predicate being described, not a refusal.
+    # A prohibition is always an obligation about a failure path.
+    _negation("prohibition", STRUCTURAL_TIER, r"\b(?:must|shall|should|may)\s+not\b"),
+    # A negated verb usually states an outcome ("is not created", "does not
+    # retry") but sometimes a capability ("does not require a Makefile", "is
+    # not nullable"); the latter are counted honestly against this pattern in
+    # the corpus. "IS NOT NULL" is a SQL predicate being described.
     _negation(
-        "negated_modal",
+        "negated_verb",
         STRUCTURAL_TIER,
-        r"\b(?:must|shall|does|do|did|is|are|was|were|will|would|can|could|should|may"
-        r"|has|have)\s+not\b(?!\s+null\b)",
+        r"\b(?:does|do|is|are|was|were|will|would|can|could)\s+not\b(?!\s+null\b)",
     ),
     _negation("cannot", STRUCTURAL_TIER, r"\bcannot\b"),
-    _negation("never", STRUCTURAL_TIER, r"\bnever\b"),
+    # (?!-): "never-expiring tokens" is a feature, not an absence.
+    _negation("never", STRUCTURAL_TIER, r"\bnever\b(?!-)"),
     _negation("neither", STRUCTURAL_TIER, r"\bneither\b"),
     # "no second tag is created"
     _negation(
@@ -243,23 +255,37 @@ NEGATION_PATTERNS: tuple[NegationPattern, ...] = (
     _negation(
         "exit_code",
         STRUCTURAL_TIER,
-        r"\bexits?\s+(?:with\s+)?(?:code\s+)?[1-9]\d*\b|\bexit\s+(?:code\s+)?[1-9]\d*\b",
+        # `status` as well as `code`; and a trailing time unit means "exits 10
+        # seconds after SIGTERM" -- a duration, not an exit code.
+        r"\bexits?\s+(?:with\s+)?(?:(?:code|status)\s+)?[1-9]\d*\b"
+        r"(?!\s*(?:s|sec|secs|seconds?|ms|min|minutes?|hours?)\b)"
+        r"|\bexit\s+(?:(?:code|status)\s+)?[1-9]\d*\b",
     ),
     _negation(
         "http_error",
         STRUCTURAL_TIER,
-        r"\b(?:returns?|yields?|responds?\s+with|gets?|receives?|answers?\s+with"
-        r"|bounced\s+with)\s+(?:an?\s+)?[45]\d{2}\b",
+        # `gets` is excluded: "gets 500 requests per second" is throughput.
+        r"\b(?:returns?|yields?|responds?(?:\s+with)?|receives?|answers?\s+with"
+        r"|bounced\s+with|results?\s+in)\s+(?:an?\s+)?(?:HTTP\s+)?[45]\d{2}\b"
+        r"|\bgets?\s+an?\s+(?:HTTP\s+)?[45]\d{2}\b"
+        r"|\b(?:HTTP\s+)?[45]\d{2}\s+(?:is|are|was|were)\s+returned\b",
     ),
     _negation("no_op", STRUCTURAL_TIER, r"\bno-?ops?\b"),
+    # Predicative only: "is unchanged", "leaves the tree untouched". The
+    # attributive form ("skips unchanged files") describes input, not outcome.
     _negation(
-        "state_preserved", STRUCTURAL_TIER, r"\b(?:unchanged|untouched|unmodified|unaffected)\b(?!-)"
+        "state_preserved",
+        STRUCTURAL_TIER,
+        r"\b(?:is|are|was|were|remains?|remained|stays?|stayed|left)\s+"
+        r"(?:unchanged|untouched|unmodified|unaffected)\b(?!-)"
+        r"|\b(?:leaves?|left|keeps?|kept)\s+\w+(?:\s+\w+){0,3}\s+"
+        r"(?:unchanged|untouched|unmodified|unaffected)\b(?!-)",
     ),
     _negation(
         "remains_absent",
         STRUCTURAL_TIER,
         r"\b(?:remains?|stays?|stayed|remained)\s+(?:absent|empty|off|unset|closed"
-        r"|disabled|untouched|the\s+same)\b",
+        r"|disabled|untouched)\b",
     ),
     # The bare word "negative" belongs to the annotation tier; in prose it needs
     # a noun to mean a failure path rather than a number below zero.
@@ -276,7 +302,14 @@ NEGATION_PATTERNS: tuple[NegationPattern, ...] = (
     _negation("reject", LEXICAL_TIER, r"\breject(?:s|ed|ing)?\b(?!-)"),
     _negation("deny", LEXICAL_TIER, r"\bden(?:y|ies|ied)\b(?!-)"),
     _negation("fail", LEXICAL_TIER, r"\bfail(?:s|ed|ing)?\b(?!-)"),
-    _negation("failure", LEXICAL_TIER, r"\bfailures?\b(?!-)"),
+    # The noun only in an outcome position: "on failure", "the failure is
+    # reported" -- not "the word failure appears in the glossary".
+    _negation(
+        "failure",
+        LEXICAL_TIER,
+        r"\b(?:on|upon|after)\s+(?:\w+\s+){0,2}failure\b|\bfailures?\s+(?:is|are|was|were)\b"
+        r"|\bfailure\s+(?:mode|path|case)s?\b",
+    ),
     # Copula-anchored: "block" is overwhelmingly a noun in software prose.
     _negation(
         "blocked", LEXICAL_TIER, r"\b(?:is|are|was|were|be|been|being|gets?|got)\s+blocked\b"
@@ -284,14 +317,24 @@ NEGATION_PATTERNS: tuple[NegationPattern, ...] = (
     _negation("abort", LEXICAL_TIER, r"\babort(?:s|ed|ing)?\b"),
     _negation("halt", LEXICAL_TIER, r"\bhalt(?:s|ed|ing)?\b"),
     _negation("decline", LEXICAL_TIER, r"\bdeclin(?:e|es|ed|ing)\b"),
-    _negation("skip", LEXICAL_TIER, r"\bskip(?:s|ped|ping)?\b"),
-    _negation("drop", LEXICAL_TIER, r"\bdrop(?:s|ped|ping)?\b"),
-    _negation("ignore", LEXICAL_TIER, r"\bignor(?:e|es|ed|ing)\b"),
+    # Passive only, as one pattern: the active forms are ordinary software
+    # verbs ("the user can skip the tutorial", "users may drop tables",
+    # "the importer ignores whitespace", "kill switch") and scored worse than
+    # chance in review. "The job is skipped" / "changes are dropped" are the
+    # outcome uses that survive.
+    _negation(
+        "passive_refusal",
+        LEXICAL_TIER,
+        r"\b(?:is|are|was|were|be|been|being|gets?|got)\s+"
+        r"(?:skipped|dropped|ignored|killed|terminated)\b",
+    ),
     _negation("prevent", LEXICAL_TIER, r"\bprevent(?:s|ed|ing)?\b"),
-    _negation("kill", LEXICAL_TIER, r"\bkill(?:s|ed|ing)?\b"),
-    _negation("terminate", LEXICAL_TIER, r"\bterminat(?:e|es|ed|ing)\b"),
-    _negation("timeout", LEXICAL_TIER, r"\btimes?\s+out\b|\btimed\s+out\b|\btimeouts?\b"),
-    _negation("raise", LEXICAL_TIER, r"\brais(?:e|es|ed|ing)\b"),
+    # No bare "timeout(s)": "timeouts are configurable" is a setting.
+    _negation("timeout", LEXICAL_TIER, r"\btimes?\s+out\b|\btimed[\s-]out\b"),
+    # Only raising an error/exception: "raises the coverage floor" is success.
+    _negation(
+        "raise", LEXICAL_TIER, r"\brais(?:e|es|ed|ing)\s+(?:an?\s+)?\w*(?:error|exception)s?\b"
+    ),
     _negation("error_out", LEXICAL_TIER, r"\berrors?\s+out\b"),
     _negation(
         "error_result",
@@ -479,13 +522,20 @@ def hard_coded(text: str, dialect: str = "") -> tuple[str, ...]:
     return tuple(offenders)
 
 
-def threshold_values(line: str) -> tuple[int, ...]:
-    """Every threshold-shaped number on a line (each HARD_THRESHOLD span), as ints."""
-    values: list[int] = []
+def threshold_values(line: str) -> tuple[int | float, ...]:
+    """Every threshold-shaped number on a line (each HARD_THRESHOLD span).
+
+    An integral value comes back as ``int`` and a fractional one as ``float``,
+    the same contract as ``detect.as_threshold_number`` -- so ``values[0] ==
+    profile.threshold.value`` compares like with like whichever way the floor
+    was written.
+    """
+    values: list[int | float] = []
     for match in HARD_THRESHOLD.finditer(line):
-        digits = re.search(r"\d{2,3}", match.group())
-        if digits:
-            values.append(int(digits.group()))
+        number = _THRESHOLD_NUMBER.search(match.group())
+        if number:
+            value = float(number.group())
+            values.append(int(value) if value.is_integer() else value)
     return tuple(values)
 
 

@@ -113,7 +113,6 @@ mid-edit:
   dialect rather than writing it) can misclassify the spec as the dialect it
   merely describes — a self-referential trap this repo has hit more than
   once while writing specs *about* its own dialect grammar.
-
 - Editing anything under `tests/corpus/targets/` → reminds that each
   `expected.json` is a hand-written label, never a snapshot of the detector,
   and to run `pytest tests/test_detect_corpus.py`. The
@@ -134,7 +133,7 @@ the write already landed — it is `PostToolUse`'s contract for surfacing
 block.
 
 See also `.claude/agents/` (spec-drafter, spec-adversary, planlint-verifier —
-this repo's own dogfooded OpenSpec change-package workflow) and the four
+this repo's own dogfooded OpenSpec change-package workflow) and the
 contributor skills under `.claude/skills/`: `planlint-add-rule` (the checklist
 the first hook case above points at), `planlint-add-eval-case`,
 `planlint-add-detect-shape` and `planlint-add-phrasing-case`. The hook script

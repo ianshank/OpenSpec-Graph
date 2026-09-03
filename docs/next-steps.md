@@ -93,7 +93,7 @@ over-engineering.
    `tests/corpus/targets/`: labelled target repositories whose expected
    dialect card is compared through the same `dialect_card.diff_cards()` that
    `--diff` uses, on every `make test`. That *is* a detection-drift gate, run
-   against thirteen known shapes rather than against one saved baseline of
+   against a labelled set of known shapes rather than against one saved baseline of
    this repo, which is the more useful of the two. A `detect --diff` job
    against a committed baseline of this repository stays unwired: its card
    changes only when the Makefile or floors change, and both already fail
@@ -104,8 +104,10 @@ over-engineering.
    recognised. A quoted header (`["tool"."coverage"."report"]`), a dotted key
    at top level (`tool.coverage.report.fail_under = 90`), or an inline table
    (`report = { fail_under = 90 }`) reads as "no floor". The old whole-file
-   regex caught the last two by accident, while also attributing floors from
-   unrelated tables to this one; the trade was made deliberately. A stdlib
+   regex caught only the quoted-header form, and only by accident of matching
+   under every table (which is how it also attributed floors from unrelated
+   tables to this one); the dotted-key and inline-table forms were never read
+   by either implementation. The trade was made deliberately. A stdlib
    `tomllib` parse would cover every form but only on 3.11+, and detection
    must be byte-identical across the whole matrix. Revisit when 3.10 leaves
    the matrix.

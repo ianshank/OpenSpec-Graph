@@ -45,6 +45,13 @@ were first written; the fixes landed with them.
 | `define-block-fake-targets` | targets = build, define-thing | A colon inside a `define` body is opaque replacement text, not a rule. `define-thing:` is a real target whose name merely starts with the directive keyword. |
 | `node-vitest-no-makefile` | languages = node, no targets, no threshold | Stages come from a Makefile and thresholds from the Python/policy locators. A documented limit. |
 | `jvm-gradle-jacoco` | languages = jvm, no threshold | The language is detected; the JaCoCo `violationRules` minimum is not a supported threshold locator. A documented limit. |
+| `bom-coveragerc-floor` | locator + value | A BOM-prefixed `.coveragerc` reached configparser as `﻿[report]`, raised `MissingSectionHeaderError`, and the floor silently read as absent. Same defect class as the Makefile BOM. |
+| `multiline-string-fail-under` | `threshold.value` = 90 | `exclude_lines = """…"""` is a free-text list that lives in exactly this table; a `fail_under = 42` line inside the string must be opaque, not the floor. |
+| `multiline-array-fail-under` | `threshold.value` = 90 | An array element that looks like a table header (`"[not a table]"`) must not reset the current table, and one that looks like a key must not become the floor. |
+| `quoted-table-header` | `threshold.value` = 90 | `["tool"."coverage"."report"]` is the same table spelled with quoted segments. |
+| `inline-table-fail-under` | `threshold` = null | `report = { fail_under = 90 }` is valid TOML the scanner does not read. Pinned as a documented limit (`docs/next-steps.md` 7a) so supporting it is a decision. |
+| `array-of-tables-fail-under` | `threshold` = null | `[[tool.coverage.report]]` is an array of tables, never the table holding a floor. |
+| `quoted-string-fail-under` | `threshold` = null | `fail_under = "90"` is a string; coverage.py rejects it and so does planlint, rather than guessing. |
 
 Three further cases are generated inside the test rather than committed,
 because a directory cannot be represented as a file in git and a large

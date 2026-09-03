@@ -7,7 +7,7 @@ core `make ci` gate with the enterprise gates (typecheck, security, docs).
 
 | Command | What it checks | Failure mode |
 |---|---|---|
-| `make test` | pytest + line & branch coverage + generated-artifact freshness | below floor, or a stale rule catalog / plugin manifest → exit 1 |
+| `make test` | pytest + line & branch coverage + generated-artifact freshness + detection-corpus labels + matcher-accuracy floors | below floor, a stale rule catalog / plugin manifest, a mislabelled corpus shape, or a matcher under its floor → exit 1 |
 | `make lint` | ruff across `openspec_graph`, `tests`, `tools` | any violation → exit 1 |
 | `make typecheck` | mypy (config in `pyproject.toml`) | type error → exit 1 |
 | `make security` | gitleaks (or deterministic fallback) | committed secret → exit 1 |
@@ -25,7 +25,9 @@ absent from the table above because they never fail: staleness is caught by
 
 Coverage floors are read from `pyproject.toml` at run time by
 `tools/check_coverage_floor.py` (line, `fail_under`) and
-`tools/check_branch_coverage.py` (branch, `branch_fail_under`). Every file
+`tools/check_branch_coverage.py` (branch, `branch_fail_under`), and the four
+`[tool.specgraph]` `*_pct` matcher-accuracy floors by `tools/matcher_accuracy.py`
+through the same `_common.read_pyproject_int` helper. Every file
 under `.github/workflows/` is scanned for a re-introduced literal, not just
 the continuous-integration one. The Makefile
 and workflow YAML contain **no** quality-gate thresholds (coverage floors) and
@@ -153,7 +155,7 @@ floors are config, never Make or workflow YAML, because rule G003 says so and
 
 | Rule | Precision | Recall | Before tiering |
 |---|---|---|---|
-| G002 | 0.933 | 0.977 | 0.38 / 0.42 |
+| G002 | 0.919 | 0.983 | 0.38 / 0.42 |
 | U004 | 0.875 | 1.000 | 0.47 / 0.39 |
 
 Read those with the corpus README's three caveats: the negative examples were

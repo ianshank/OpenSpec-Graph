@@ -17,7 +17,8 @@
   ],
   "excludeFiles": [
     "CHANGELOG.md",
-    "docs/distribution-plan.md"
+    "docs/distribution-plan.md",
+    "docs/eval-corpus-plan.md"
   ],
   "rules": [
     "planlint is a linter and a gate, not an authoring tool. It never writes spec prose.",

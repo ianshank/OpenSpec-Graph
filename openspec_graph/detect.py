@@ -121,6 +121,14 @@ def read_text_or_none(path: Path, what: str) -> str | None:
     which is the convention ``_invariants``/``_adrs`` already followed and the
     only safe posture for an untrusted target repo.
     """
+    # is_file() first, not just a try/except around the read: a FIFO named
+    # `Makefile` passes exists(), and open() on it blocks until a writer
+    # appears -- detect.profile() would never return, and no exception would
+    # ever be raised to catch. Git cannot store a FIFO so a clone is safe,
+    # but "safe to point at an unfamiliar tree" is a working-tree promise.
+    if not path.is_file():
+        logger.debug("%s: %s exists but is not a regular file; treated as absent", what, path)
+        return None
     try:
         return path.read_text(encoding="utf-8-sig", errors="replace")
     except OSError as exc:
@@ -128,31 +136,76 @@ def read_text_or_none(path: Path, what: str) -> str | None:
         return None
 
 
-def as_threshold_number(raw: object) -> int | float | None:
+# The only spelling of a coverage floor this module accepts from text: ASCII
+# digits with an optional decimal fraction. Deliberately narrower than
+# float()'s grammar, which also takes "1e2", "1_000", "-5", "nan", full-width
+# and Arabic-Indic digits -- none of which coverage.py's own config accepts,
+# and any of which would let a stray string become a floor W002 then compares
+# real witness coverage against.
+_THRESHOLD_LITERAL = re.compile(r"[0-9]+(?:\.[0-9]+)?")
+# A coverage floor is a percentage. Anything outside this range is not one,
+# whatever a config file claims.
+THRESHOLD_MIN, THRESHOLD_MAX = 0, 100
+
+
+def as_threshold_number(raw: object, *, accept_str: bool = True) -> int | float | None:
     """Coerce a detected coverage floor to a number, or ``None``.
 
     Returns an ``int`` for an integral value and a ``float`` only for a real
     fraction, so an existing integer floor keeps rendering as ``90`` rather
     than ``90.0`` -- the dialect card is a byte-stability contract (AC-DC-1)
     and a saved ``detect --diff`` baseline must not report drift purely
-    because this function started widening the type. Rejects booleans (``True``
-    is an ``int`` in Python) and non-finite floats, neither of which is a
-    coverage floor.
+    because this function started widening the type.
+
+    Rejects: booleans (``True`` is an ``int`` in Python); non-finite floats;
+    anything outside ``0..100``; and, when ``accept_str`` is false, any string
+    at all -- the JSON policy path takes numbers only, as it always did, so a
+    quoted ``"90"`` there stays a misconfiguration rather than becoming a
+    floor. String input is matched against :data:`_THRESHOLD_LITERAL`, not
+    handed to ``float()``. Every rejection is logged at debug level: "why did
+    planlint not see my floor?" is the question this module exists to answer.
     """
     if isinstance(raw, bool):
+        logger.debug("threshold: rejected boolean %r as a floor", raw)
         return None
     if isinstance(raw, (int, float)):
         value = float(raw)
     elif isinstance(raw, str):
-        try:
-            value = float(raw)
-        except ValueError:
+        if not accept_str:
+            logger.debug("threshold: rejected quoted string %r; this locator takes a number", raw)
             return None
+        literal = raw.strip()
+        if not _THRESHOLD_LITERAL.fullmatch(literal):
+            logger.debug("threshold: rejected %r; not a plain decimal", raw)
+            return None
+        value = float(literal)
     else:
+        logger.debug("threshold: rejected %r (%s) as a floor", raw, type(raw).__name__)
         return None
-    if not math.isfinite(value):
+    if not math.isfinite(value) or not THRESHOLD_MIN <= value <= THRESHOLD_MAX:
+        logger.debug(
+            "threshold: rejected %r; a coverage floor is a percentage in %d..%d",
+            raw, THRESHOLD_MIN, THRESHOLD_MAX,
+        )
         return None
     return int(value) if value.is_integer() else value
+
+
+# TOML multi-line string delimiters. A line inside one of these is data, not
+# a key, however much it looks like `fail_under = 42` -- and
+# `[tool.coverage.report]` is exactly where coverage.py's free-text
+# `exclude_lines`/`exclude_also` lists live, so this is the realistic case.
+_ML_STRING_DELIMS = ('"""', "'''")
+
+
+def _normalise_table_name(raw: str) -> str:
+    """``[ tool . "coverage" . report ]`` -> ``tool.coverage.report``.
+
+    Handles whitespace around dots and simple quoted segments. A quoted
+    segment that itself contains a dot is not handled and is a documented
+    limit (docs/next-steps.md 7a).
+    """
+    return ".".join(seg.strip().strip("\"'") for seg in raw.split("."))
 
 
 def scoped_fail_under(text: str, table: str) -> int | float | None:
@@ -174,10 +227,38 @@ def scoped_fail_under(text: str, table: str) -> int | float | None:
     """
     current = ""
     elsewhere: list[str] = []
-    for line in text.splitlines():
+    in_ml_string = False
+    array_depth = 0
+    for line in machinery.strip_bom(text).splitlines():
+        stripped = line.strip()
+        # Multi-line strings: a line that opens (or closes) one toggles the
+        # state; everything inside is opaque. Counting delimiters per line
+        # handles the `key = """` opener, the bare `"""` closer, and a
+        # one-line `"""x"""` (even count, no toggle) alike.
+        delims = sum(stripped.count(d) for d in _ML_STRING_DELIMS)
+        if in_ml_string:
+            if delims % 2:
+                in_ml_string = False
+            continue
+        if delims % 2:
+            in_ml_string = True
+            continue
+        # Multi-line arrays: `key = [` without its `]` opens one; a closing
+        # `]` on a later line ends it. Lines inside are elements, not keys
+        # and not table headers, so `[1, 2]` as an element cannot reset the
+        # current table.
+        if array_depth:
+            array_depth += stripped.count("[") - stripped.count("]")
+            continue
         header = _TOML_TABLE.match(line)
         if header:
-            current = header.group(1).strip()
+            # `[[x]]` is an array of tables -- a different construct, and never
+            # the one holding a coverage floor. Scope it out rather than
+            # mistaking it for `[x]`.
+            current = "" if stripped.startswith("[[") else _normalise_table_name(header.group(1))
+            continue
+        if "=" in stripped and stripped.count("[") > stripped.count("]"):
+            array_depth = stripped.count("[") - stripped.count("]")
             continue
         found = _TOML_FAIL_UNDER.match(line)
         if not found:
@@ -360,7 +441,14 @@ def _make_target_facts(root: Path) -> machinery.MakefileFacts:
         # something *else* in the file (an include, a conditional) it
         # couldn't fully resolve. AC-MP-4: never weaken G004, only remove
         # false positives.
-        widened = tuple(sorted(set(facts.targets) | set(_legacy_make_targets(text))))
+        legacy = set(_legacy_make_targets(text))
+        added = sorted(legacy - set(facts.targets))
+        if added:
+            logger.debug(
+                "make_targets: structural parse is low-confidence; regex fallback added %s",
+                added,
+            )
+        widened = tuple(sorted(set(facts.targets) | legacy))
         facts = dataclasses.replace(facts, targets=widened)
     return facts
 
@@ -374,17 +462,23 @@ def _read_ini_fail_under(path: Path, section: str) -> int | float | None:
     than ``parser.getint``, which rejects the fractional floor coverage.py
     itself accepts and would silently report "no floor detected" for it.
     """
-    if not path.exists():
+    if not path.is_file():
         return None
     parser = configparser.ConfigParser(interpolation=None)
     try:
-        parser.read(path, encoding="utf-8")
+        # utf-8-sig for the same reason every other read here uses it: a
+        # BOM-prefixed `.coveragerc` otherwise reaches configparser as
+        # "﻿[report]", raises MissingSectionHeaderError, and the floor
+        # silently reads as absent -- the class of defect this file exists to
+        # close.
+        parser.read(path, encoding="utf-8-sig")
     except (configparser.Error, OSError) as exc:
         logger.debug("threshold: %s could not be parsed: %s", path, exc)
         return None
     if not parser.has_option(section, "fail_under"):
+        logger.debug("threshold: %s has no fail_under under [%s]", path.name, section)
         return None
-    return as_threshold_number(parser.get(section, "fail_under").strip())
+    return as_threshold_number(parser.get(section, "fail_under"))
 
 
 def _threshold(root: Path) -> ThresholdSource | None:
@@ -397,14 +491,19 @@ def _threshold(root: Path) -> ThresholdSource | None:
     for policy in policy_candidates:
         if not policy.exists():
             continue
-        try:
-            data = json.loads(policy.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as exc:
-            logger.debug("threshold: %s exists but could not be read: %s", policy, exc)
+        raw = read_text_or_none(policy, "threshold")
+        if raw is None:
             continue
-        coverage = data.get("coverage")
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            logger.debug("threshold: %s is not valid JSON: %s", policy, exc)
+            continue
+        coverage = data.get("coverage") if isinstance(data, dict) else None
         if isinstance(coverage, dict):
-            lines = as_threshold_number(coverage.get("lines"))
+            # Numbers only, as this locator always required: a quoted "90" in
+            # a policy file is a misconfiguration, not a floor.
+            lines = as_threshold_number(coverage.get("lines"), accept_str=False)
             if lines is not None:
                 rel = to_posix_relative(policy, root)
                 logger.debug("threshold: found coverage.lines in %s", rel)

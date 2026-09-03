@@ -1,0 +1,6 @@
+[tool.coverage.report]
+exclude_also = [
+  "fail_under = 3",
+  "[not a table]",
+]
+fail_under = 90

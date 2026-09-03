@@ -25,9 +25,9 @@ import sys
 from pathlib import Path
 
 import pytest
-from support import run_cli, write_spec
 
 from openspec_graph import __version__
+from tests.support import load_tool, run_cli, write_spec
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILL_DIR = REPO_ROOT / "skills" / "planlint-spec-governance"
@@ -457,21 +457,9 @@ def test_write_verbs_still_exit_zero_when_the_target_is_writable(
 # --- AC-SD-2 / AC-SD-3: the generated catalog -------------------------------
 
 
-def _load_tool(name: str, filename: str):
-    """Import a ``tools/`` script by path, in-process.
-
-    In-process rather than by subprocess for two reasons: coverage sees it
-    (``tools/`` scripts invoked as subprocesses are measured by nothing), and
-    module attributes can be monkeypatched so a test never has to write to a
-    tracked file to exercise a failure path.
-    """
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(name, REPO_ROOT / "tools" / filename)
-    assert spec and spec.loader, f"cannot load tools/{filename}"
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+# _load_tool lives in tests/support.py as load_tool: three verbatim copies
+# is the definition of a helper that belongs there.
+_load_tool = load_tool
 
 
 def _run_renderer(*args: str) -> subprocess.CompletedProcess:

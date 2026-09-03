@@ -1,0 +1,5 @@
+[tool.coverage.report]
+exclude_lines = """
+fail_under = 42
+"""
+fail_under = 90

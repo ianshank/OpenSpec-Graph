@@ -58,7 +58,7 @@ CRITERIA_CORPUS = CORPUS_DIR / "criteria.jsonl"
 REQUIREMENTS_CORPUS = CORPUS_DIR / "requirements.jsonl"
 
 SPECGRAPH_TABLE = "[tool.specgraph]"
-# (rule, corpus, precision key, recall key) -- the floors this gate enforces.
+# rule -> (precision floor key, recall floor key) in [tool.specgraph].
 FLOOR_KEYS = {
     "G002": ("g002_min_precision_pct", "g002_min_recall_pct"),
     "U004": ("u004_min_precision_pct", "u004_min_recall_pct"),
@@ -102,8 +102,22 @@ class Score:
         present = self.true_positives + self.false_negatives
         return self.true_positives / present if present else 1.0
 
+    def precision_meets(self, floor_pct: int) -> bool:
+        """``precision >= floor_pct / 100``, in integers.
+
+        Never ``int(self.precision * 100)``: binary floats make ``0.29 * 100``
+        come out as ``28.999...``, so a matcher sitting exactly on its floor
+        would fail by rounding artefact. Cross-multiplying keeps it exact.
+        """
+        flagged = self.true_positives + self.false_positives
+        return self.true_positives * 100 >= floor_pct * flagged
+
+    def recall_meets(self, floor_pct: int) -> bool:
+        present = self.true_positives + self.false_negatives
+        return self.true_positives * 100 >= floor_pct * present
+
     def precision_pct(self) -> int:
-        """Precision as a floored integer percentage, for comparison to config."""
+        """Display only (floored); gating uses :meth:`precision_meets`."""
         return int(self.precision * 100)
 
     def recall_pct(self) -> int:
@@ -119,9 +133,20 @@ def load_rows(path: Path) -> list[dict[str, object]]:
         if not line.strip():
             continue
         try:
-            rows.append(json.loads(line))
-        except json.JSONDecodeError as exc:  # pragma: no cover - corpus is committed
+            row = json.loads(line)
+        except json.JSONDecodeError as exc:
             raise ValueError(f"{path.name} line {number} is not valid JSON: {exc}") from exc
+        # Validate the shape here, once, so every scorer can trust its rows: a
+        # bare list or a row without a boolean label would otherwise surface
+        # as a TypeError deep inside a tally, or -- worse -- be scored as a
+        # silent negative.
+        if not isinstance(row, dict):
+            raise ValueError(f"{path.name} line {number}: expected an object, got {type(row).__name__}")
+        if not isinstance(row.get("text"), str) or not row["text"].strip():
+            raise ValueError(f"{path.name} line {number}: missing or empty 'text'")
+        if not isinstance(row.get("label"), bool):
+            raise ValueError(f"{path.name} line {number}: 'label' must be true or false")
+        rows.append(row)
     return rows
 
 
@@ -228,18 +253,18 @@ def _check(score: Score) -> list[str]:
     """
     precision_key, recall_key = FLOOR_KEYS[score.rule]
     failures: list[str] = []
-    for key, actual, name in (
-        (precision_key, score.precision_pct(), "precision"),
-        (recall_key, score.recall_pct(), "recall"),
+    for key, meets, actual, name in (
+        (precision_key, score.precision_meets, score.precision, "precision"),
+        (recall_key, score.recall_meets, score.recall, "recall"),
     ):
         floor = _floor(key)
         if floor is None:
             failures.append(f"{score.rule}: no {key} configured in pyproject.toml {SPECGRAPH_TABLE}")
             continue
-        logger.debug("matcher_accuracy: %s %s=%d floor=%d", score.rule, name, actual, floor)
-        if actual < floor:
+        logger.debug("matcher_accuracy: %s %s=%.3f floor=%d%%", score.rule, name, actual, floor)
+        if not meets(floor):
             failures.append(
-                f"{score.rule}: {name} {actual}% is below the configured floor {floor}% "
+                f"{score.rule}: {name} {actual:.3f} is below the configured floor of {floor}% "
                 f"({key} in pyproject.toml)"
             )
     return failures

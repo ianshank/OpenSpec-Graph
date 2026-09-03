@@ -510,3 +510,19 @@ def test_hooks_ci_table_lists_every_ci_job() -> None:
     table_cells = set(re.findall(r"^\|\s*`([\w-]+)`", hooks, re.MULTILINE))
     missing = sorted(job for job in jobs if job not in table_cells)
     assert not missing, f"docs/hooks.md CI hooks table is missing rows for jobs: {missing}"
+
+
+def test_makefile_has_matcher_accuracy_report_target() -> None:
+    """`make matcher-accuracy` is a report, not a gate: documented, `.PHONY`,
+    and composed into neither `ci` nor `pre-pr`. The gate for the same
+    numbers is `tests/test_matcher_accuracy.py`, inside `make test`."""
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert re.search(r"^matcher-accuracy:.*?##", makefile, re.MULTILINE), (
+        "Makefile has no documented `matcher-accuracy` target"
+    )
+    phony = next(line for line in makefile.splitlines() if line.startswith(".PHONY"))
+    assert "matcher-accuracy" in phony.split(), "matcher-accuracy missing from .PHONY"
+    for gate in ("ci", "pre-pr"):
+        line = next(ln for ln in makefile.splitlines() if ln.startswith(f"{gate}:"))
+        assert "matcher-accuracy" not in line.split(), f"{gate} must not compose the report target"
+
