@@ -10,13 +10,12 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import json
 import re
 import subprocess
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
-
-from tests.support import normalize_root
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PKG = REPO_ROOT / "openspec_graph"
@@ -105,17 +104,24 @@ def _run_cli(root: Path, *args: str) -> str:
         capture_output=True, text=True, encoding="utf-8", check=False,
     )
     assert r.returncode == 0, f"{' '.join(args)} failed: {r.stderr}"
-    # Raw + JSON-escaped path normalization lives in the shared helper -- a
-    # bare native-path replace is POSIX-only, because json.dumps doubles
-    # every backslash (tests/support.py's normalize_root docstring).
-    out = normalize_root(r.stdout, root)
-    # Normalize the envelope's tool_version the same way, and for the same
-    # reason: it is machine/build state, not spec content. Without this every
-    # release would re-pin _EXPECTED_HASHES["validate"] on a version bump that
-    # changed no output shape at all -- the hash would stop meaning "the
-    # findings projection is stable" and start meaning "nobody bumped the
-    # version" (AC-FE-7).
-    return _TOOL_VERSION.sub('"tool_version": "<VERSION>"', out)
+    # Normalize the machine/build-state fields at the JSON level, not by
+    # string-replacing the path. The CLI emits Path(args.target).resolve(),
+    # whose spelling (8.3 short names, junctions, a symlinked temp dir, drive
+    # case) can differ from the str(root) this test built -- so a str.replace
+    # of the path is a silent no-op on exactly the runners whose spelling
+    # diverges (the windows-latest leg went red on this). Parsing and
+    # rewriting the field is immune to spelling, escaping, and codepage; the
+    # re-serialization (indent=2, ensure_ascii) matches the CLI's own dumps.
+    # tool_version is machine state for the same reason (a version bump that
+    # changed no output shape must not re-pin the golden hash -- AC-FE-7).
+    payload = json.loads(r.stdout)
+    if isinstance(payload, dict):
+        for key in ("target", "root"):
+            if isinstance(payload.get(key), str):
+                payload[key] = "<ROOT>"
+        if "tool_version" in payload:
+            payload["tool_version"] = "<VERSION>"
+    return json.dumps(payload, indent=2, ensure_ascii=True) + "\n"
 
 
 def _outputs(root: Path) -> dict[str, str]:

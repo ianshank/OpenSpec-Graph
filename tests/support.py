@@ -94,9 +94,16 @@ def normalize_root(text: str, root: Path) -> str:
 
     ``json.dumps`` escapes each backslash as ``\\\\``, so on Windows the raw
     native path never textually matches inside ``--json`` output -- a bare
-    ``text.replace(str(root), ...)`` normalizes POSIX only. One helper for
-    both forms, so no third call site re-learns this by failing on Windows
-    (test_decomposition's golden hashes had it; test_findings_envelope's
-    two-checkout test didn't).
+    ``text.replace(str(root), ...)`` normalizes POSIX only. And the CLI emits
+    ``Path(args.target).resolve()``, whose spelling can differ from the
+    ``str(root)`` a test built (8.3 short names, junctions, a symlinked
+    ``TemporaryDirectory``) -- so a single fixed spelling can be a silent
+    no-op, leaving the absolute path in the hash (this exact failure shipped
+    the windows-latest CI leg red). Try every plausible spelling of the same
+    directory, in both raw and JSON-escaped form, so the absolute path is
+    always erased regardless of how ``resolve()`` rendered it.
     """
-    return text.replace(str(root), "<ROOT>").replace(str(root).replace("\\", "\\\\"), "<ROOT>")
+    spellings = {str(root), str(root.resolve())}
+    for spelling in spellings:
+        text = text.replace(spelling, "<ROOT>").replace(spelling.replace("\\", "\\\\"), "<ROOT>")
+    return text
