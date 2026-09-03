@@ -107,6 +107,35 @@ the project was renamed and eight places went on printing an install command
 for a distribution that no longer existed, with every gate green, because
 nothing compared prose against `pyproject.toml`.
 
+## Two-track e2e
+
+"End-to-end" here means two deliberately different things, and both run:
+
+- **With mocks** — `make test`. Fixture repositories built in `tmp_path`,
+  edge conditions simulated with `monkeypatch` (no git binary, corrupt
+  witness files, unreadable specs), and the CLI driven both in-process
+  (`cli.main()`) and as a real subprocess (`tests/support.py::run_cli`,
+  with coverage tracked across the subprocess boundary). This is the fast,
+  hermetic track.
+- **Without mocks** — `make e2e-live`. The *installed* `planlint` against
+  *this live repository*, with zero fixtures: `detect`,
+  `validate --fail-on ERROR`, `graph --format json`, `waivers`, and one
+  more `validate` pass under `PYTHONIOENCODING=ascii` — the console
+  environment that crashed `validate` before the stdout-encoding fix. This
+  is the track that catches what fixtures can't: drift between the repo
+  and its own specs, encoding/path behavior of the real host, and
+  packaging-level breakage.
+
+CI runs the mock track on both operating systems (`test` on Ubuntu 3.10–
+3.13, `test-windows` on Windows 3.12) and the live track twice
+(`self-validate`, and `encoding-stress` under an ASCII-only console). A
+job missing from `docs/hooks.md`'s CI table is a test failure
+(`test_hooks_ci_table_lists_every_ci_job`), not a doc gap.
+
+No `make` on your Windows box? Every recipe is two commands; run them
+directly, or use Git Bash (make installs via `choco install make -y`,
+which is what `test-windows` does).
+
 ## No NumPy / no heavy runtime deps
 
 `planlint` has **zero runtime dependencies**. Scientific-computing stacks

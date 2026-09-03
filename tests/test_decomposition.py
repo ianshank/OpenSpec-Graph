@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -93,24 +94,34 @@ def _build_repo(root: Path) -> None:
 def _run_cli(root: Path, *args: str) -> str:
     r = subprocess.run(
         [sys.executable, "-m", "openspec_graph.cli", "--target", str(root), *args],
-        capture_output=True, text=True, check=False,
+        # Decode as UTF-8 explicitly: cli.main() forces its own stdout to UTF-8
+        # (Defect D fix), so the platform default is wrong on any host whose
+        # codepage isn't UTF-8 -- notably the GitHub windows-latest runner
+        # (cp1252), where the absolute `target` path's escaped backslashes
+        # decode-then-reencode to different bytes and only the `validate` hash
+        # (the one verb carrying that path) drifts off golden. run_cli() in
+        # tests/support.py already pins UTF-8 for the same reason.
+        capture_output=True, text=True, encoding="utf-8", check=False,
     )
     assert r.returncode == 0, f"{' '.join(args)} failed: {r.stderr}"
-    out = r.stdout.replace(str(root), "<ROOT>")
-    # On Windows, the absolute --target root is deliberately left
-    # native-separator (backslash) in JSON output (e.g. validate --json's
-    # "target" field), and json.dumps then escapes each backslash as "\\" --
-    # so the raw-form replace above never matches inside JSON. Also try the
-    # JSON-escaped form so this stays path-normalized on every OS, not just
-    # POSIX ones where a path never needs escaping in the first place.
-    out = out.replace(str(root).replace("\\", "\\\\"), "<ROOT>")
-    # Normalize the envelope's tool_version the same way, and for the same
-    # reason: it is machine/build state, not spec content. Without this every
-    # release would re-pin _EXPECTED_HASHES["validate"] on a version bump that
-    # changed no output shape at all -- the hash would stop meaning "the
-    # findings projection is stable" and start meaning "nobody bumped the
-    # version" (AC-FE-7).
-    return _TOOL_VERSION.sub('"tool_version": "<VERSION>"', out)
+    # Normalize the machine/build-state fields at the JSON level, not by
+    # string-replacing the path. The CLI emits Path(args.target).resolve(),
+    # whose spelling (8.3 short names, junctions, a symlinked temp dir, drive
+    # case) can differ from the str(root) this test built -- so a str.replace
+    # of the path is a silent no-op on exactly the runners whose spelling
+    # diverges (the windows-latest leg went red on this). Parsing and
+    # rewriting the field is immune to spelling, escaping, and codepage; the
+    # re-serialization (indent=2, ensure_ascii) matches the CLI's own dumps.
+    # tool_version is machine state for the same reason (a version bump that
+    # changed no output shape must not re-pin the golden hash -- AC-FE-7).
+    payload = json.loads(r.stdout)
+    if isinstance(payload, dict):
+        for key in ("target", "root"):
+            if isinstance(payload.get(key), str):
+                payload[key] = "<ROOT>"
+        if "tool_version" in payload:
+            payload["tool_version"] = "<VERSION>"
+    return json.dumps(payload, indent=2, ensure_ascii=True) + "\n"
 
 
 def _outputs(root: Path) -> dict[str, str]:
@@ -195,10 +206,25 @@ def test_output_byte_identical() -> None:
         _build_repo(root)
         outs = _outputs(root)
     hashes = {k: hashlib.sha256(v.encode()).hexdigest() for k, v in outs.items()}
+    if hashes != _EXPECTED_HASHES:
+        # Self-diagnosing failure: the hashes alone cannot say *what* drifted,
+        # and an environment-specific divergence (this test runs on both the
+        # Ubuntu matrix and the Windows leg) is undiagnosable from hex. Dump
+        # the normalized output's shape for each drifting verb so the CI log
+        # names the exact field, not just the mismatch.
+        for verb in sorted(_EXPECTED_HASHES):
+            if hashes[verb] == _EXPECTED_HASHES[verb]:
+                continue
+            lines = outs[verb].splitlines()
+            print(f"--- {verb}: {len(lines)} lines, first/last + any path-bearing ---")
+            pathy = [ln for ln in lines if "<ROOT>" in ln or "\\\\" in ln][:5]
+            for ln in lines[:3] + pathy + lines[-3:]:
+                print(f"    {ln}")
     assert hashes == _EXPECTED_HASHES, (
         "CLI/graph/rules JSON drifted after decomposition.\n"
         f"expected: {_EXPECTED_HASHES}\n"
         f"actual:   {hashes}\n"
+        "(normalized per-verb output dumped above)"
     )
 
 

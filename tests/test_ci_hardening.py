@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import textwrap
@@ -395,8 +396,117 @@ def test_lint_is_a_hard_gate() -> None:
 def test_graph_diff_artifact_uploaded() -> None:
     """AC-CH-7: the graph-diff job publishes the graph and its comparison, so a
     reviewer can see what changed rather than taking the job's word for it."""
-    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    blocks = _ci_job_blocks(_ci_workflow_text())
+    graph_diff = blocks.get("graph-diff", "")
+    assert "upload-artifact" in graph_diff, "graph-diff job uploads no artifact"
+    assert "base.json" in graph_diff, "graph-diff never uploads base.json"
+    assert "head.json" in graph_diff, "graph-diff never uploads head.json"
 
-    assert "upload-artifact" in workflow, "no artifact upload configured in CI"
-    assert "spec-graph.json" in workflow, "the spec graph is never uploaded"
-    assert "spec-findings.json" in workflow, "the findings artifact is never uploaded"
+
+# --- harden-two-track-e2e-aqa: the two-track e2e gates exist and stay synced ---
+
+
+def _ci_workflow_text() -> str:
+    return (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+
+def _ci_job_blocks(text: str) -> dict[str, str]:
+    """Job name -> body, line-scanned out of the workflow's `jobs:` mapping.
+
+    Structural, not substring matching (DEC-AQA-005): PyYAML is deliberately
+    not a dependency (zero-runtime-deps contract), and `jobs:` keys sit at a
+    fixed two-space indent, so a line scan is exact -- a cosmetic reformat
+    can't false-fail and a renamed job can't false-pass.
+    """
+    lines = text.splitlines()
+    try:
+        start = lines.index("jobs:") + 1
+    except ValueError:
+        return {}
+    blocks: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in lines[start:]:
+        if line and not line.startswith(" "):
+            break  # left the top-level mapping
+        match = re.match(r"^  ([A-Za-z][\w-]*):\s*$", line)
+        if match:
+            current = match.group(1)
+            blocks[current] = []
+        elif current is not None:
+            blocks[current].append(line)
+    return {name: "\n".join(body) for name, body in blocks.items()}
+
+
+def test_ci_job_blocks_returns_empty_when_jobs_key_is_absent() -> None:
+    # The guard tests above must fail on a real missing job, not on a parser
+    # that silently found nothing.
+    assert _ci_job_blocks("name: CI\non: push\n") == {}
+
+
+def test_ci_job_blocks_ignores_comments_mentioning_jobs() -> None:
+    text = "jobs:\n  test:\n    # see the other jobs: for context\n    runs-on: ubuntu-latest\n"
+    assert set(_ci_job_blocks(text)) == {"test"}
+
+
+def test_makefile_has_e2e_live_target() -> None:
+    """AC-AQA-1: the no-mocks live track is one local command, not a recipe
+    contributors must copy out of the CI YAML."""
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert re.search(r"^e2e-live:.*?##", makefile, re.MULTILINE), (
+        "Makefile has no documented `e2e-live` target"
+    )
+    phony = next(line for line in makefile.splitlines() if line.startswith(".PHONY"))
+    assert "e2e-live" in phony.split(), "e2e-live missing from .PHONY"
+    assert "PYTHONIOENCODING=ascii" in makefile, (
+        "e2e-live must include one pass under the ASCII-only console that "
+        "reproduces the fix-stdout-encoding-crash environment"
+    )
+
+    # AC-AQA-7: the pre-PR gate's composition is unchanged -- the live track
+    # is additive (its own target and CI jobs), never folded into pre-pr.
+    pre_pr = next(
+        line for line in makefile.splitlines() if re.match(r"^pre-pr:", line)
+    )
+    assert "e2e-live" not in pre_pr, "e2e-live must not become part of `make pre-pr`"
+
+
+def test_ci_workflow_has_a_windows_job() -> None:
+    """AC-AQA-2: the platform guard tests (path separators, console encoding,
+    symlink privilege) must actually execute on the OS they guard."""
+    blocks = _ci_job_blocks(_ci_workflow_text())
+    windows = {name: body for name, body in blocks.items() if "windows-latest" in body}
+    assert windows, (
+        "ci.yml has no windows-latest job -- ubuntu-only CI is how three "
+        "Windows-blind defects shipped green"
+    )
+    body = next(iter(windows.values()))
+    for gate in ("make lint", "make typecheck", "make test"):
+        assert gate in body, f"the Windows job must run `{gate}`, the same gates as `test`"
+
+
+def test_ci_workflow_has_an_encoding_stress_job() -> None:
+    """AC-AQA-3: the encoding crash's original failure environment is itself
+    a gate, so a regression can't ship silently the way the original did."""
+    blocks = _ci_job_blocks(_ci_workflow_text())
+    stressed = {name: body for name, body in blocks.items() if "PYTHONIOENCODING" in body}
+    assert stressed, "ci.yml has no job running under an ASCII-only console"
+    assert "make e2e-live" in next(iter(stressed.values())), (
+        "the encoding-stress job must run the live track (`make e2e-live`)"
+    )
+
+
+def test_hooks_ci_table_lists_every_ci_job() -> None:
+    """AC-AQA-4 (non-success): a ci.yml job absent from docs/hooks.md's CI
+    hooks table fails the suite -- the `packaging` drift this package
+    backfills is a hard error on recurrence, never a silent doc gap.
+
+    Matches the job id only as a backtick-quoted table cell, not anywhere in
+    prose -- `graph-diff` and `release` are named in the body text below the
+    table, so a bare substring check would false-pass on a missing row."""
+    jobs = set(_ci_job_blocks(_ci_workflow_text()))
+    assert jobs, "parsed no jobs from ci.yml -- the parser, not the table, is broken"
+    hooks = (REPO_ROOT / "docs" / "hooks.md").read_text(encoding="utf-8")
+    # A job row looks like `| \`job-name\` ... |` in the CI hooks table.
+    table_cells = set(re.findall(r"^\|\s*`([\w-]+)`", hooks, re.MULTILINE))
+    missing = sorted(job for job in jobs if job not in table_cells)
+    assert not missing, f"docs/hooks.md CI hooks table is missing rows for jobs: {missing}"

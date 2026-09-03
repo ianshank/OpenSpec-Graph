@@ -94,6 +94,12 @@ over-engineering.
    follow-up once the capability has proven useful in practice, not bundled
    into CP-2 itself.
 
+8. ~~**CI runs the platform/encoding guards in the environments they
+guard**~~ — shipped in `harden-two-track-e2e-aqa`: a `test-windows` leg
+   (the suite on `windows-latest`) and an `encoding-stress` leg (`make
+   e2e-live` under `PYTHONIOENCODING=ascii`), closing the ubuntu-only gap
+   that let three Windows-blind defects ship green.
+
 ## Deferred / out of scope
 
 8. **Autonomous spec generation** — using an LLM to *author* specs is explicitly

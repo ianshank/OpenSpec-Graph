@@ -21,7 +21,7 @@ from pathlib import Path
 
 from openspec_graph import __version__
 from openspec_graph.rule_types import FINDINGS_SCHEMA_VERSION, Finding
-from tests.support import run_cli, write_spec
+from tests.support import normalize_root, run_cli, write_spec
 
 FX = Path(__file__).resolve().parent / "fixtures"
 
@@ -115,10 +115,21 @@ def test_two_checkout_paths_produce_identical_json(tmp_path: Path) -> None:
     first = _repo(tmp_path / "checkout-one")
     second = _repo(tmp_path / "a-different-length-path")
 
-    one = run_cli(first, "validate", "--json").stdout.replace(str(first), "<ROOT>")
-    two = run_cli(second, "validate", "--json").stdout.replace(str(second), "<ROOT>")
+    one = normalize_root(run_cli(first, "validate", "--json").stdout, first)
+    two = normalize_root(run_cli(second, "validate", "--json").stdout, second)
 
     assert one == two
+
+
+def test_normalize_root_handles_raw_and_json_escaped_forms(tmp_path: Path) -> None:
+    """Direct unit pin for the helper: a bare native-path replace is POSIX-only
+    (json.dumps doubles every backslash on Windows), so both forms must go."""
+    raw = str(tmp_path)
+    escaped = raw.replace("\\", "\\\\")
+    text = f'plain {raw} and quoted "{escaped}"'
+    out = normalize_root(text, tmp_path)
+    assert raw not in out and escaped not in out
+    assert out.count("<ROOT>") == 2
 
 
 def test_findings_are_sorted_like_the_text_renderer(tmp_path: Path) -> None:

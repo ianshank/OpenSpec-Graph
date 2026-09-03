@@ -18,7 +18,7 @@ import pytest
 
 from openspec_graph.cli import build_parser, main, main_deprecated
 from tests import support
-from tests.support import run_cli, write_spec
+from tests.support import normalize_root, run_cli, write_spec
 
 # The closed set of verbs planlint exposes. Adding a verb here is a deliberate,
 # reviewed product decision — never an accident. Authoring verbs (propose,
@@ -397,6 +397,42 @@ class _ReconfigureRaises:
 
     def reconfigure(self, **_kwargs: object) -> None:
         raise self._exc_type("reconfiguration not supported by this test double")
+
+
+def test_waivers_format_json_emits_parseable_json(repo: Path, fixtures: dict[str, Path]) -> None:
+    """The `waivers --format json` surface had no subprocess coverage at all;
+    it must emit parseable JSON, on the UTF-8 stream like every other verb."""
+    (repo / "Makefile").write_text((fixtures["makefile"]).read_text())
+    write_spec(
+        repo, "c1", "cap",
+        (fixtures["good_harness"]).read_text()
+        + "\n<!-- specgraph:allow G003 this spec discusses floors abstractly -->\n",
+    )
+    result = run_cli(repo, "waivers", "--format", "json")
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert isinstance(payload, list)
+    assert payload and payload[0]["rule"] == "G003", "the seeded waiver must appear"
+
+
+def test_validate_fail_on_info_exits_1_on_info_findings(
+    repo: Path, fixtures: dict[str, Path]
+) -> None:
+    """`--fail-on INFO` is the strictest gate: a waived ERROR downgraded to INFO
+    must still fail the run."""
+    (repo / "Makefile").write_text((fixtures["makefile"]).read_text())
+    (repo / "pyproject.toml").write_text("[tool.coverage.report]\nfail_under = 90\n")
+    write_spec(
+        repo, "c1", "cap",
+        "<!-- specgraph:allow G003 this spec's subject IS a 95% floor -->\n"
+        "\n## Problem Statement\n\nThe floor is 95%.\n",
+    )
+    result = run_cli(repo, "validate", "--fail-on", "INFO", "--json")
+    assert result.returncode == 1, (
+        f"exit {result.returncode}: --fail-on INFO must make even INFO findings blocking"
+    )
+    payload = json.loads(normalize_root(result.stdout, repo))
+    assert payload["blocking"] > 0
 
 
 @pytest.mark.parametrize("exc_type", [ValueError, OSError])

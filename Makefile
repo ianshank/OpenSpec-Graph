@@ -1,4 +1,4 @@
-.PHONY: help test lint typecheck security validate graph graph-mermaid ci pre-pr docs-check thresholds wheel-check skill-catalog skill-manifests skill-artifacts clean
+.PHONY: help test lint typecheck security validate graph graph-mermaid e2e-live ci pre-pr docs-check thresholds wheel-check skill-catalog skill-manifests skill-artifacts clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-14s %s\n", $$1, $$2}'
@@ -26,6 +26,17 @@ graph: ## Emit the spec dependency graph as JSON
 
 graph-mermaid: ## Emit the spec dependency graph as a Mermaid flowchart
 	planlint --target . graph --format mermaid
+
+# The no-mocks e2e track: the installed CLI against this live repo, once
+# normally and once under an ASCII-only console (the Defect D repro
+# environment). The env-prefix line is POSIX shell syntax -- on Windows run
+# it under Git Bash, or set the variable for the whole shell instead.
+e2e-live: ## Live self-validation of the installed CLI against this repo
+	planlint --target . detect
+	planlint --target . validate --fail-on ERROR
+	planlint --target . graph --format json
+	planlint --target . waivers
+	PYTHONIOENCODING=ascii planlint --target . validate --fail-on ERROR
 
 ci: test lint validate ## The authoritative local core gate
 	@echo "ci: core gates passed"

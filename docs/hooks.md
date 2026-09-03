@@ -50,7 +50,10 @@ a local net before the round-trip to CI.
 | Job | Trigger | Gate |
 |---|---|---|
 | `test` (3.10–3.13) | push + PR | `make lint` + `make typecheck` + `make test` |
+| `test-windows` (3.12) | push + PR | same three gates on `windows-latest` (GNU make via Chocolatey) |
+| `encoding-stress` | push + PR | `make e2e-live` under `PYTHONIOENCODING=ascii` (hard) |
 | `self-validate` | push + PR | `planlint validate --fail-on ERROR` (hard) |
+| `packaging` | push + PR | wheel build + `tools/check_wheel_metadata.py` (hard) |
 | `graph-diff` | PR only | `tools/diff_spec_graph.py` base→head (AC-CH-5/6) |
 | `security` | push + PR | gitleaks + no-hardcoded-thresholds (hard) |
 | `docs` | push + PR | `make docs-check` (hard) |
