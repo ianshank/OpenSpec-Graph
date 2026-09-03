@@ -105,11 +105,46 @@ fail_under = 90
 # high line coverage and untested conditional branches must still fail.
 branch_fail_under = 80
 
+# Accuracy floors for the two matchers that read English prose rather than
+# structure, scored by `tools/matcher_accuracy.py` against
+# `tests/fixtures/phrasing/` and enforced by `tests/test_matcher_accuracy.py`.
+#
+# Here rather than in the Makefile or a workflow for the same reason as every
+# other threshold in this project: rule G003 says a threshold belongs in
+# config, and `tools/check_no_hardcoded_thresholds.py` enforces it. A
+# governance tool that hard-codes its own numbers argues against its own rule.
+#
+# Integer percentages so they reuse `_common.read_pyproject_int`, the reader
+# the coverage gates already use, instead of adding a second config parser.
+# Set below the measured figures, not at them: a floor equal to the current
+# value turns every future pattern addition into a failure even when it is an
+# improvement. Measured when these landed -- G002 0.933/0.977, U004 0.875/1.000.
+#
+# Raising a floor is a deliberate act. Lowering one needs a reason in the
+# commit message, because it means the matcher got worse.
+g002_min_precision_pct = 88
+g002_min_recall_pct = 90
+u004_min_precision_pct = 80
+u004_min_recall_pct = 95
+
 [project.optional-dependencies]
 # tomli backports stdlib tomllib (3.11+) for coverage.process_startup()'s
 # config-file parsing on the 3.10 leg of the CI matrix; coverage itself
 # declares zero dependencies, so this is required, not merely convenient.
-dev = ["pytest", "pytest-cov", "ruff", "mypy", "build", "tomli; python_version < \"3.11\""]
+#
+# `hypothesis` powers tests/test_properties.py. Dev-only and deliberately so:
+# `[project] dependencies` stays empty (see its own comment), and a property
+# test is a contributor/CI tool, never something an adopter installing the CLI
+# should be made to carry.
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+    "build",
+    "hypothesis",
+    "tomli; python_version < \"3.11\"",
+]
 
 [tool.ruff]
 line-length = 100

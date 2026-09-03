@@ -10,6 +10,7 @@ import configparser
 import dataclasses
 import json
 import logging
+import math
 import re
 import subprocess
 from collections.abc import Iterable, Sequence
@@ -69,7 +70,17 @@ _ADR_ID = re.compile(r"\bADR-\d+\b")
 # ADR file's own title over an earlier body reference to a different ADR
 # when picking its declared id (see _adrs()).
 _HEADING_LINE = re.compile(r"^#+[ \t]+\S.*$", re.MULTILINE)
-_FAIL_UNDER = re.compile(r"^\s*fail_under\s*=\s*(\d+)", re.MULTILINE)
+# A TOML table header (`[tool.coverage.report]`, or the array-of-tables
+# `[[x]]` form), with an optional trailing comment. Whitespace inside the
+# brackets is tolerated and stripped by the caller.
+_TOML_TABLE = re.compile(r"^\s*\[\[?([^\[\]]+)\]\]?\s*(?:#.*)?$")
+# `fail_under = <number>`, anchored to a whole line so a key mentioned inside
+# a string or comment cannot match. Accepts a decimal fraction: coverage.py
+# itself accepts a float floor, and truncating one silently *loosens* the
+# gate being reported (85.5 read as 85).
+_TOML_FAIL_UNDER = re.compile(r"^\s*fail_under\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*(?:#.*)?$")
+# The one TOML table a pyproject.toml coverage floor may legitimately live in.
+COVERAGE_REPORT_TABLE = "tool.coverage.report"
 
 
 def to_posix_relative(path: Path, root: Path | None) -> str:
@@ -93,12 +104,96 @@ def to_posix_relative(path: Path, root: Path | None) -> str:
     return path.as_posix()
 
 
+def read_text_or_none(path: Path, what: str) -> str | None:
+    """``path``'s text, or ``None`` if it cannot be read.
+
+    Decodes with ``utf-8-sig`` so a UTF-8 BOM is consumed by the codec rather
+    than surviving into the first parsed line (see ``machinery.strip_bom``).
+
+    Every optional-config read in this module funnels through here. Three of
+    them previously called ``read_text()`` directly after an ``exists()``
+    check, which is a time-of-check/time-of-use gap *and* simply wrong for a
+    path that exists but is not a regular file: a directory named ``Makefile``
+    or ``pyproject.toml`` raised ``IsADirectoryError`` out of
+    ``detect.profile()``, crashing every CLI verb with a traceback and exit 1
+    (the code reserved for "findings were reported") against a repository
+    planlint is only *inspecting*. Returning ``None`` treats it as absent,
+    which is the convention ``_invariants``/``_adrs`` already followed and the
+    only safe posture for an untrusted target repo.
+    """
+    try:
+        return path.read_text(encoding="utf-8-sig", errors="replace")
+    except OSError as exc:
+        logger.debug("%s: %s exists but could not be read: %s", what, path, exc)
+        return None
+
+
+def as_threshold_number(raw: object) -> int | float | None:
+    """Coerce a detected coverage floor to a number, or ``None``.
+
+    Returns an ``int`` for an integral value and a ``float`` only for a real
+    fraction, so an existing integer floor keeps rendering as ``90`` rather
+    than ``90.0`` -- the dialect card is a byte-stability contract (AC-DC-1)
+    and a saved ``detect --diff`` baseline must not report drift purely
+    because this function started widening the type. Rejects booleans (``True``
+    is an ``int`` in Python) and non-finite floats, neither of which is a
+    coverage floor.
+    """
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        value = float(raw)
+    elif isinstance(raw, str):
+        try:
+            value = float(raw)
+        except ValueError:
+            return None
+    else:
+        return None
+    if not math.isfinite(value):
+        return None
+    return int(value) if value.is_integer() else value
+
+
+def scoped_fail_under(text: str, table: str) -> int | float | None:
+    """``fail_under`` declared under ``[table]`` in TOML ``text``, or ``None``.
+
+    A deliberate line scanner rather than ``tomllib``: ``tomllib`` is 3.11+,
+    this package supports 3.10, and it declares **zero** runtime dependencies,
+    so a ``tomli`` backport is not available to fall back on. Choosing the
+    parser by interpreter version would make detection behave differently
+    across the 3.10-3.13 CI matrix, breaking the byte-identical-output
+    contract this module is held to; one scanner on every version keeps that
+    contract intact.
+
+    Replaces a whole-file ``^\\s*fail_under`` regex that matched the key under
+    *any* table and then reported it under a locator naming
+    ``[tool.coverage.report]`` -- so a floor belonging to an unrelated tool was
+    attributed to a table that did not exist, and G003 compared spec prose
+    against a number from somewhere else entirely.
+    """
+    current = ""
+    for line in text.splitlines():
+        header = _TOML_TABLE.match(line)
+        if header:
+            current = header.group(1).strip()
+            continue
+        if current != table:
+            continue
+        found = _TOML_FAIL_UNDER.match(line)
+        if found:
+            return as_threshold_number(found.group(1))
+    return None
+
+
 @dataclasses.dataclass(frozen=True)
 class ThresholdSource:
     """Where a coverage floor actually lives in this repo."""
 
     locator: str
-    value: int | None
+    # `float` only ever for a genuinely fractional floor -- see
+    # as_threshold_number() for why an integral value stays an `int`.
+    value: int | float | None
 
     def as_dict(self) -> dict[str, object]:
         return {"locator": self.locator, "value": self.value}
@@ -226,7 +321,12 @@ def _legacy_make_targets(text: str) -> tuple[str, ...]:
     colon (e.g. "Usage: ...") would otherwise regex-match as a fabricated
     target, closed here too since a low-confidence Makefile (a define
     block included) widens using exactly this fallback."""
-    text, _ = machinery.strip_define_blocks(text)
+    # strip_bom for the same reason parse_makefile does it, and symmetrically:
+    # this fallback failed *differently* on a BOM (its `^[a-zA-Z]` anchor
+    # cannot match U+FEFF, so it silently dropped the first target instead of
+    # fabricating a mangled one). The two parsers must not diverge on BOM
+    # handling any more than they may on define/endef handling.
+    text, _ = machinery.strip_define_blocks(machinery.strip_bom(text))
     skip = {".PHONY", ".DEFAULT_GOAL", ".SUFFIXES"}
     targets = [t for t in _MAKE_TARGET.findall(text) if t not in skip]
     return tuple(sorted(set(targets)))
@@ -236,7 +336,12 @@ def _make_target_facts(root: Path) -> machinery.MakefileFacts:
     makefile = root / "Makefile"
     if not makefile.exists():
         return machinery.MakefileFacts((), False, False, 0)
-    text = makefile.read_text(encoding="utf-8", errors="replace")
+    text = read_text_or_none(makefile, "make_targets")
+    if text is None:
+        # Exists but unreadable (a directory named `Makefile`, a permission
+        # denial, a dangling symlink). "No Makefile" is the safe reading: with
+        # no targets, G004 returns early rather than manufacturing findings.
+        return machinery.MakefileFacts((), False, False, 0)
     facts = machinery.parse_makefile(text)
     if facts.confidence == "low":
         # Widen, never replace: structural parsing found real targets too,
@@ -249,25 +354,26 @@ def _make_target_facts(root: Path) -> machinery.MakefileFacts:
     return facts
 
 
-def _read_ini_fail_under(path: Path, section: str) -> int | None:
-    """Read an integer fail_under from an INI-style coverage config section.
+def _read_ini_fail_under(path: Path, section: str) -> int | float | None:
+    """Read a fail_under floor from an INI-style coverage config section.
 
     None if the file is absent, unparsable, or lacks the key -- never raises,
     matching this module's fail-quiet-and-move-on style for optional config.
+    Reads the raw string and coerces via :func:`as_threshold_number` rather
+    than ``parser.getint``, which rejects the fractional floor coverage.py
+    itself accepts and would silently report "no floor detected" for it.
     """
     if not path.exists():
         return None
     parser = configparser.ConfigParser(interpolation=None)
     try:
         parser.read(path, encoding="utf-8")
-    except configparser.Error:
+    except (configparser.Error, OSError) as exc:
+        logger.debug("threshold: %s could not be parsed: %s", path, exc)
         return None
     if not parser.has_option(section, "fail_under"):
         return None
-    try:
-        return parser.getint(section, "fail_under")
-    except ValueError:
-        return None
+    return as_threshold_number(parser.get(section, "fail_under").strip())
 
 
 def _threshold(root: Path) -> ThresholdSource | None:
@@ -286,18 +392,28 @@ def _threshold(root: Path) -> ThresholdSource | None:
             logger.debug("threshold: %s exists but could not be read: %s", policy, exc)
             continue
         coverage = data.get("coverage")
-        if isinstance(coverage, dict) and isinstance(coverage.get("lines"), int):
-            rel = to_posix_relative(policy, root)
-            logger.debug("threshold: found coverage.lines in %s", rel)
-            return ThresholdSource(f"{rel}:coverage.lines", coverage["lines"])
-        logger.debug("threshold: %s has no integer coverage.lines", policy)
+        if isinstance(coverage, dict):
+            lines = as_threshold_number(coverage.get("lines"))
+            if lines is not None:
+                rel = to_posix_relative(policy, root)
+                logger.debug("threshold: found coverage.lines in %s", rel)
+                return ThresholdSource(f"{rel}:coverage.lines", lines)
+        logger.debug("threshold: %s has no numeric coverage.lines", policy)
 
     pyproject = root / "pyproject.toml"
     if pyproject.exists():
-        match = _FAIL_UNDER.search(pyproject.read_text(encoding="utf-8", errors="replace"))
-        if match:
-            return ThresholdSource(
-                "pyproject.toml:[tool.coverage.report].fail_under", int(match.group(1))
+        text = read_text_or_none(pyproject, "threshold")
+        if text is not None:
+            value = scoped_fail_under(text, COVERAGE_REPORT_TABLE)
+            if value is not None:
+                logger.debug(
+                    "threshold: found fail_under=%s under [%s]", value, COVERAGE_REPORT_TABLE
+                )
+                return ThresholdSource(
+                    f"pyproject.toml:[{COVERAGE_REPORT_TABLE}].fail_under", value
+                )
+            logger.debug(
+                "threshold: pyproject.toml has no fail_under under [%s]", COVERAGE_REPORT_TABLE
             )
 
     # coverage.py's own convention: bare [report] in .coveragerc, but
@@ -333,14 +449,12 @@ def _invariants(root: Path) -> tuple[Path | None, tuple[str, ...]]:
         path = root / rel
         if not path.exists():
             continue
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError as exc:
-            # An untrusted target repo's candidate may exist but be
-            # unreadable (permission-denied, a broken symlink `exists()`
-            # didn't catch, etc.) -- treat it like any other non-match
-            # rather than crashing every CLI verb that calls detect.profile().
-            logger.debug("invariants: %s exists but is unreadable: %s", path, exc)
+        # An untrusted target repo's candidate may exist but be unreadable
+        # (permission-denied, a directory, a broken symlink `exists()` didn't
+        # catch) -- read_text_or_none treats it like any other non-match
+        # rather than crashing every CLI verb that calls detect.profile().
+        text = read_text_or_none(path, "invariants")
+        if text is None:
             continue
         ids = sorted(
             set(_INV_ID.findall(text)),
@@ -397,17 +511,15 @@ def _adrs(root: Path) -> tuple[Path | None, tuple[str, ...]]:
             # that was never really declared either.
             ids_list: list[str] = []
             for p in sorted(path.glob("*.md")):
-                try:
-                    text = p.read_text(encoding="utf-8", errors="replace")
-                except OSError as exc:
-                    logger.debug("adr: skipping unreadable %s: %s", p, exc)
-                    # glob() lists directory entries by name pattern only --
-                    # a dangling symlink still matches "*.md" but can't be
-                    # read. Skip it like any other non-declaring file
-                    # instead of crashing every CLI verb that calls
-                    # detect.profile() (adversarial review finding on PR #13).
+                # glob() lists directory entries by name pattern only -- a
+                # dangling symlink still matches "*.md" but can't be read.
+                # Skip it like any other non-declaring file instead of
+                # crashing every CLI verb that calls detect.profile()
+                # (adversarial review finding on PR #13).
+                text_or_none = read_text_or_none(p, "adr")
+                if text_or_none is None:
                     continue
-                declared = _declared_adr_id(text)
+                declared = _declared_adr_id(text_or_none)
                 if declared:
                     ids_list.append(declared)
             ids = sorted(set(ids_list), key=lambda s: (int(s.split("-")[1]), s))
@@ -416,13 +528,11 @@ def _adrs(root: Path) -> tuple[Path | None, tuple[str, ...]]:
             # convention (mirrors _invariants()'s CONTRACT.md assumption),
             # so every mention is a real declaration -- scanning the whole
             # file, not just its first match, is correct here.
-            try:
-                text = path.read_text(encoding="utf-8", errors="replace")
-            except OSError as exc:
-                logger.debug("adr: %s exists but is unreadable: %s", path, exc)
+            index_text = read_text_or_none(path, "adr")
+            if index_text is None:
                 continue
             ids = sorted(
-                set(_ADR_ID.findall(text)),
+                set(_ADR_ID.findall(index_text)),
                 key=lambda s: (int(s.split("-")[1]), s),
             )
         else:
@@ -453,10 +563,8 @@ def detect_dialect(spec_paths: list[Path]) -> str:
     upstream = harness = speckit = 0
     votes: dict[str, list[str]] = {"upstream": [], "harness": [], "speckit": []}
     for path in spec_paths:
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError as exc:
-            logger.debug("dialect: cannot read %s: %s", path, exc)
+        text = read_text_or_none(path, "dialect")
+        if text is None:
             continue
         if is_upstream_marked(text):
             upstream += 1

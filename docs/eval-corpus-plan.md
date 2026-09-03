@@ -96,8 +96,22 @@ mostly equivalent mutants and noise, the suite's wall time multiplies by the
 mutant count, and a mutation score is a number that would need a floor
 somewhere, which planlint's own G003 discipline forbids in Make or YAML.
 
-**Rebuttal.** _(Filled from the measurement run; see the appendix for the
-raw numbers.)_ PLACEHOLDER_D3
+**Rebuttal.** The two halves of the thesis had different fates, and the
+measurement is what separated them. Hypothesis was cheap and clean: five
+properties, all passing in under three seconds, promoted into the suite as
+`tests/test_properties.py` with `derandomize=True` so the gate cannot flake.
+Mutation testing was not. The run was cancelled before producing a single
+kill/survive count, and what it established on the way is that `mutmut`
+cannot run against this repository without deselecting two of the
+repository's own self-checks: the stdlib-only import guard rejects mutmut's
+injected trampoline import, and the clean-tree typecheck fails under the
+mutants directory. That is not a reason never to adopt it. It is a reason
+that adopting it is a change package with a real measurement behind it, not
+a `make mutation` target added on the strength of an argument. **Decision:
+property tests in; mutation testing deferred with the finding recorded.**
+The counter-argument's threshold point stands either way: any future
+mutation-score floor goes in `pyproject.toml`, read by a `tools/check_*.py`
+script, never in Make or YAML.
 
 ### D4 — The G002/U004 phrasing corpus
 
@@ -299,7 +313,41 @@ substring hits: "shallow clone", "Marshalling", "mustard", "must-have",
 
 ### C. Mutation testing and Hypothesis
 
-PLACEHOLDER_APPENDIX_C
+| Measurement | Result |
+|---|---|
+| Full suite wall time | 62.9 s |
+| Suite restricted to parser and rule tests | 3.4 s (104 tests) |
+| Hypothesis, five properties at three hundred examples each | all pass, 2.6 s total, no shrunk counterexample |
+| Extra case-folding probe (dotless ı, Kelvin sign, long s, fullwidth, ligatures) | no hole; `re.IGNORECASE` already folds them |
+| mutmut | cancelled before any mutant was processed; five launches, ~4 machine-minutes, each blocked by a repo self-check or an import-path issue |
+
+One observation from writing the requirement-count property, not a failure:
+the upstream `REQUIREMENT` regex's `\s+` after the heading hashes can span a
+newline, so a bare `##` line followed by a plain-prose `Requirement: x` line
+would count as a heading. The generator never emits an empty heading, so it
+did not fire. Low priority; noted for the next parser change.
+
+### C2. What was implemented from this plan
+
+Landed on the same branch as this document, all gates green (`make pre-pr`:
+line coverage 98.3, branch 96.6, 31 specs clean, mypy and ruff clean):
+
+| Plan item | Change package | Outcome |
+|---|---|---|
+| 1 | `fix-detect-corpus-defects` | Four defects fixed; 13-shape labelled corpus under `tests/corpus/targets/`; hostile-Makefile canary test; 48 new tests |
+| 2 | `add-parser-property-tests` | Five properties, dev-only `hypothesis` extra, runtime dependencies still empty |
+| 3 | deferred | See D3: mutmut cannot run here without deselecting repo self-checks; needs its own package |
+| 4 | `fix-prose-matcher-precision` | Three-tier negation table; word-bounded `is_normative`; labelled phrasing corpus; config-driven floors; 14 new tests. G002 precision 0.38 → 0.933, recall 0.42 → 0.977; U004 0.47 → 0.875, 0.39 → 1.000 |
+| 5 | Agents repo | Not in this repository; the four-file change is specified in D6 and appendix D |
+| 6 | blocked | `claude plugin eval` is early-access and not enabled on this account |
+| 7 | deferred by design | No results directory exists to export |
+
+One decision in item 1 departs from the plan text: the plan said a
+directory named `Makefile` should exit 2. The code already had a convention
+for unreadable optional config (`_invariants` and `_adrs` treat it as
+absent), and consistency with that convention beat the plan. A directory
+where a Makefile belongs now reads as "no Makefile", which is also the safe
+posture: with no targets, G004 returns early rather than inventing findings.
 
 ### D. Agents repo integration points
 

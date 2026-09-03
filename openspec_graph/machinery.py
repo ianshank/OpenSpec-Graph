@@ -18,7 +18,7 @@ from __future__ import annotations
 import dataclasses
 import re
 
-__all__ = ["MakefileFacts", "parse_makefile", "strip_define_blocks"]
+__all__ = ["MakefileFacts", "parse_makefile", "strip_bom", "strip_define_blocks"]
 
 # GNU Make's built-in special targets. A leading '.' must be part of the
 # tokenizer's accepted target-name characters for any of these to ever be
@@ -55,6 +55,28 @@ _CONDITIONAL_PREFIXES = ("ifeq", "ifneq", "ifdef", "ifndef")
 # name in `define NAME`, so this also matches real Make syntax more exactly.
 _DEFINE_START = re.compile(r"^define(?:\s|$)")
 _DEFINE_END = re.compile(r"^endef(?:\s|$)")
+
+# U+FEFF (BYTE ORDER MARK) is a Cf format character, NOT whitespace, so
+# `str.strip()` does not remove it and `[^:\s]` in _RULE_LINE happily accepts
+# it as the first character of a target name. A UTF-8-BOM Makefile therefore
+# used to yield a fabricated first target ("﻿all" instead of "all"),
+# which in turn produced a *false* G004 ("cites `make all` which is not a
+# target") against a perfectly valid repository -- the exact false-positive
+# class this project exists to eliminate in other people's repos.
+#
+# Stripped here, in the pure function, rather than only at detect.py's read
+# site: parse_makefile() is public API that takes text from any caller, so
+# its own contract is "BOM-tolerant", not "correct provided somebody else
+# decoded carefully". detect.py additionally reads with `utf-8-sig` so the
+# BOM never reaches either this parser or the legacy regex fallback (which
+# failed differently on it -- silently *dropping* the first target, since
+# `^[a-zA-Z]` cannot match U+FEFF).
+_BOM = "﻿"
+
+
+def strip_bom(text: str) -> str:
+    """``text`` without any leading U+FEFF byte-order mark(s)."""
+    return text.lstrip(_BOM)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -124,7 +146,7 @@ def strip_define_blocks(text: str) -> tuple[str, bool]:
 
 
 def parse_makefile(text: str) -> MakefileFacts:
-    text, has_define = strip_define_blocks(text)
+    text, has_define = strip_define_blocks(strip_bom(text))
     targets: set[str] = set()
     has_include = False
     has_conditional = False

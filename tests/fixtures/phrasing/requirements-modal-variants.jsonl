@@ -1,0 +1,11 @@
+{"body": "The client should retry idempotent requests at most three times.", "label": true, "note": "SHOULD (RFC 2119 weak obligation)", "text": "Retry Policy"}
+{"body": "The service is required to record every write with an actor id.", "label": true, "note": "is required to", "text": "Audit Trail"}
+{"body": "The service needs to record every write with an actor id.", "label": true, "note": "needs to", "text": "Audit Trail"}
+{"body": "The service will record every write with an actor id.", "label": true, "note": "will (declarative future)", "text": "Audit Trail"}
+{"body": "Every write is recorded with an actor id.", "label": true, "note": "present-tense declarative obligation, no modal", "text": "Audit Trail"}
+{"body": "It is mandatory that every write be recorded with an actor id.", "label": true, "note": "'mandatory'", "text": "Audit Trail"}
+{"body": "", "label": true, "note": "imperative heading, no modal", "text": "Validate every manifest before apply"}
+{"body": "Manifests are validated before apply; an invalid manifest aborts the run.", "label": true, "note": "declarative obligation with consequence, no modal", "text": "Manifest validation"}
+{"body": "Sessions expire after 30 minutes of inactivity.", "label": true, "note": "declarative obligation, no modal", "text": "Session timeout"}
+{"body": "Logs ought to be structured JSON.", "label": true, "note": "ought to", "text": "Logging"}
+{"body": "Operators are obliged to rotate keys quarterly.", "label": true, "note": "obliged to", "text": "Compliance"}

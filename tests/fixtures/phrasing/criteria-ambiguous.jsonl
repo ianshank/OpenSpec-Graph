@@ -1,0 +1,11 @@
+{"label": true, "text": "The failsafe engages and the pump keeps running."}
+{"label": false, "text": "The pipeline never exceeds its p99 latency budget."}
+{"label": true, "text": "The caught exception is logged with its stack trace."}
+{"label": true, "text": "The build fails over to the mirror registry when the primary is slow."}
+{"label": true, "text": "A failing test's output is shown inline."}
+{"label": false, "text": "Neither dark nor light theme is forced; the system preference is honoured."}
+{"label": true, "text": "The commit is created without a signature when gpg is unavailable."}
+{"label": false, "text": "The sidebar shows nothing until the first project is created."}
+{"label": true, "text": "Duplicate submissions are deduplicated; only the first is stored."}
+{"label": false, "text": "Invalid-looking but well-formed addresses are accepted."}
+{"label": false, "text": "A cache miss falls through to the origin."}
