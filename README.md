@@ -303,8 +303,14 @@ enforces:
 | typecheck | `make typecheck` | mypy (config in `pyproject.toml`) |
 | security | `make security` | gitleaks (or deterministic fallback) |
 | validate | `make validate` | `planlint validate --fail-on ERROR` |
+| e2e-live | `make e2e-live` | live no-mocks self-validation: installed CLI vs this repo, plus one pass under an ASCII-only console |
 | thresholds | `make thresholds` | no hard-coded coverage floors or tool-version pins in the Makefile or any workflow |
 | docs | `make docs-check` | required docs present + linked from README |
+
+The mock-track gates (`test`/`lint`/`typecheck`) also run on `windows-latest`
+(`test-windows`, Python 3.12), and the live track runs under an ASCII-only
+console (`encoding-stress`), so the platform/encoding guard tests execute in
+the environments they guard.
 
 No numeric threshold lives in the Makefile or CI YAML — floors are read from
 `pyproject.toml` at run time, and `tools/check_no_hardcoded_thresholds.py`

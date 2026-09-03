@@ -5,6 +5,39 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — two-track e2e AQA (`harden-two-track-e2e-aqa` change package)
+
+- **`make e2e-live`**: the no-mocks e2e track as one local command — the
+  installed CLI run against this live repo (`detect`, `validate --fail-on
+  ERROR`, `graph --format json`, `waivers`) plus one `validate` pass under
+  `PYTHONIOENCODING=ascii`, the console environment that crashed
+  `validate` before the stdout-encoding fix.
+- **Two new CI legs** so the platform/encoding guard tests run in the
+  environments they exist for: `test-windows` (`windows-latest`, GNU make
+  via Chocolatey, `make lint`/`typecheck`/`test` on Python 3.12) and
+  `encoding-stress` (Ubuntu under an ASCII-only console, running
+  `make e2e-live`). Three Windows-blind defects had previously shipped
+  green on ubuntu-only CI and were caught only by manual Windows runs.
+- **Guard tests**: the workflow must contain both jobs, the Makefile must
+  define `e2e-live`, and every `jobs:` key in `ci.yml` must appear in
+  `docs/hooks.md`'s CI table — job names parsed structurally, not by
+  substring. The last fence backfills the `packaging` job, which had
+  drifted out of the table when it was added upstream.
+- **Docs**: `docs/aqa.md` gains a "Two-track e2e" section; the
+  `docs/hooks.md` CI table lists all eight jobs.
+
+### Fixed — envelope two-checkout test on Windows
+
+- **`test_two_checkout_paths_produce_identical_json`** normalized the
+  absolute `--target` path out of `validate --json` output with a
+  raw-native-path `str.replace`, which can never match inside JSON on
+  Windows because `json.dumps` doubles every backslash — the test failed
+  the first time the suite ran on Windows, invisible to ubuntu-only CI.
+  Both occurrences of the idiom (this test, and `test_decomposition.py`'s
+  golden-hash helper, which already carried the second, JSON-escaped
+  replace) now share one `normalize_root()` helper in
+  `tests/support.py`, so a third copy cannot drift again.
+
 ### Added — `delta`, which reports what *your change* broke
 
 - **`planlint delta --baseline CARD.json`** compares a saved dialect card
