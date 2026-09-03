@@ -87,3 +87,16 @@ def run_cli(repo: Path, *args: str, env: dict[str, str] | None = None) -> subpro
         # though the child emitted it correctly.
         encoding="utf-8",
     )
+
+
+def normalize_root(text: str, root: Path) -> str:
+    """Replace ``root`` with ``<ROOT>`` in CLI output, raw and JSON-escaped.
+
+    ``json.dumps`` escapes each backslash as ``\\\\``, so on Windows the raw
+    native path never textually matches inside ``--json`` output -- a bare
+    ``text.replace(str(root), ...)`` normalizes POSIX only. One helper for
+    both forms, so no third call site re-learns this by failing on Windows
+    (test_decomposition's golden hashes had it; test_findings_envelope's
+    two-checkout test didn't).
+    """
+    return text.replace(str(root), "<ROOT>").replace(str(root).replace("\\", "\\\\"), "<ROOT>")

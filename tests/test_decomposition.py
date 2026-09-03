@@ -16,6 +16,8 @@ import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from tests.support import normalize_root
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PKG = REPO_ROOT / "openspec_graph"
 FX = REPO_ROOT / "tests" / "fixtures"
@@ -96,14 +98,10 @@ def _run_cli(root: Path, *args: str) -> str:
         capture_output=True, text=True, check=False,
     )
     assert r.returncode == 0, f"{' '.join(args)} failed: {r.stderr}"
-    out = r.stdout.replace(str(root), "<ROOT>")
-    # On Windows, the absolute --target root is deliberately left
-    # native-separator (backslash) in JSON output (e.g. validate --json's
-    # "target" field), and json.dumps then escapes each backslash as "\\" --
-    # so the raw-form replace above never matches inside JSON. Also try the
-    # JSON-escaped form so this stays path-normalized on every OS, not just
-    # POSIX ones where a path never needs escaping in the first place.
-    out = out.replace(str(root).replace("\\", "\\\\"), "<ROOT>")
+    # Raw + JSON-escaped path normalization lives in the shared helper -- a
+    # bare native-path replace is POSIX-only, because json.dumps doubles
+    # every backslash (tests/support.py's normalize_root docstring).
+    out = normalize_root(r.stdout, root)
     # Normalize the envelope's tool_version the same way, and for the same
     # reason: it is machine/build state, not spec content. Without this every
     # release would re-pin _EXPECTED_HASHES["validate"] on a version bump that
