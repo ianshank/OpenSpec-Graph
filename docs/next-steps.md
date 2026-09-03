@@ -88,11 +88,47 @@ over-engineering.
    absolute floor. A trend gate (branch coverage must not *decrease* vs.
    merge-base) would mirror the graph-diff pattern for coverage.
 
-7. **CI wiring for `detect --diff`** — `detect --format json`/`--diff` (CP-2)
-   is implemented as a CLI capability but has no CI job wired to it yet,
-   unlike the existing `graph-diff` job it mirrors in spirit. A natural
-   follow-up once the capability has proven useful in practice, not bundled
-   into CP-2 itself.
+7. ~~**CI wiring for `detect --diff`**~~ — closed by a different route than
+   the one this item imagined. `fix-detect-corpus-defects` added
+   `tests/corpus/targets/`: labelled target repositories whose expected
+   dialect card is compared through the same `dialect_card.diff_cards()` that
+   `--diff` uses, on every `make test`. That *is* a detection-drift gate, run
+   against thirteen known shapes rather than against one saved baseline of
+   this repo, which is the more useful of the two. A `detect --diff` job
+   against a committed baseline of this repository stays unwired: its card
+   changes only when the Makefile or floors change, and both already fail
+   other gates.
+
+7a. **`scoped_fail_under` reads the common TOML forms, not all of them** —
+   `[tool.coverage.report]` as a plain table header is the only shape
+   recognised. A quoted header (`["tool"."coverage"."report"]`), a dotted key
+   at top level (`tool.coverage.report.fail_under = 90`), or an inline table
+   (`report = { fail_under = 90 }`) reads as "no floor". The old whole-file
+   regex caught the last two by accident, while also attributing floors from
+   unrelated tables to this one; the trade was made deliberately. A stdlib
+   `tomllib` parse would cover every form but only on 3.11+, and detection
+   must be byte-identical across the whole matrix. Revisit when 3.10 leaves
+   the matrix.
+
+7b. **Mutation testing, evaluated and deferred** — `mutmut` was tried
+   against the parsers and cancelled before producing a single kill/survive
+   count. What the attempt established is that it cannot run here at all
+   without deselecting two of this repo's own self-checks
+   (`test_new_modules_stdlib_only` rejects mutmut's injected trampoline
+   import; `test_typecheck_passes_on_clean_repo` fails under the mutants
+   tree). The Hypothesis half of the same evaluation landed as
+   `tests/test_properties.py`. Adopting mutation testing is its own change
+   package with a real measurement, and any score floor it introduces goes
+   in `pyproject.toml`, never the Makefile.
+
+7c. **U004 counts SHALL/MUST and nothing else** — the eleven requirements in
+   `tests/fixtures/phrasing/requirements-modal-variants.jsonl` ("is required
+   to", "ought to", "Sessions expire after 30 minutes") are normative in
+   spirit and use neither word. U004's message says "uses no SHALL/MUST", so
+   they are not scored as misses. Whether the rule *should* accept them is a
+   design question with a real false-positive cost (a descriptive "Validation
+   happens before apply" is not an obligation) and needs the spec-drafter →
+   spec-adversary pass, not a regex widening.
 
 8. ~~**CI runs the platform/encoding guards in the environments they
 guard**~~ — shipped in `harden-two-track-e2e-aqa`: a `test-windows` leg

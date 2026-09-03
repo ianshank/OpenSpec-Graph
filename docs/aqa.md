@@ -166,10 +166,13 @@ least one** non-success criterion, so a single false positive anywhere in the
 document switches it off for that document. Under the old flat pattern list,
 "The block renders below the header" satisfied it.
 
-`python tools/matcher_accuracy.py --patterns` prints the per-pattern
-true/false-positive breakdown. A pattern that misfires more often than it
-fires is not a detector, and `test_no_negation_pattern_misfires_more_than_it_fires`
-fails if one is added.
+`make matcher-accuracy` prints the per-pattern true/false-positive
+breakdown and checks the floors; it is a **report**, the same way
+`make graph` is, and the gate is `tests/test_matcher_accuracy.py` inside
+`make test`. A pattern that misfires more often than it fires is not a
+detector, and `test_no_negation_pattern_misfires_more_than_it_fires` fails if
+one is added. `.claude/skills/planlint-add-phrasing-case/SKILL.md` is the
+checklist for adding a sentence or a pattern.
 
 ## Property-based tests
 

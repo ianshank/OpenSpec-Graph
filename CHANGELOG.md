@@ -5,6 +5,90 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed — detection defects found by a labelled corpus (`fix-detect-corpus-defects`)
+
+- **False G004 from a UTF-8 byte-order mark.** U+FEFF is a format character,
+  not whitespace, so it survived `str.strip()` and became the first character
+  of the first Makefile target's name; a valid repository was told it cited a
+  target it did not have. `machinery.strip_bom()` runs in the pure parser and
+  `detect` decodes with `utf-8-sig`, so neither the structural parser nor the
+  legacy regex fallback (which silently *dropped* the first target instead)
+  ever sees it.
+- **`fail_under` matched under any TOML table** and was reported under a
+  locator naming `[tool.coverage.report]` whether or not that table existed.
+  `detect.scoped_fail_under()` is table-aware — a line scanner rather than
+  `tomllib`, so Python 3.10 and 3.11+ produce byte-identical cards.
+- **Fractional coverage floors were truncated** (`85.5` read as `85`),
+  quietly loosening the gate being reported. `detect.as_threshold_number()`
+  keeps fractions and returns integral values as `int`, so existing dialect
+  cards and saved `--diff` baselines are unchanged. Applies to the pyproject,
+  `.coveragerc`/`setup.cfg` and governance-policy paths alike.
+- **A directory named `Makefile` or `pyproject.toml` crashed every verb** with
+  an `IsADirectoryError` traceback and exit 1. `detect.read_text_or_none()`
+  treats an unreadable optional file as absent — the convention the invariant
+  and ADR readers already followed — and every optional-config read now goes
+  through it.
+- **New: `tests/corpus/targets/`**, thirteen labelled target repositories each
+  carrying the partial dialect card a correct detector should produce,
+  compared through `dialect_card.diff_cards()`. Includes a hostile Makefile
+  whose `$(shell rm -rf …)` is proven not to run via a canary directory, so
+  "parsing never executes" is a behavioural assertion rather than an import
+  guard. `.gitattributes` pins these fixtures `-text` so a Windows checkout
+  cannot rewrite the CRLF and BOM specimens.
+
+### Fixed — prose matchers held to measured accuracy (`fix-prose-matcher-precision`)
+
+- **G002 was being switched off by ordinary prose.** The flat negation
+  pattern list scored precision 0.38 / recall 0.42 on a hand-labelled set:
+  bare `zero`, `block`, `fail`, `without` fired on "zero-downtime deploy",
+  "the block renders", "--cov-fail-under". Because the rule asks only whether
+  at least one non-success criterion exists, one false positive silenced it
+  for the whole document. `parse_semantics.NEGATION_PATTERNS` is now a
+  named, three-tier table — *annotation* (the criterion's own
+  `(non-success)`/`(negative)` marker, matched against the marker only),
+  *structural* (zero-false-positive grammar), *lexical* (verbal inflections
+  that refuse a following hyphen). Measured after: precision 0.933, recall
+  0.977. `Criterion.negation_evidence` is new and additive; `is_negative`
+  and `NEGATIVE_PATTERNS` keep their meaning.
+- **U004/S003's normative check was a substring test**, so "shallow clone",
+  "Marshalling" and "mustard" read as SHALL/MUST and silenced the rule.
+  `parse_semantics.NORMATIVE_MODAL` is word-bounded and refuses the
+  hyphenated compound ("must-have"). Measured after: precision 0.875, recall
+  1.000 against the rule's stated contract.
+- **New: `tests/fixtures/phrasing/`**, hand-labelled criterion and
+  requirement corpora, with the eleven sentences the labeller could not
+  decide and the eleven "normative without SHALL/MUST" requirements kept in
+  non-asserting files rather than deleted.
+- **New: `tools/matcher_accuracy.py`** scores the real matcher (per-pattern
+  breakdown with `--patterns`, floors with `--check`); `make matcher-accuracy`
+  runs it. `tests/test_matcher_accuracy.py` enforces four floors declared in
+  `pyproject.toml` `[tool.specgraph]` as integer percentages, read by the
+  same helper the coverage gates use — never in the Makefile or workflow
+  YAML, which is rule G003 applied to this repository.
+
+### Added — property-based tests (`add-parser-property-tests`)
+
+- **`tests/test_properties.py`**: five Hypothesis properties over the parsers
+  that read untrusted text — determinism with sorted, unique targets; never
+  raising on arbitrary unicode (BOM, NUL, CRLF, exotic line separators);
+  idempotent `define` stripping; a requirement count independent of heading
+  depth; case- and padding-invariant negation detection. `derandomize=True`
+  so the gate cannot flake; `--hypothesis-seed=random` widens the search
+  locally. `hypothesis` is a dev-only extra; runtime dependencies stay empty.
+- Mutation testing was evaluated in the same pass and **not** adopted: the
+  measurement was cancelled before producing counts, and `mutmut` cannot run
+  here without deselecting two of this repo's own self-checks. Recorded in
+  `docs/next-steps.md`.
+
+### Added — planning record
+
+- **`docs/eval-corpus-plan.md`**: a peer review of two rounds of multi-model
+  research on adapting an external `eval-corpus-forge` skill into this CI,
+  rewritten as thesis / counter-argument / rebuttal per decision. Establishes
+  that the skill is a deterministic packager rather than an LLM generator,
+  that the eval runner is early-access and unavailable here, and records what
+  from the plan was implemented, deferred, or rejected and why.
+
 ### Added — two-track e2e AQA (`harden-two-track-e2e-aqa` change package)
 
 - **`make e2e-live`**: the no-mocks e2e track as one local command — the

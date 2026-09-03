@@ -1,0 +1,8 @@
+# Labelled fixtures whose bytes ARE the test. Git must never normalise them:
+# tests/corpus/targets/ carries a CRLF Makefile and two UTF-8-BOM Makefiles
+# whose whole purpose is to reach detect's parser exactly as written, and
+# the phrasing corpora are byte-compared JSONL. `-text` disables end-of-line
+# conversion on every platform (the `test-windows` CI leg checks out with
+# Git for Windows' autocrlf default, which would otherwise rewrite them).
+tests/corpus/targets/** -text
+tests/fixtures/phrasing/** -text

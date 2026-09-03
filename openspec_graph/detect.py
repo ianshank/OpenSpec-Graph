@@ -173,16 +173,27 @@ def scoped_fail_under(text: str, table: str) -> int | float | None:
     against a number from somewhere else entirely.
     """
     current = ""
+    elsewhere: list[str] = []
     for line in text.splitlines():
         header = _TOML_TABLE.match(line)
         if header:
             current = header.group(1).strip()
             continue
-        if current != table:
-            continue
         found = _TOML_FAIL_UNDER.match(line)
-        if found:
+        if not found:
+            continue
+        if current == table:
             return as_threshold_number(found.group(1))
+        # Remember, don't return: the answer to "why did planlint not see my
+        # floor?" is usually "it is under a different table", and that is
+        # only sayable if the scan kept looking rather than stopping here.
+        elsewhere.append(current or "<top level>")
+    if elsewhere:
+        logger.debug(
+            "threshold: fail_under found under %s, not under [%s]; ignored",
+            ", ".join(f"[{t}]" for t in elsewhere),
+            table,
+        )
     return None
 
 

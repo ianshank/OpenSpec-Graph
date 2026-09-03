@@ -195,6 +195,52 @@ def test_negation_pattern_names_are_unique() -> None:
     assert len(names) == len(set(names)), "duplicate negation pattern name"
 
 
+def test_negation_evidence_names_the_matching_patterns() -> None:
+    """The additive accessor: names in table order, and ``is_negative`` stays a bool.
+
+    ``graph.py`` serialises ``is_negative`` into node attributes, so the boolean
+    view must survive the richer one being added beside it.
+    """
+    from openspec_graph.parse_model import Criterion
+
+    plain = Criterion(ident="AC-X-1", text="The request is rejected and exits 2.")
+    assert plain.negation_evidence == ("exit_code", "reject")
+    assert plain.is_negative is True
+
+    # The marker is seen by both the annotation tier (note only) and the
+    # structural `non_success` pattern (note + text); both count, in table
+    # order, so the annotation always leads.
+    annotated = Criterion(ident="AC-X-2", text="Writes land.", note=" (non-success)")
+    assert annotated.negation_evidence == ("annotated_non_success", "non_success")
+    assert Criterion(ident="AC-X-4", text="Writes land.", note=" (negative)").negation_evidence == (
+        "annotated_non_success",
+    )
+
+    success = Criterion(ident="AC-X-3", text="The deploy completes and the page renders.")
+    assert success.negation_evidence == ()
+    assert success.is_negative is False
+
+
+def test_negative_patterns_alias_excludes_the_annotation_tier() -> None:
+    """The backwards-compatible alias is the prose patterns, and only those.
+
+    ``NEGATIVE_PATTERNS`` is re-exported through ``parse.py``; a caller
+    applying it to free text must not get the annotation-tier patterns, which
+    would reproduce the bare-word false positives the tiering removed.
+    """
+    from openspec_graph import parse
+    from openspec_graph.parse_semantics import (
+        ANNOTATION_TIER,
+        NEGATION_PATTERNS,
+        NEGATIVE_PATTERNS,
+    )
+
+    prose_only = tuple(p.pattern for p in NEGATION_PATTERNS if p.tier != ANNOTATION_TIER)
+    assert prose_only == NEGATIVE_PATTERNS
+    assert parse.NEGATIVE_PATTERNS is NEGATIVE_PATTERNS
+    assert not any(p.search("Negative numbers are formatted.") for p in NEGATIVE_PATTERNS)
+
+
 def test_annotation_tier_never_fires_on_prose() -> None:
     """The tier boundary, stated as a test.
 
