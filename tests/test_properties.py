@@ -265,13 +265,16 @@ def test_property_settings_are_derandomized_and_nothing_is_xfailed() -> None:
         if name.startswith("test_") and hasattr(fn, "hypothesis")
     ]
     assert len(properties) >= 5, "the five stated properties must all be present"
-    source = inspect.getsource(module)
     for fn in properties:
-        # Each property is decorated with the shared settings object, by name.
-        assert f"@PROPERTY_SETTINGS\n@given" in source or "@PROPERTY_SETTINGS" in source
         marks = getattr(fn, "pytestmark", [])
         assert not any(m.name == "xfail" for m in marks), f"{fn.__name__} is xfail-marked"
-    assert source.count("@PROPERTY_SETTINGS") == len(properties), (
+    # Each property is decorated with the shared settings object, by name, on
+    # its own line -- counted line-anchored so this test's own source cannot
+    # inflate the tally.
+    import re
+
+    decorated = re.findall(r"^@PROPERTY_SETTINGS$", inspect.getsource(module), re.MULTILINE)
+    assert len(decorated) == len(properties), (
         "every property must carry the shared, derandomised settings"
     )
 
