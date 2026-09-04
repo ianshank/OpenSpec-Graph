@@ -50,6 +50,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `int | float`. BOM-tolerant reads now cover `.coveragerc`/`setup.cfg`,
   `governance-policy.json`, spec files and `--diff`/`--baseline` cards, not
   only the Makefile and pyproject.
+- **Found by the Windows CI leg:** a top-level `$(shell touch C:/…)` line
+  matched the rule regex on its drive-letter colon and minted `touch` and
+  `C` as targets. A line that is exactly one `$(shell|eval|info|…)` call now
+  declares nothing, decided by bracket matching so a colon inside the
+  arguments cannot be mistaken for a rule's; `$(shell x): deps` in target
+  position still counts as unresolved. Pinned as `shell-call-with-colon`.
+- **New: `tests/test_e2e_corpus.py`**, the real CLI as a subprocess over
+  every corpus shape and each fixed defect, at the exit-code boundary.
 
 ### Fixed — prose matchers held to measured accuracy (`fix-prose-matcher-precision`)
 

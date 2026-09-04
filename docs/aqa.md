@@ -118,7 +118,14 @@ nothing compared prose against `pyproject.toml`.
   witness files, unreadable specs), and the CLI driven both in-process
   (`cli.main()`) and as a real subprocess (`tests/support.py::run_cli`,
   with coverage tracked across the subprocess boundary). This is the fast,
-  hermetic track.
+  hermetic track. `tests/test_e2e_corpus.py` extends it to the labelled
+  corpora: the real verb over every target shape, and each fixed defect
+  proven at the exit-code and stdout boundary (no false G004 on a BOM
+  Makefile, a fractional floor through `detect --diff`, a directory named
+  `Makefile` exiting 0, the hostile shape inert as a process, G002 not
+  satisfied by ordinary prose or a waiver reason, U004 on "shallow" but not
+  on "mustn't", the accuracy tool headless, the debug log naming a rejected
+  floor).
 - **Without mocks** — `make e2e-live`. The *installed* `planlint` against
   *this live repository*, with zero fixtures: `detect`,
   `validate --fail-on ERROR`, `graph --format json`, `waivers`, and one
