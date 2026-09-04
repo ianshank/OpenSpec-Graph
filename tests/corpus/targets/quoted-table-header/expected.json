@@ -1,0 +1,1 @@
+{"threshold": {"locator": "pyproject.toml:[tool.coverage.report].fail_under", "value": 90}}

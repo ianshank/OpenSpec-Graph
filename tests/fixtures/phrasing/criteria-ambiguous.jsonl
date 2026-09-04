@@ -1,0 +1,11 @@
+{"leaning": true, "text": "The failsafe engages and the pump keeps running."}
+{"leaning": false, "text": "The pipeline never exceeds its p99 latency budget."}
+{"leaning": true, "text": "The caught exception is logged with its stack trace."}
+{"leaning": true, "text": "The build fails over to the mirror registry when the primary is slow."}
+{"leaning": true, "text": "A failing test's output is shown inline."}
+{"leaning": false, "text": "Neither dark nor light theme is forced; the system preference is honoured."}
+{"leaning": true, "text": "The commit is created without a signature when gpg is unavailable."}
+{"leaning": false, "text": "The sidebar shows nothing until the first project is created."}
+{"leaning": true, "text": "Duplicate submissions are deduplicated; only the first is stored."}
+{"leaning": false, "text": "Invalid-looking but well-formed addresses are accepted."}
+{"leaning": false, "text": "A cache miss falls through to the origin."}

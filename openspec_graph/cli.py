@@ -317,7 +317,9 @@ def _load_card(path_str: str, label: str) -> tuple[dict[str, object] | None, int
     """
     path = Path(path_str)
     try:
-        card = json.loads(path.read_text(encoding="utf-8"))
+        # utf-8-sig: a baseline card saved by a Windows editor may carry a BOM,
+        # which json.loads rejects outright.
+        card = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError) as exc:
         print(f"cannot read {label} {path}: {exc}", file=sys.stderr)
         return None, 2

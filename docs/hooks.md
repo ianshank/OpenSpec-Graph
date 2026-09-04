@@ -113,8 +113,18 @@ mid-edit:
   dialect rather than writing it) can misclassify the spec as the dialect it
   merely describes — a self-referential trap this repo has hit more than
   once while writing specs *about* its own dialect grammar.
+- Editing anything under `tests/corpus/targets/` → reminds that each
+  `expected.json` is a hand-written label, never a snapshot of the detector,
+  and to run `pytest tests/test_detect_corpus.py`. The
+  `planlint-add-detect-shape` skill carries the checklist.
+- Editing `tests/fixtures/phrasing/**`, `openspec_graph/parse_semantics.py`
+  or `openspec_graph/parse_model.py` → reminds to run `make matcher-accuracy`
+  (the per-pattern misfire column is the review) and then `make validate`,
+  because a tightened negation pattern must not strip the last non-success
+  criterion from any of this repo's own change packages. The
+  `planlint-add-phrasing-case` skill carries the checklist.
 
-`.claude/hooks/nudge_rule_registry.sh` implements all four checks via a
+`.claude/hooks/nudge_rule_registry.sh` implements every check above via a
 single shell script (no `jq` dependency — not guaranteed to be on `PATH` in
 every dev environment this repo is used from). Despite the JSON key's name,
 `"decision": "block"` does **not** undo the edit — `PostToolUse` fires after
@@ -123,9 +133,13 @@ the write already landed — it is `PostToolUse`'s contract for surfacing
 block.
 
 See also `.claude/agents/` (spec-drafter, spec-adversary, planlint-verifier —
-this repo's own dogfooded OpenSpec change-package workflow) and
-`.claude/skills/planlint-add-rule/` (the step-by-step checklist the first
-hook case above points at).
+this repo's own dogfooded OpenSpec change-package workflow) and the
+contributor skills under `.claude/skills/`: `planlint-add-rule` (the checklist
+the first hook case above points at), `planlint-add-eval-case`,
+`planlint-add-detect-shape` and `planlint-add-phrasing-case`. The hook script
+itself is held to its wiring by `tests/test_claude_hooks.py`: every path
+class above must produce a reason, an unrelated path must produce none, and
+`.claude/settings.json` must point at the script.
 
 ## Adding a custom rule
 

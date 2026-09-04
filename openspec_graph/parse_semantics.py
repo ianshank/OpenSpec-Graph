@@ -126,7 +126,13 @@ ADR_REF = re.compile(r"\bADR-\d+\b")
 PYTEST_SEL = re.compile(r"pytest\s+-k\s+(\S+)")
 
 # A bare percentage or >= NN in criterion text, which should come from config.
-HARD_THRESHOLD = re.compile(r"(?:≥|>=|>)\s*\d{2,3}\s*%?|\b\d{2,3}\s*%")
+# The number may carry a decimal fraction: coverage.py accepts a fractional
+# floor, `detect` now reports one faithfully, and G003's "cites the exact
+# detected floor" suppression has to be able to see 85.5 as 85.5 rather than
+# as 85 -- otherwise the one repo whose floor is fractional gets a false G003
+# on every criterion that cites it correctly.
+HARD_THRESHOLD = re.compile(r"(?:≥|>=|>)\s*\d{2,3}(?:\.\d+)?\s*%?|\b\d{2,3}(?:\.\d+)?\s*%")
+_THRESHOLD_NUMBER = re.compile(r"\d{2,3}(?:\.\d+)?")
 THRESHOLD_ALLOWLIST = (
     "governance-policy.json",
     "pyproject.toml",
@@ -138,38 +144,286 @@ THRESHOLD_ALLOWLIST = (
     "policy",
 )
 
+# --- non-success detection (G002) ------------------------------------------
+#
 # A non-success criterion is one that asserts something is refused, fails, or
 # does not happen. Detected by pattern rather than by an exact-phrase list,
 # because the phrasings that matter in practice are open-ended -- "opens no
 # egress channel" and "mutates neither the remote nor the local tag list" both
 # describe failure paths and neither is a fixed idiom.
-NEGATIVE_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
-    re.compile(p, re.IGNORECASE)
-    for p in (
-        r"\bnon-success\b",
-        r"\bnegative\b",
-        r"\b(?:must|shall|does|do|is|are|will|would|can|could)\s+not\b",
-        r"\bcannot\b",
-        r"\bnever\b",
-        r"\bneither\b",
-        r"\bnothing\b",
-        r"\bwithout\b",
-        r"\brefus\w*",
-        r"\breject\w*",
-        r"\bden(?:y|ies|ied|ial)\b",
-        r"\bblock(?:s|ed|ing)?\b",
-        r"\bfail\w*",
-        r"\bmalformed\b",
-        r"\binvalid\b",
-        r"\bunaffected\b",
-        r"\bunchanged\b",
-        r"\bcaught\b",
-        r"\bnon-?zero\b",
-        r"\bzero\b",
-        # "opens no egress channel", "no second tag is created"
-        r"\bno\s+\w+(?:\s+\w+){0,3}\s+(?:is|are|was|were|opens|occurs|happens|created|written)\b",
-        r"\b(?:opens|creates|writes|emits|grants|mutates|leaves)\s+no\b",
+#
+# The patterns are tiered, and the tier is the design rather than a label. An
+# earlier flat list of bare lexical triggers (`zero`, `block`, `fail`,
+# `without`) scored precision 0.38 / recall 0.42 against a hand-labelled set of
+# 86 criterion sentences -- worse than useless for a rule whose failure mode is
+# *silence*: G002 asks only whether a spec has at least ONE non-success
+# criterion, so a single false positive anywhere in the document switches the
+# rule off. "The block renders below the header" used to satisfy it. Measured
+# again after this tiering and a second adversarial round: precision 0.92,
+# recall 0.98.
+#
+#   annotation -- the author said so. Harness-dialect criteria carry a
+#                 parenthesised marker ("**AC-WM-3 (non-success):**"), which is
+#                 an explicit declaration, not prose to be interpreted. Matched
+#                 against the WHOLE marker (a full match, not a search), so a
+#                 criterion merely discussing negative numbers is not promoted
+#                 by the word -- and neither is an upstream scenario, whose
+#                 `Criterion.note` is the entire scenario block rather than a
+#                 marker (an adversarial review found the bare-word false
+#                 positive had simply moved dialects when this tier matched by
+#                 search).
+#   structural -- grammar that means absence or refusal wherever it appears
+#                 ("cannot", "no X is created", "writes no", "exits 2"). Every
+#                 pattern in this tier scored zero false positives.
+#   lexical    -- a word whose *verb* forms mean failure but whose noun forms
+#                 are ordinary software vocabulary. Each is restricted to the
+#                 inflections that are actually verbal, and refuses a following
+#                 hyphen, which is what separates "the write is denied" from
+#                 "denied-list entries", "the run fails" from "--cov-fail-under",
+#                 and "the request is blocked" from "blocking I/O".
+#
+# `tools/matcher_accuracy.py` scores this table against
+# `tests/fixtures/phrasing/`; `tests/test_matcher_accuracy.py` holds it to the
+# floors declared in `pyproject.toml`. Adding a pattern here without moving
+# those numbers is the point: the table is data, and its accuracy is a tracked
+# figure rather than a claim.
+
+ANNOTATION_TIER = "annotation"
+STRUCTURAL_TIER = "structural"
+LEXICAL_TIER = "lexical"
+
+
+@dataclasses.dataclass(frozen=True)
+class NegationPattern:
+    """One named, tiered non-success detector."""
+
+    name: str
+    tier: str
+    pattern: re.Pattern[str]
+
+
+def _negation(name: str, tier: str, source: str) -> NegationPattern:
+    # IGNORECASE on every pattern without exception: G002 must not turn on how
+    # a criterion happens to be capitalised, an invariant
+    # tests/test_properties.py holds by construction.
+    return NegationPattern(name, tier, re.compile(source, re.IGNORECASE))
+
+
+NEGATION_PATTERNS: tuple[NegationPattern, ...] = (
+    # -- annotation: matched against the criterion's own marker only ---------
+    _negation("annotated_non_success", ANNOTATION_TIER, r"(?:non-success|negative)"),
+    # -- structural ---------------------------------------------------------
+    _negation("non_success", STRUCTURAL_TIER, r"\bnon-success\b"),
+    # A prohibition is always an obligation about a failure path.
+    _negation("prohibition", STRUCTURAL_TIER, r"\b(?:must|shall|should|may)\s+not\b"),
+    # A negated verb usually states an outcome ("is not created", "does not
+    # retry") but sometimes a capability ("does not require a Makefile", "is
+    # not nullable"); the latter are counted honestly against this pattern in
+    # the corpus. "IS NOT NULL" is a SQL predicate being described.
+    _negation(
+        "negated_verb",
+        STRUCTURAL_TIER,
+        r"\b(?:does|do|is|are|was|were|will|would|can|could)\s+not\b(?!\s+null\b)",
+    ),
+    _negation("cannot", STRUCTURAL_TIER, r"\bcannot\b"),
+    # (?!-): "never-expiring tokens" is a feature, not an absence.
+    _negation("never", STRUCTURAL_TIER, r"\bnever\b(?!-)"),
+    _negation("neither", STRUCTURAL_TIER, r"\bneither\b"),
+    # "no second tag is created"
+    _negation(
+        "no_subject_verb",
+        STRUCTURAL_TIER,
+        r"\bno\s+\w+(?:\s+\w+){0,3}\s+(?:is|are|was|were|opens|occurs|happens|created"
+        r"|written|recorded|emitted|appears)\b",
+    ),
+    # "opens no egress channel"
+    _negation(
+        "verb_no",
+        STRUCTURAL_TIER,
+        r"\b(?:opens|creates|writes|emits|grants|mutates|leaves|records|returns"
+        r"|produces|adds|sends|makes)\s+no\b",
+    ),
+    _negation(
+        "nothing",
+        STRUCTURAL_TIER,
+        r"\b(?:opens|creates|writes|emits|grants|mutates|leaves|records|returns"
+        r"|produces|does|changes|reports)\s+nothing\b|\bnothing\s+(?:is|are|was|were)\b",
+    ),
+    # Anchored to an exit/status context: "every non-zero balance" is a report
+    # about data, not a failing run.
+    _negation(
+        "non_zero_exit",
+        STRUCTURAL_TIER,
+        r"\bnon-?zero\s+(?:exit|status|code|return)\w*\b"
+        r"|\b(?:exits?|exited|returns?|status|code)\s+(?:with\s+)?(?:an?\s+)?non-?zero\b",
+    ),
+    _negation(
+        "exit_code",
+        STRUCTURAL_TIER,
+        # `status` as well as `code`; and a trailing time unit means "exits 10
+        # seconds after SIGTERM" -- a duration, not an exit code.
+        r"\bexits?\s+(?:with\s+)?(?:(?:code|status)\s+)?[1-9]\d*\b"
+        r"(?!\s*(?:s|sec|secs|seconds?|ms|min|minutes?|hours?)\b)"
+        r"|\bexit\s+(?:(?:code|status)\s+)?[1-9]\d*\b",
+    ),
+    _negation(
+        "http_error",
+        STRUCTURAL_TIER,
+        # `gets` is excluded: "gets 500 requests per second" is throughput.
+        r"\b(?:returns?|yields?|responds?(?:\s+with)?|receives?|answers?\s+with"
+        r"|bounced\s+with|results?\s+in)\s+(?:an?\s+)?(?:HTTP\s+)?[45]\d{2}\b"
+        r"|\bgets?\s+an?\s+(?:HTTP\s+)?[45]\d{2}\b"
+        r"|\b(?:HTTP\s+)?[45]\d{2}\s+(?:is|are|was|were)\s+returned\b",
+    ),
+    _negation("no_op", STRUCTURAL_TIER, r"\bno-?ops?\b"),
+    # Predicative only: "is unchanged", "leaves the tree untouched". The
+    # attributive form ("skips unchanged files") describes input, not outcome.
+    _negation(
+        "state_preserved",
+        STRUCTURAL_TIER,
+        r"\b(?:is|are|was|were|remains?|remained|stays?|stayed|left)\s+"
+        r"(?:unchanged|untouched|unmodified|unaffected)\b(?!-)"
+        r"|\b(?:leaves?|left|keeps?|kept)\s+\w+(?:\s+\w+){0,3}\s+"
+        r"(?:unchanged|untouched|unmodified|unaffected)\b(?!-)",
+    ),
+    _negation(
+        "remains_absent",
+        STRUCTURAL_TIER,
+        r"\b(?:remains?|stays?|stayed|remained)\s+(?:absent|empty|off|unset|closed"
+        r"|disabled|untouched)\b",
+    ),
+    # The bare word "negative" belongs to the annotation tier; in prose it needs
+    # a noun to mean a failure path rather than a number below zero.
+    _negation(
+        "negative_case",
+        STRUCTURAL_TIER,
+        r"\bnegative\s+(?:case|cases|path|paths|test|tests|scenario|scenarios"
+        r"|criterion|criteria|outcome|outcomes)\b",
+    ),
+    # -- lexical ------------------------------------------------------------
+    # Each excludes its own nominalisation ("refusal", "rejection", "denial")
+    # and, via (?!-), its hyphenated attributive use.
+    _negation("refuse", LEXICAL_TIER, r"\brefus(?:e|es|ed|ing)\b"),
+    _negation("reject", LEXICAL_TIER, r"\breject(?:s|ed|ing)?\b(?!-)"),
+    _negation("deny", LEXICAL_TIER, r"\bden(?:y|ies|ied)\b(?!-)"),
+    _negation("fail", LEXICAL_TIER, r"\bfail(?:s|ed|ing)?\b(?!-)"),
+    # The noun only in an outcome position: "on failure", "the failure is
+    # reported" -- not "the word failure appears in the glossary".
+    _negation(
+        "failure",
+        LEXICAL_TIER,
+        r"\b(?:on|upon|after)\s+(?:\w+\s+){0,2}failure\b|\bfailures?\s+(?:is|are|was|were)\b"
+        r"|\bfailure\s+(?:mode|path|case)s?\b",
+    ),
+    # Copula-anchored: "block" is overwhelmingly a noun in software prose.
+    _negation(
+        "blocked", LEXICAL_TIER, r"\b(?:is|are|was|were|be|been|being|gets?|got)\s+blocked\b"
+    ),
+    _negation("abort", LEXICAL_TIER, r"\babort(?:s|ed|ing)?\b"),
+    _negation("halt", LEXICAL_TIER, r"\bhalt(?:s|ed|ing)?\b"),
+    _negation("decline", LEXICAL_TIER, r"\bdeclin(?:e|es|ed|ing)\b"),
+    # Passive only, as one pattern: the active forms are ordinary software
+    # verbs ("the user can skip the tutorial", "users may drop tables",
+    # "the importer ignores whitespace", "kill switch") and scored worse than
+    # chance in review. "The job is skipped" / "changes are dropped" are the
+    # outcome uses that survive.
+    _negation(
+        "passive_refusal",
+        LEXICAL_TIER,
+        r"\b(?:is|are|was|were|be|been|being|gets?|got)\s+"
+        r"(?:skipped|dropped|ignored|killed|terminated)\b",
+    ),
+    _negation("prevent", LEXICAL_TIER, r"\bprevent(?:s|ed|ing)?\b"),
+    # No bare "timeout(s)": "timeouts are configurable" is a setting.
+    _negation("timeout", LEXICAL_TIER, r"\btimes?\s+out\b|\btimed[\s-]out\b"),
+    # Only raising an error/exception: "raises the coverage floor" is success.
+    _negation(
+        "raise", LEXICAL_TIER, r"\brais(?:e|es|ed|ing)\s+(?:an?\s+)?\w*(?:error|exception)s?\b"
+    ),
+    _negation("error_out", LEXICAL_TIER, r"\berrors?\s+out\b"),
+    _negation(
+        "error_result",
+        LEXICAL_TIER,
+        r"\b(?:raises?|returns?|reports?|emits?|shows?|displays?|yields?|produces?"
+        r"|receives?|gets?|sees?|is|are)\s+(?:an?\s+)?(?:\w+\s+)?errors?\b",
+    ),
+    _negation("invalid", LEXICAL_TIER, r"\binvalid\b(?!-)"),
+    _negation("malformed", LEXICAL_TIER, r"\bmalformed\b(?!-)"),
+    # "caught up with upstream" is progress, not an exception being handled.
+    _negation("caught", LEXICAL_TIER, r"\bcaught\b(?!\s+up\b)"),
+    _negation(
+        "rollback", LEXICAL_TIER, r"\b(?:rolls?\s+back|rolled\s+back|revert(?:s|ed|ing)?)\b"
+    ),
+)
+
+
+def negation_matches(note: str, text: str) -> tuple[str, ...]:
+    """Names of every negation pattern matching this criterion, in table order.
+
+    ``note`` is the criterion's own parenthesised annotation and ``text`` its
+    prose. Annotation-tier patterns must match the whole of ``note`` (stripped)
+    -- that separation is the whole point of the tier, since "negative" as a
+    declared marker and "negative" in a sentence about numbers are different
+    claims. A dialect whose ``note`` is a block of prose (upstream scenarios,
+    speckit snippets) therefore never triggers the annotation tier; its prose
+    is judged by the structural and lexical tiers like any other prose.
+
+    Returns names rather than a bare bool so a caller can report *why* a
+    criterion counted, which is what makes a G002 finding arguable instead of
+    mysterious. :attr:`parse_model.Criterion.is_negative` is the boolean view.
+    """
+    note = note or ""
+    text = text or ""
+    # The harness parser already strips the marker's parentheses; tolerate a
+    # caller that hands them over intact, and any surrounding whitespace.
+    marker = note.strip().strip("()").strip()
+    blob = f"{note} {text}"
+    return tuple(
+        p.name
+        for p in NEGATION_PATTERNS
+        if (
+            p.pattern.fullmatch(marker)
+            if p.tier == ANNOTATION_TIER
+            else p.pattern.search(blob)
+        )
     )
+
+
+# --- normative language (U004 / S003) --------------------------------------
+#
+# Word-bounded, deliberately. This was a bare case-insensitive *substring* test
+# for "SHALL"/"MUST", which made "shallow clone", "Marshalling", "mustard" and
+# an env var named MUST_ROTATE_KEYS all read as normative -- and because U004
+# fires when a requirement is NOT normative, every one of those silently
+# switched the rule off for that requirement. Scored 0.47 precision on a
+# hand-labelled set of 32 requirement texts; the boundaries remove that class
+# of false pass outright.
+#
+# Scope unchanged: this asks "does the requirement use SHALL/MUST", which is
+# exactly what U004's message claims. Broader modals ("should", "is required
+# to", bare imperatives) are a separate question about what *counts* as
+# normative, and answering it belongs in a change package of its own rather
+# than smuggled into a boundary fix.
+# (?!-) additionally rejects the hyphenated noun compound -- "the must-have
+# list", "a shall-not-pass rule" -- where the word is a modifier rather than a
+# modal. Known and accepted limitation: an interrogative ("Shall we keep the
+# legacy endpoint?") still reads as normative. It is a question rather than an
+# obligation, but distinguishing the two needs more than a lexical test, and
+# it is counted honestly against U004's measured precision rather than
+# special-cased away.
+# The contracted prohibition ("mustn't", straight or curly apostrophe) is a
+# MUST NOT and counts; without the optional group `\bmust` has no boundary
+# before the `n` and a contracted prohibition would draw a U004.
+NORMATIVE_MODAL = re.compile(r"\b(?:SHALL|MUST)(?:N['\u2019]T)?\b(?!-)", re.IGNORECASE)
+
+
+# Backwards-compatible view for callers that only ever wanted the compiled
+# prose patterns (it is re-exported through parse.py's __all__). Annotation-tier
+# patterns are deliberately excluded: applied to free text they would reproduce
+# the bare-word false positives the tiering exists to remove. Prefer
+# negation_matches(), which applies each tier to the field it is written for.
+NEGATIVE_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
+    p.pattern for p in NEGATION_PATTERNS if p.tier != ANNOTATION_TIER
 )
 
 
@@ -288,13 +542,20 @@ def hard_coded(text: str, dialect: str = "") -> tuple[str, ...]:
     return tuple(offenders)
 
 
-def threshold_values(line: str) -> tuple[int, ...]:
-    """Every threshold-shaped number on a line (each HARD_THRESHOLD span), as ints."""
-    values: list[int] = []
+def threshold_values(line: str) -> tuple[int | float, ...]:
+    """Every threshold-shaped number on a line (each HARD_THRESHOLD span).
+
+    An integral value comes back as ``int`` and a fractional one as ``float``,
+    the same contract as ``detect.as_threshold_number`` -- so ``values[0] ==
+    profile.threshold.value`` compares like with like whichever way the floor
+    was written.
+    """
+    values: list[int | float] = []
     for match in HARD_THRESHOLD.finditer(line):
-        digits = re.search(r"\d{2,3}", match.group())
-        if digits:
-            values.append(int(digits.group()))
+        number = _THRESHOLD_NUMBER.search(match.group())
+        if number:
+            value = float(number.group())
+            values.append(int(value) if value.is_integer() else value)
     return tuple(values)
 
 

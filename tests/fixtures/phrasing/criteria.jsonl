@@ -1,0 +1,119 @@
+{"label": true, "text": "A partial GCP block opens no egress channel."}
+{"label": true, "text": "The command mutates neither the remote nor the local tag list."}
+{"label": true, "text": "The operation leaves the working tree unchanged."}
+{"label": true, "text": "The server refuses the connection when the client certificate has expired."}
+{"label": true, "text": "Access is denied for users outside the allowlist."}
+{"label": true, "text": "The request is rejected when the payload exceeds 1 MiB."}
+{"label": true, "text": "The tool MUST NOT write outside the target directory."}
+{"label": true, "text": "The CLI returns exit 2 rather than exit 0 when the config is unreadable."}
+{"label": true, "text": "No witness is recorded for a dry run."}
+{"label": true, "text": "The client times out after 30 seconds and surfaces the error to the caller."}
+{"label": true, "text": "The parser raises ValueError on a truncated header."}
+{"label": true, "text": "Re-running apply against an already-applied package is a no-op."}
+{"label": true, "text": "The lock file remains absent after a rollback."}
+{"label": true, "text": "The validator exits non-zero on an empty manifest."}
+{"label": true, "text": "The upload is aborted when the checksum mismatches."}
+{"label": true, "text": "The migration halts before touching any rows if the schema version is unknown."}
+{"label": true, "text": "An expired token yields a 401 and the session is cleared."}
+{"label": true, "text": "The daemon declines to start if the socket is already bound."}
+{"label": true, "text": "Nothing is written to disk when --dry-run is passed."}
+{"label": true, "text": "The job is skipped when the input hash matches the previous run."}
+{"label": true, "text": "Retries stop after the third failure."}
+{"label": true, "text": "The endpoint returns 404 for an unknown id."}
+{"label": true, "text": "The message is dropped if its signature cannot be verified."}
+{"label": true, "text": "An unknown flag causes the CLI to print usage and exit 64."}
+{"label": true, "text": "The scheduler does not requeue a task that has been cancelled."}
+{"label": true, "text": "The stale entry is evicted and never served."}
+{"label": true, "text": "The build errors out on a missing dependency."}
+{"label": true, "text": "Concurrent writers are serialized; the loser receives a conflict error."}
+{"label": true, "text": "The webhook is ignored when the shared secret mismatches."}
+{"label": true, "text": "No second tag is created when the release already exists."}
+{"label": true, "text": "The feature flag stays off for tenants lacking the entitlement."}
+{"label": true, "text": "Requests over the rate limit receive 429 and are not processed."}
+{"label": true, "text": "The import is rolled back entirely if any row fails validation."}
+{"label": true, "text": "The user sees an error banner instead of the dashboard when the backend is unreachable."}
+{"label": true, "text": "The linter reports the drift and leaves the tree untouched."}
+{"label": true, "text": "Submitting an empty form is prevented client-side."}
+{"label": true, "text": "The process is killed after exceeding its memory budget."}
+{"label": true, "text": "Attempting to delete a protected branch produces error E403."}
+{"label": true, "text": "Writes to a read-only replica are bounced with a 405."}
+{"label": true, "text": "Once the retry budget is exhausted the circuit opens and callers get an immediate error."}
+{"label": true, "text": "An unauthenticated caller gets a 401."}
+{"label": true, "text": "Non-success responses are retried with exponential backoff."}
+{"label": true, "text": "Uploading a file over the size limit shows the message 'Too large'."}
+{"label": false, "text": "The zero-downtime deploy completes within the maintenance window."}
+{"label": false, "text": "The block renders below the header."}
+{"label": false, "text": "The failover succeeds within five seconds."}
+{"label": false, "text": "The blocking call returns the result once the lock is acquired."}
+{"label": false, "text": "The unaffected-rows counter increments after each batch."}
+{"label": false, "text": "The replica has caught up with upstream before serving reads."}
+{"label": false, "text": "The denylist is loaded at startup."}
+{"label": false, "text": "Negative numbers are formatted with a leading minus sign."}
+{"label": false, "text": "The zero value is serialized as 0 rather than omitted."}
+{"label": false, "text": "The certificate is valid for 90 days and renewed automatically."}
+{"label": false, "text": "Nothing more than a single HTTP round-trip is needed to fetch the manifest."}
+{"label": false, "text": "The report is generated without manual intervention."}
+{"label": false, "text": "Users can log in without a password using a passkey."}
+{"label": false, "text": "Denial-of-service protection is enabled by default."}
+{"label": false, "text": "The reviewer's rejection reason is displayed in the review panel."}
+{"label": false, "text": "Refusal telemetry is aggregated hourly."}
+{"label": false, "text": "The catalog lists every non-zero balance."}
+{"label": false, "text": "Malformed-input fuzzing runs nightly in CI."}
+{"label": false, "text": "The blocked-user list can be exported as CSV."}
+{"label": false, "text": "Do not disturb mode silences notifications until 8am."}
+{"label": false, "text": "The IS NOT NULL predicate is pushed down to the storage layer."}
+{"label": false, "text": "Invalidating the cache triggers a full rebuild."}
+{"label": false, "text": "The wizard is unchanged from v2 except for the new logo."}
+{"label": false, "text": "The blocker label is applied to every P0 issue."}
+{"label": false, "text": "Zero-config mode picks sensible defaults."}
+{"label": false, "text": "The API will not be versioned until 2.0."}
+{"label": false, "text": "The failure-rate dashboard refreshes every minute."}
+{"label": false, "text": "The reject-and-resubmit flow is documented in the runbook."}
+{"label": false, "text": "The canary receives 5% of traffic and the rollout continues."}
+{"label": false, "text": "The user can download the report as PDF."}
+{"label": false, "text": "Search results are returned within 200 ms."}
+{"label": false, "text": "The audit log records the actor, the action, and the timestamp."}
+{"label": false, "text": "The deploy is idempotent; running it twice produces the same state."}
+{"label": false, "text": "The release notes are published to the changelog."}
+{"label": false, "text": "The blockchain height is displayed in the footer."}
+{"label": false, "text": "Users are notified when their password is about to expire."}
+{"label": false, "text": "The user is signed in and the dashboard shows their projects."}
+{"label": false, "text": "The neighbouring blocks are merged into one region."}
+{"label": false, "text": "Every dependency is pinned to an exact version."}
+{"label": false, "text": "The blocks column is sortable by height."}
+{"label": false, "text": "Denied-list entries are shown in grey."}
+{"label": false, "text": "The zero-based index is converted to one-based for display."}
+{"label": false, "text": "Blocking I/O is moved off the event loop."}
+{"label": false, "text": "The user can skip the tutorial."}
+{"label": false, "text": "The pipeline skips unchanged files."}
+{"label": false, "text": "Drop-down menus render in the header."}
+{"label": false, "text": "Users may drop tables they own."}
+{"label": false, "text": "The run raises the coverage floor to the configured value."}
+{"label": false, "text": "Raising a PR triggers CI."}
+{"label": false, "text": "The kill switch is documented in the runbook."}
+{"label": false, "text": "Timeouts are configurable via TIMEOUT_SECONDS."}
+{"label": false, "text": "The importer ignores leading whitespace."}
+{"label": false, "text": "Never-expiring tokens are supported for service accounts."}
+{"label": false, "text": "The window remains the same size after rotation."}
+{"label": false, "text": "The gateway gets 500 requests per second."}
+{"label": false, "text": "The daemon exits 10 seconds after SIGTERM."}
+{"label": false, "text": "The column is not nullable."}
+{"label": false, "text": "The build does not require a Makefile."}
+{"label": false, "text": "The tool has not been run yet."}
+{"label": true, "text": "Timed-out jobs are retried once."}
+{"label": true, "text": "HTTP 500 is returned when the backend is unreachable."}
+{"label": true, "text": "A 404 is returned for an unknown id."}
+{"label": true, "text": "The request results in a 403 when the token is expired."}
+{"label": true, "text": "The process exits with status 1 when the manifest is missing."}
+{"label": true, "text": "The job is skipped when the cache is warm."}
+{"label": true, "text": "Uncommitted changes are dropped on rollback."}
+{"label": true, "text": "The command raises ValueError on a malformed id."}
+{"label": true, "text": "On failure the partial output is deleted."}
+{"label": true, "text": "The tag list is not modified when the push is rejected."}
+{"label": true, "text": "A second witness is not written for the same stage."}
+{"label": true, "text": "The temporary file does not exist after cleanup."}
+{"label": true, "text": "The client will not retry a request that returned a 4xx."}
+{"label": true, "text": "The baseline does not change when only prose changes."}
+{"label": true, "text": "The target tree is left unchanged by every read-only verb."}
+{"label": false, "text": "Unchanged files are listed first in the report."}
+{"label": false, "text": "An untouched draft can be resumed from the dashboard."}

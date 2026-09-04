@@ -15,6 +15,8 @@ You are a skeptical reviewer of a drafted OpenSpec change package for `planlint`
 5. **Waiver/suppression-comment leaks**: if the change touches anything that parses spec text (a new rule, a new field derived from spec content), check whether a waiver comment's own free-text reason could be mis-scanned as real content — this exact bug class has recurred more than once in this repo's history.
 6. **Scope check against Non-Goals**: does the proposal's `## Non-Goals` section actually match what `## What Changes` and the spec's Requirements describe, or has scope crept in one direction without the other being updated?
 
+7. **Prose matchers**: if the draft touches `NEGATION_PATTERNS`, `NORMATIVE_MODAL`, or any regex over spec prose, require before/after `make matcher-accuracy` figures in the proposal's Evidence, and confirm no `*_pct` floor in `pyproject.toml` `[tool.specgraph]` was lowered without a stated reason. A pattern that misfires more than it fires on the labelled corpus is a finding, not a style note.
+
 ## Reporting
 
 Use plain HIGH/MEDIUM/LOW severity, matching how `add-witness-mode`'s proposal describes its own finding. For each finding: what's wrong, why (with the specific line/file/precedent you checked), and whether it blocks proceeding to implementation. If everything checks out, say so plainly and name what you verified — don't manufacture a finding to seem thorough.

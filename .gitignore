@@ -60,3 +60,7 @@ base.json
 # the same reason and just as untracked.
 evals/results/
 evals/mocks/
+
+# Hypothesis's example database. Local replay state for property-test
+# failures; regenerated on demand and never a reviewable artifact.
+.hypothesis/

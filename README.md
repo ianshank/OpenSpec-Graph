@@ -265,8 +265,37 @@ are now regression tests, named after the file that exposed them:
    affected. `Requirement` now carries the body text too, and U004 checks
    both.
 
+A second round, run against twenty synthetic target repositories and a
+hand-labelled sentence corpus instead of two real repos, found four more.
+These are also regression tests now, under `tests/corpus/targets/` and
+`tests/fixtures/phrasing/`:
+
+5. **False G004 from a byte-order mark.** U+FEFF is a format character, not
+   whitespace, so `str.strip()` left it on the first Makefile line and it
+   became part of the first target's name. A valid repo whose Makefile
+   started with a BOM was told it cited a target it did not have. Stripped in
+   the parser and decoded away at the read site.
+6. **Wrong threshold locator.** `fail_under` was matched under *any* TOML
+   table and then reported as `[tool.coverage.report].fail_under`, a table
+   that did not exist in the file. Now scoped to the table it names.
+7. **Truncated floor.** `fail_under = 85.5` was read as `85`, which quietly
+   loosens the gate being reported. Fractions survive; integers stay
+   integers so saved dialect cards do not churn.
+8. **G002 was switched off by ordinary prose.** The negation matcher scored
+   precision 0.38 on a labelled set: bare `zero`, `block`, `fail` and
+   `without` fired on "zero-downtime deploy", "the block renders", and
+   "--cov-fail-under". Because G002 asks only whether *one* non-success
+   criterion exists, a single false positive silenced the rule for the whole
+   document. The matcher is now tiered (an author's `(non-success)` marker,
+   then structural grammar, then anchored verb forms) and held to floors in
+   `pyproject.toml`; measured precision 0.919 on a corpus half of whose
+   negatives were written to trip the matcher. In the same pass U004's
+   substring test, which read "shallow clone" as normative, became
+   word-bounded.
+
 A linter that never fails is a decoration; one that fails wrongly gets disabled.
-Both directions are tested.
+Both directions are tested, and for the two rules that read prose the
+false-positive rate is a tracked number rather than a hope.
 
 ## Tests
 
@@ -290,6 +319,13 @@ on a non-git target), and pins the exact exit-code messages the skill quotes.
 `tests/test_agent_artifacts.py` validates the evaluation suite, the retrieval
 config, and the release workflow, because those are read only by tools outside
 this repo and would otherwise fail first in someone else's runner.
+
+Two labelled corpora sit under the same gate: `tests/corpus/targets/` holds
+synthetic target repositories with the dialect card a correct `detect` should
+emit, and `tests/fixtures/phrasing/` holds hand-labelled sentences the G002 and
+U004 matchers are scored against, with floors read from `pyproject.toml`. Both
+run inside `make test`, which needs the dev extras (`pip install -e ".[dev]"`;
+Hypothesis powers `tests/test_properties.py`).
 
 ## Enterprise AQA gate
 
@@ -421,6 +457,8 @@ change package.
   defers to the Agent Skill above rather than restating it
 - [Evaluation suite](evals/README.md) — activation, repair and adversarial
   cases proving the skill refuses to make findings disappear
+- [Eval corpus plan](docs/eval-corpus-plan.md) — the peer-reviewed plan behind
+  the labelled corpora and property tests, and what was deferred and why
 - [Next steps](docs/next-steps.md) — what is deliberately out of scope
 - [Differentiation roadmap](docs/differentiation-roadmap.md) — the wedge, the
   comparison, and the candidate change packages

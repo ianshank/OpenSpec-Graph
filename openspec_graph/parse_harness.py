@@ -40,11 +40,16 @@ def parse_harness(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion, 
         # turn this citation into a build-gating verdict, not just a
         # cosmetic graph edge).
         verified = VERIFIED_BY.search(strip_waiver_comments(block))
+        # The same class, one field over: a waiver's reason text ("the
+        # coverage floor fails otherwise") is not the criterion's prose, and
+        # letting it into `text` handed G002 a non-success word the author
+        # never wrote -- switching the rule off for the document. Found by
+        # adversarial review of fix-prose-matcher-precision.
         criteria.append(
             Criterion(
                 ident=match.group(2),
                 note=match.group(3).strip(" ()"),
-                text=match.group(4),
+                text=strip_waiver_comments(match.group(4)).strip(),
                 verified_by=verified.group(1) if verified else "",
                 requirement_refs=tuple(sorted(set(REQ_REF.findall(block)))),
                 line=line_of(text, text.find(block[:60])) if block else 0,

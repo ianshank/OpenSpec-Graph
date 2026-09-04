@@ -47,6 +47,14 @@ case "/$FILE_NORM" in
     printf '{"decision": "block", "reason": "You just edited adopter-facing prose. Install commands, the CI template version floor, changelog release links and plugin ids here are checked against pyproject.toml and the generated manifests -- the rename that left eight dead install lines passed every gate because nothing compared prose to packaging metadata. Before finishing: run `pytest tests/test_adopter_urls.py tests/test_agent_artifacts.py`."}'
     exit 0
     ;;
+  */tests/corpus/targets/*)
+    printf '{"decision": "block", "reason": "You just edited the labelled detection corpus. Each expected.json is a hand-written label of what a correct detector should report -- never regenerate it from the detector, or the test asserts the code equals itself. Before finishing: state the expectation in tests/corpus/targets/README.md (the test checks the shape is documented), keep the bytes exact (the corpus is -text in .gitattributes), and run `pytest tests/test_detect_corpus.py` (see the planlint-add-detect-shape skill)."}'
+    exit 0
+    ;;
+  */tests/fixtures/phrasing/*|*/openspec_graph/parse_semantics.py|*/openspec_graph/parse_model.py)
+    printf '{"decision": "block", "reason": "You just edited a prose matcher or its labelled corpus. G002 and U004 are held to measured accuracy floors in pyproject.toml [tool.specgraph]; a pattern change is a change to a number. Before finishing: run `make matcher-accuracy` (per-pattern misfires are the review), then `make validate` -- a tightened pattern must not strip the last non-success criterion from any of this repo own change packages (see the planlint-add-phrasing-case skill)."}'
+    exit 0
+    ;;
   */openspec/changes/*/specs/*/spec.md)
     printf '{"decision": "block", "reason": "You just edited a change-package spec.md -- the exact file planlint dialect-sniffs. Quoting a dialect marker as prose (e.g. a heading name in backticks) can misclassify this spec as the dialect it merely describes, the self-referential trap this repo has hit twice. Before finishing: run `planlint --target . validate --fail-on ERROR` (or `make validate`) and confirm the dialect/finding count is what you expect."}'
     exit 0

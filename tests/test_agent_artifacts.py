@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.support import load_tool
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EVALS_DIR = REPO_ROOT / "evals"
 SKILL_DIR = REPO_ROOT / "skills" / "planlint-spec-governance"
@@ -69,22 +71,8 @@ _TAGS = frozenset({
 })
 
 
-def _load_tool(name: str, filename: str):
-    """Import a ``tools/`` script by path, in-process.
-
-    In-process rather than as a subprocess so coverage sees the module and so
-    its attributes can be read directly. Mirrors the helper of the same name in
-    ``tests/test_skill_contract.py``; the two files stay independent on purpose
-    (importing one test module from another makes collection order load-bearing),
-    but within this file it is one helper rather than a copy per call site.
-    """
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(name, REPO_ROOT / "tools" / filename)
-    assert spec and spec.loader, f"cannot load tools/{filename}"
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+# See tests/support.py::load_tool -- the one shared copy.
+_load_tool = load_tool
 
 
 def _ids(paths: list[Path]) -> list[str]:

@@ -18,7 +18,7 @@ from __future__ import annotations
 import dataclasses
 import re
 
-__all__ = ["MakefileFacts", "parse_makefile", "strip_define_blocks"]
+__all__ = ["MakefileFacts", "parse_makefile", "strip_bom", "strip_define_blocks"]
 
 # GNU Make's built-in special targets. A leading '.' must be part of the
 # tokenizer's accepted target-name characters for any of these to ever be
@@ -55,6 +55,63 @@ _CONDITIONAL_PREFIXES = ("ifeq", "ifneq", "ifdef", "ifndef")
 # name in `define NAME`, so this also matches real Make syntax more exactly.
 _DEFINE_START = re.compile(r"^define(?:\s|$)")
 _DEFINE_END = re.compile(r"^endef(?:\s|$)")
+# A top-level line that IS a function call -- `$(shell ...)`, `$(eval ...)`,
+# `$(info ...)` -- declares nothing, whatever its arguments contain. Without
+# this, `$(shell touch C:/tmp/x)` (a Windows path, or any argument with a
+# colon: `$(shell echo a:b)`) matched _RULE_LINE and minted `touch` and `C`
+# as targets. Found by the Windows CI leg running the hostile-Makefile
+# corpus shape. A `$(VAR): deps` rule with a variable in target position is a
+# different thing and still counts as unresolved below.
+_FUNCTION_CALL_LINE = re.compile(
+    r"^\$[({]\s*(?:shell|eval|call|info|warning|error|foreach|if|value|origin|flavor|file)\b"
+)
+_BRACKETS = {"(": ")", "{": "}"}
+
+
+def _is_whole_line_function_call(line: str) -> bool:
+    """True when ``line`` is exactly one ``$(func ...)`` call and nothing else.
+
+    A `$(shell x): deps` line -- the call in *target position* -- is a rule
+    with an unresolvable target and must keep counting as unresolved
+    (AC-MP-2); only a call that spans the whole line declares nothing. Decided
+    by matching brackets rather than by a regex, so a colon inside the call's
+    arguments (`$(shell touch C:/x)`) cannot be mistaken for a rule's colon.
+    """
+    if not _FUNCTION_CALL_LINE.match(line):
+        return False
+    opener = line[1]
+    closer = _BRACKETS[opener]
+    depth = 0
+    for index, char in enumerate(line):
+        if char == opener:
+            depth += 1
+        elif char == closer:
+            depth -= 1
+            if depth == 0:
+                return line[index + 1 :].strip() == ""
+    return False  # unbalanced: leave it to the rule regex as before
+
+# U+FEFF (BYTE ORDER MARK) is a Cf format character, NOT whitespace, so
+# `str.strip()` does not remove it and `[^:\s]` in _RULE_LINE happily accepts
+# it as the first character of a target name. A UTF-8-BOM Makefile therefore
+# used to yield a fabricated first target ("﻿all" instead of "all"),
+# which in turn produced a *false* G004 ("cites `make all` which is not a
+# target") against a perfectly valid repository -- the exact false-positive
+# class this project exists to eliminate in other people's repos.
+#
+# Stripped here, in the pure function, rather than only at detect.py's read
+# site: parse_makefile() is public API that takes text from any caller, so
+# its own contract is "BOM-tolerant", not "correct provided somebody else
+# decoded carefully". detect.py additionally reads with `utf-8-sig` so the
+# BOM never reaches either this parser or the legacy regex fallback (which
+# failed differently on it -- silently *dropping* the first target, since
+# `^[a-zA-Z]` cannot match U+FEFF).
+_BOM = "\ufeff"  # an escape, not the invisible literal: editors and formatters mangle it
+
+
+def strip_bom(text: str) -> str:
+    """``text`` without any leading U+FEFF byte-order mark(s)."""
+    return text.lstrip(_BOM)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -124,7 +181,7 @@ def strip_define_blocks(text: str) -> tuple[str, bool]:
 
 
 def parse_makefile(text: str) -> MakefileFacts:
-    text, has_define = strip_define_blocks(text)
+    text, has_define = strip_define_blocks(strip_bom(text))
     targets: set[str] = set()
     has_include = False
     has_conditional = False
@@ -145,6 +202,8 @@ def parse_makefile(text: str) -> MakefileFacts:
             continue
         if line.startswith(("else", "endif")):
             continue  # conditional control lines never declare targets
+        if _is_whole_line_function_call(line):
+            continue  # a bare function call is evaluated by make, never a rule; opaque here
 
         match = _RULE_LINE.match(line)
         if not match:

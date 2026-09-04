@@ -1,4 +1,4 @@
-.PHONY: help test lint typecheck security validate graph graph-mermaid e2e-live ci pre-pr docs-check thresholds wheel-check skill-catalog skill-manifests skill-artifacts clean
+.PHONY: help test lint typecheck security validate graph graph-mermaid e2e-live ci pre-pr docs-check thresholds matcher-accuracy wheel-check skill-catalog skill-manifests skill-artifacts clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-14s %s\n", $$1, $$2}'
@@ -49,6 +49,9 @@ docs-check: ## Confirm required docs exist and are linked from README
 
 thresholds: ## Confirm no hard-coded thresholds in the Makefile or workflow YAML
 	python tools/check_no_hardcoded_thresholds.py
+
+matcher-accuracy: ## Report G002/U004 precision + recall per pattern; floors read from pyproject.toml
+	python tools/matcher_accuracy.py --check --patterns
 
 wheel-check: ## Build the wheel and confirm it carries its declared SPDX licence
 	python -m build --wheel --outdir dist

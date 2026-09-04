@@ -5,6 +5,151 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed — detection defects found by a labelled corpus (`fix-detect-corpus-defects`)
+
+- **False G004 from a UTF-8 byte-order mark.** U+FEFF is a format character,
+  not whitespace, so it survived `str.strip()` and became the first character
+  of the first Makefile target's name; a valid repository was told it cited a
+  target it did not have. `machinery.strip_bom()` runs in the pure parser and
+  `detect` decodes with `utf-8-sig`, so neither the structural parser nor the
+  legacy regex fallback (which silently *dropped* the first target instead)
+  ever sees it.
+- **`fail_under` matched under any TOML table** and was reported under a
+  locator naming `[tool.coverage.report]` whether or not that table existed.
+  `detect.scoped_fail_under()` is table-aware — a line scanner rather than
+  `tomllib`, so Python 3.10 and 3.11+ produce byte-identical cards.
+- **Fractional coverage floors were truncated** (`85.5` read as `85`),
+  quietly loosening the gate being reported. `detect.as_threshold_number()`
+  keeps fractions and returns integral values as `int`, so existing dialect
+  cards and saved `--diff` baselines are unchanged. Applies to the pyproject,
+  `.coveragerc`/`setup.cfg` and governance-policy paths alike.
+- **A directory named `Makefile` or `pyproject.toml` crashed every verb** with
+  an `IsADirectoryError` traceback and exit 1. `detect.read_text_or_none()`
+  treats an unreadable optional file as absent — the convention the invariant
+  and ADR readers already followed — and every optional-config read now goes
+  through it.
+- **New: `tests/corpus/targets/`**, labelled target repositories each
+  carrying the partial dialect card a correct detector should produce,
+  compared through `dialect_card.diff_cards()`. Includes a hostile Makefile
+  whose `$(shell rm -rf …)` is proven not to run via a canary directory, so
+  "parsing never executes" is a behavioural assertion rather than an import
+  guard. `.gitattributes` pins these fixtures `-text` so a Windows checkout
+  cannot rewrite the CRLF and BOM specimens.
+- **Found in adversarial review of the above, fixed in the same package:** a
+  `fail_under` line inside a multi-line TOML string or array under
+  `[tool.coverage.report]` (the `exclude_lines` idiom) was read as the floor;
+  the scanner now tracks string and array state, normalises quoted table
+  headers, and scopes out `[[array-of-tables]]`. `as_threshold_number()`
+  accepted `float()`'s whole grammar (`"1e3"`, `"-5"`, `"1_000"`, non-ASCII
+  digits) and any magnitude; it now takes plain decimals in `0..100` only,
+  and the governance-policy path takes numbers only. A FIFO named `Makefile`
+  blocked `detect` forever; `read_text_or_none()` requires a regular file. A
+  fractional floor made G003 report a correct citation as hard-coded and made
+  `delta` skip threshold deltas, because both compared against `int`;
+  `threshold_values()` and `delta._baseline_threshold()` now carry
+  `int | float`. BOM-tolerant reads now cover `.coveragerc`/`setup.cfg`,
+  `governance-policy.json`, spec files and `--diff`/`--baseline` cards, not
+  only the Makefile and pyproject.
+- **Found by the Windows CI leg:** a top-level `$(shell touch C:/…)` line
+  matched the rule regex on its drive-letter colon and minted `touch` and
+  `C` as targets. A line that is exactly one `$(shell|eval|info|…)` call now
+  declares nothing, decided by bracket matching so a colon inside the
+  arguments cannot be mistaken for a rule's; `$(shell x): deps` in target
+  position still counts as unresolved. Pinned as `shell-call-with-colon`.
+- **New: `tests/test_e2e_corpus.py`**, the real CLI as a subprocess over
+  every corpus shape and each fixed defect, at the exit-code boundary.
+
+### Fixed — prose matchers held to measured accuracy (`fix-prose-matcher-precision`)
+
+- **G002 was being switched off by ordinary prose.** The flat negation
+  pattern list scored precision 0.38 / recall 0.42 on a hand-labelled set:
+  bare `zero`, `block`, `fail`, `without` fired on "zero-downtime deploy",
+  "the block renders", "--cov-fail-under". Because the rule asks only whether
+  at least one non-success criterion exists, one false positive silenced it
+  for the whole document. `parse_semantics.NEGATION_PATTERNS` is now a
+  named, three-tier table — *annotation* (the criterion's own
+  `(non-success)`/`(negative)` marker, matched against the marker only),
+  *structural* (zero-false-positive grammar), *lexical* (verbal inflections
+  that refuse a following hyphen). Measured after: precision 0.919, recall
+  0.983, on a corpus later widened with the review's own adversarial
+  sentences. `Criterion.negation_evidence` is new and additive; `is_negative`
+  and `NEGATIVE_PATTERNS` keep their meaning. A second adversarial round
+  re-anchored the weak verbs (`skip`/`drop`/`ignore`/`kill` to passive forms,
+  `raise` to an error or exception, `failure` to an outcome position,
+  `never` and `unchanged` away from attributive use) and split the negated
+  modal into a `prohibition` and a `negated_verb` pattern; the corpus grew
+  by the review's own sentences.
+- **U004/S003's normative check was a substring test**, so "shallow clone",
+  "Marshalling" and "mustard" read as SHALL/MUST and silenced the rule.
+  `parse_semantics.NORMATIVE_MODAL` is word-bounded and refuses the
+  hyphenated compound ("must-have") and accepts the contraction "mustn't".
+  Measured after: precision 0.875; recall 1.000 against the rule's stated
+  contract -- the earlier 0.39 counted eleven "normative without SHALL/MUST"
+  rows now set aside, so the boundary fix did not raise recall and does not
+  claim to.
+- **New: `tests/fixtures/phrasing/`**, hand-labelled criterion and
+  requirement corpora, with the eleven sentences the labeller could not
+  decide and the eleven "normative without SHALL/MUST" requirements kept in
+  non-asserting files rather than deleted.
+- **New: `tools/matcher_accuracy.py`** scores the real matcher (per-pattern
+  breakdown with `--patterns`, floors with `--check`); `make matcher-accuracy`
+  runs it. `tests/test_matcher_accuracy.py` enforces four floors declared in
+  `pyproject.toml` `[tool.specgraph]` as integer percentages, read by the
+  same helper the coverage gates use — never in the Makefile or workflow
+  YAML, which is rule G003 applied to this repository.
+
+### Added — property-based tests (`add-parser-property-tests`)
+
+- **`tests/test_properties.py`**: five Hypothesis properties over the parsers
+  that read untrusted text — determinism with sorted, unique targets; never
+  raising on arbitrary unicode (BOM, NUL, CRLF, exotic line separators);
+  idempotent `define` stripping; a requirement count independent of heading
+  depth; case- and padding-invariant negation detection. `derandomize=True`
+  so the gate cannot flake; `--hypothesis-seed=random` widens the search
+  locally. `hypothesis` is a dev-only extra; runtime dependencies stay empty.
+- Mutation testing was evaluated in the same pass and **not** adopted: the
+  measurement was cancelled before producing counts, and `mutmut` cannot run
+  here without deselecting two of this repo's own self-checks. Recorded in
+  `docs/next-steps.md`.
+
+### Added — the contributor harness around the corpora
+
+- Two `.claude/skills/` checklists, `planlint-add-detect-shape` and
+  `planlint-add-phrasing-case`; `planlint-add-rule` gains the steps that send a
+  prose-reading rule to the phrasing corpus and a detection-dependent rule to
+  the target corpus; `planlint-verifier` gains remediation norms for the new
+  gates; `spec-drafter` no longer permits a `(test not yet written)` selector,
+  which `tests/test_spec_test_citations.py` rejects; `spec-adversary` checks
+  matcher accuracy figures.
+- The Claude Code `PostToolUse` hook nudges on corpus and matcher edits. Its
+  script was committed with mode 100644, so Claude Code could not execute it;
+  now 100755, and `tests/test_claude_hooks.py` pins the wiring, every path
+  class, the quiet paths, and Windows path normalisation.
+- `tests/support.py::load_tool` replaces three verbatim copies of the
+  import-a-tool-by-path helper.
+
+### Changed — `detect.py` decomposed (no public API change)
+
+- Coverage-floor discovery (`ThresholdSource`, `find_threshold`,
+  `as_threshold_number`, `scoped_fail_under`, `read_ini_fail_under` and the
+  TOML scanners) moved to `openspec_graph/thresholds.py`; the shared tolerant
+  read and POSIX-relative path helpers moved to `openspec_graph/repo_io.py`.
+  `detect` re-exports every name, including the `_threshold` and
+  `_read_ini_fail_under` aliases the tests patch, so no import in this
+  package, the tools, or an adopter's code changes. `detect.py` stays the
+  package's single `subprocess` importer (DEC-WM-009); both new modules are
+  registered in `tests/test_decomposition.py` and shown in
+  `docs/architecture/c4.md`.
+
+### Added — planning record
+
+- **`docs/eval-corpus-plan.md`**: a peer review of two rounds of multi-model
+  research on adapting an external `eval-corpus-forge` skill into this CI,
+  rewritten as thesis / counter-argument / rebuttal per decision. Establishes
+  that the skill is a deterministic packager rather than an LLM generator,
+  that the eval runner is early-access and unavailable here, and records what
+  from the plan was implemented, deferred, or rejected and why.
+
 ### Added — two-track e2e AQA (`harden-two-track-e2e-aqa` change package)
 
 - **`make e2e-live`**: the no-mocks e2e track as one local command — the

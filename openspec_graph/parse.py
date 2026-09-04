@@ -97,7 +97,11 @@ class SpecReadError(Exception):
 
 def parse_spec(path: Path, dialect: str) -> ParsedSpec:
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")
+        # utf-8-sig, matching every read in detect.py: a BOM-prefixed spec
+        # whose first line is a criterion otherwise loses that criterion to the
+        # `^-` anchor of the AC grammar, while dialect detection (already
+        # BOM-tolerant) happily classifies the same file.
+        text = path.read_text(encoding="utf-8-sig", errors="replace")
     except OSError as exc:
         # Translated, never swallowed: a spec that cannot be read is a
         # precondition failure, not an absent finding. Silently skipping it

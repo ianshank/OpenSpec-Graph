@@ -1,0 +1,1 @@
+{"threshold": {"locator": "setup.cfg:[coverage:report].fail_under", "value": 82}, "languages": ["python"]}

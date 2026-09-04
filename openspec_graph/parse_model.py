@@ -14,9 +14,10 @@ from .parse_semantics import (
     CANONICAL_REQ_LEVEL,
     CANONICAL_SCEN_LEVEL,
     MAKE_REF,
-    NEGATIVE_PATTERNS,
+    NORMATIVE_MODAL,
     PYTEST_SEL,
     Waiver,
+    negation_matches,
 )
 
 __all__ = ["Criterion", "ParsedSpec", "Requirement"]
@@ -34,9 +35,21 @@ class Criterion:
     line: int = 0
 
     @property
+    def negation_evidence(self) -> tuple[str, ...]:
+        """Which negation patterns matched, in table order; empty if none.
+
+        Additive and read-only: :attr:`is_negative` remains the boolean every
+        existing caller (G002, ``graph.py``'s node attributes) uses. This
+        exists so a G002 finding can be argued with -- "which word made this
+        count?" previously had no answer short of re-deriving the regex list
+        by hand, and the answer is what tells an author whether the rule
+        agreed with them for the right reason.
+        """
+        return negation_matches(self.note, self.text)
+
+    @property
     def is_negative(self) -> bool:
-        blob = f"{self.note} {self.text}"
-        return any(p.search(blob) for p in NEGATIVE_PATTERNS)
+        return bool(self.negation_evidence)
 
     @property
     def has_stage(self) -> bool:
@@ -57,8 +70,14 @@ class Requirement:
 
     @property
     def is_normative(self) -> bool:
-        blob = f"{self.text} {self.body}".upper()
-        return any(m in blob for m in ("SHALL", "MUST"))
+        """Whether this requirement uses SHALL/MUST, on word boundaries.
+
+        Word-bounded rather than a substring test: "shallow", "Marshalling"
+        and "mustard" contain SHALL/MUST and used to make a non-normative
+        requirement read as normative, which silently switched U004 off for
+        it. See ``parse_semantics.NORMATIVE_MODAL``.
+        """
+        return bool(NORMATIVE_MODAL.search(f"{self.text} {self.body}"))
 
 
 @dataclasses.dataclass(frozen=True)

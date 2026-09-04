@@ -6,9 +6,7 @@ is always safe to run against an unfamiliar clone.
 
 from __future__ import annotations
 
-import configparser
 import dataclasses
-import json
 import logging
 import re
 import subprocess
@@ -17,6 +15,36 @@ from pathlib import Path
 
 from . import dialect_card, machinery, witness
 from .parse_semantics import is_harness_marked, is_speckit_marked, is_upstream_marked
+from .repo_io import read_text_or_none, to_posix_relative
+from .thresholds import (
+    COVERAGE_REPORT_TABLE,
+    THRESHOLD_MAX,
+    THRESHOLD_MIN,
+    ThresholdSource,
+    as_threshold_number,
+    find_threshold,
+    read_ini_fail_under,
+    scoped_fail_under,
+)
+
+# Backwards-compatible surface: these lived here until the threshold and
+# read helpers were split into their own modules. Every name is re-exported so
+# `detect.<name>` keeps resolving for tests and any external caller.
+_threshold = find_threshold
+_read_ini_fail_under = read_ini_fail_under
+__all__ = [
+    "COVERAGE_REPORT_TABLE",
+    "THRESHOLD_MAX",
+    "THRESHOLD_MIN",
+    "StackProfile",
+    "ThresholdSource",
+    "as_threshold_number",
+    "detect_dialect",
+    "profile",
+    "read_text_or_none",
+    "scoped_fail_under",
+    "to_posix_relative",
+]
 
 MANIFESTS: dict[str, tuple[str, ...]] = {
     "python": ("pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"),
@@ -69,39 +97,6 @@ _ADR_ID = re.compile(r"\bADR-\d+\b")
 # ADR file's own title over an earlier body reference to a different ADR
 # when picking its declared id (see _adrs()).
 _HEADING_LINE = re.compile(r"^#+[ \t]+\S.*$", re.MULTILINE)
-_FAIL_UNDER = re.compile(r"^\s*fail_under\s*=\s*(\d+)", re.MULTILINE)
-
-
-def to_posix_relative(path: Path, root: Path | None) -> str:
-    """``path`` relative to ``root``, forward-slash rendered.
-
-    ``str(path.relative_to(root))``/plain f-string interpolation render with
-    the host OS's native separator -- identical to this on POSIX, but
-    backslash-separated on Windows, which breaks every consumer that expects
-    (or hardcodes, in this project's own test suite) a portable, forward-slash
-    relative path. Falls back to ``path.as_posix()`` -- never the
-    native-separator ``str(path)`` -- when ``root`` is ``None`` or ``path``
-    isn't actually under it; never raises. Shared by graph.py, ledger.py,
-    rule_types.py, scaffold.py, and this module's own StackProfile/threshold
-    fields, all of which had independently copy-pasted the buggy pattern.
-    """
-    if root is not None:
-        try:
-            return path.relative_to(root).as_posix()
-        except ValueError:
-            pass
-    return path.as_posix()
-
-
-@dataclasses.dataclass(frozen=True)
-class ThresholdSource:
-    """Where a coverage floor actually lives in this repo."""
-
-    locator: str
-    value: int | None
-
-    def as_dict(self) -> dict[str, object]:
-        return {"locator": self.locator, "value": self.value}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -226,7 +221,12 @@ def _legacy_make_targets(text: str) -> tuple[str, ...]:
     colon (e.g. "Usage: ...") would otherwise regex-match as a fabricated
     target, closed here too since a low-confidence Makefile (a define
     block included) widens using exactly this fallback."""
-    text, _ = machinery.strip_define_blocks(text)
+    # strip_bom for the same reason parse_makefile does it, and symmetrically:
+    # this fallback failed *differently* on a BOM (its `^[a-zA-Z]` anchor
+    # cannot match U+FEFF, so it silently dropped the first target instead of
+    # fabricating a mangled one). The two parsers must not diverge on BOM
+    # handling any more than they may on define/endef handling.
+    text, _ = machinery.strip_define_blocks(machinery.strip_bom(text))
     skip = {".PHONY", ".DEFAULT_GOAL", ".SUFFIXES"}
     targets = [t for t in _MAKE_TARGET.findall(text) if t not in skip]
     return tuple(sorted(set(targets)))
@@ -236,7 +236,12 @@ def _make_target_facts(root: Path) -> machinery.MakefileFacts:
     makefile = root / "Makefile"
     if not makefile.exists():
         return machinery.MakefileFacts((), False, False, 0)
-    text = makefile.read_text(encoding="utf-8", errors="replace")
+    text = read_text_or_none(makefile, "make_targets")
+    if text is None:
+        # Exists but unreadable (a directory named `Makefile`, a permission
+        # denial, a dangling symlink). "No Makefile" is the safe reading: with
+        # no targets, G004 returns early rather than manufacturing findings.
+        return machinery.MakefileFacts((), False, False, 0)
     facts = machinery.parse_makefile(text)
     if facts.confidence == "low":
         # Widen, never replace: structural parsing found real targets too,
@@ -244,88 +249,16 @@ def _make_target_facts(root: Path) -> machinery.MakefileFacts:
         # something *else* in the file (an include, a conditional) it
         # couldn't fully resolve. AC-MP-4: never weaken G004, only remove
         # false positives.
-        widened = tuple(sorted(set(facts.targets) | set(_legacy_make_targets(text))))
+        legacy = set(_legacy_make_targets(text))
+        added = sorted(legacy - set(facts.targets))
+        if added:
+            logger.debug(
+                "make_targets: structural parse is low-confidence; regex fallback added %s",
+                added,
+            )
+        widened = tuple(sorted(set(facts.targets) | legacy))
         facts = dataclasses.replace(facts, targets=widened)
     return facts
-
-
-def _read_ini_fail_under(path: Path, section: str) -> int | None:
-    """Read an integer fail_under from an INI-style coverage config section.
-
-    None if the file is absent, unparsable, or lacks the key -- never raises,
-    matching this module's fail-quiet-and-move-on style for optional config.
-    """
-    if not path.exists():
-        return None
-    parser = configparser.ConfigParser(interpolation=None)
-    try:
-        parser.read(path, encoding="utf-8")
-    except configparser.Error:
-        return None
-    if not parser.has_option(section, "fail_under"):
-        return None
-    try:
-        return parser.getint(section, "fail_under")
-    except ValueError:
-        return None
-
-
-def _threshold(root: Path) -> ThresholdSource | None:
-    """Find the coverage floor. Order matters: an explicit governance policy wins."""
-    policy_candidates = [
-        root / "harness" / "shared" / "governance-policy.json",
-        root / "governance-policy.json",
-        root / ".governance" / "governance-policy.json",
-    ]
-    for policy in policy_candidates:
-        if not policy.exists():
-            continue
-        try:
-            data = json.loads(policy.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as exc:
-            logger.debug("threshold: %s exists but could not be read: %s", policy, exc)
-            continue
-        coverage = data.get("coverage")
-        if isinstance(coverage, dict) and isinstance(coverage.get("lines"), int):
-            rel = to_posix_relative(policy, root)
-            logger.debug("threshold: found coverage.lines in %s", rel)
-            return ThresholdSource(f"{rel}:coverage.lines", coverage["lines"])
-        logger.debug("threshold: %s has no integer coverage.lines", policy)
-
-    pyproject = root / "pyproject.toml"
-    if pyproject.exists():
-        match = _FAIL_UNDER.search(pyproject.read_text(encoding="utf-8", errors="replace"))
-        if match:
-            return ThresholdSource(
-                "pyproject.toml:[tool.coverage.report].fail_under", int(match.group(1))
-            )
-
-    # coverage.py's own convention: bare [report] in .coveragerc, but
-    # namespaced [coverage:report] in setup.cfg (to avoid colliding with
-    # other tools' sections there) -- different section names, not the same.
-    coveragerc = root / ".coveragerc"
-    value = _read_ini_fail_under(coveragerc, "report")
-    if value is not None:
-        rel = to_posix_relative(coveragerc, root)
-        return ThresholdSource(f"{rel}:[report].fail_under", value)
-
-    setup_cfg = root / "setup.cfg"
-    value = _read_ini_fail_under(setup_cfg, "coverage:report")
-    if value is not None:
-        rel = to_posix_relative(setup_cfg, root)
-        return ThresholdSource(f"{rel}:[coverage:report].fail_under", value)
-
-    # The highest-value diagnostic in the module. A repo with no detected floor
-    # gets G003 findings phrased against "the coverage floor" with no way to
-    # see which six locations were consulted, so the obvious next question --
-    # "where should I put it?" -- had no answer anywhere in the output.
-    logger.debug(
-        "threshold: no floor found under %s; tried %s, then pyproject.toml, "
-        ".coveragerc [report], setup.cfg [coverage:report]",
-        root,
-        [to_posix_relative(c, root) for c in policy_candidates],
-    )
-    return None
 
 
 def _invariants(root: Path) -> tuple[Path | None, tuple[str, ...]]:
@@ -333,14 +266,12 @@ def _invariants(root: Path) -> tuple[Path | None, tuple[str, ...]]:
         path = root / rel
         if not path.exists():
             continue
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError as exc:
-            # An untrusted target repo's candidate may exist but be
-            # unreadable (permission-denied, a broken symlink `exists()`
-            # didn't catch, etc.) -- treat it like any other non-match
-            # rather than crashing every CLI verb that calls detect.profile().
-            logger.debug("invariants: %s exists but is unreadable: %s", path, exc)
+        # An untrusted target repo's candidate may exist but be unreadable
+        # (permission-denied, a directory, a broken symlink `exists()` didn't
+        # catch) -- read_text_or_none treats it like any other non-match
+        # rather than crashing every CLI verb that calls detect.profile().
+        text = read_text_or_none(path, "invariants")
+        if text is None:
             continue
         ids = sorted(
             set(_INV_ID.findall(text)),
@@ -397,17 +328,15 @@ def _adrs(root: Path) -> tuple[Path | None, tuple[str, ...]]:
             # that was never really declared either.
             ids_list: list[str] = []
             for p in sorted(path.glob("*.md")):
-                try:
-                    text = p.read_text(encoding="utf-8", errors="replace")
-                except OSError as exc:
-                    logger.debug("adr: skipping unreadable %s: %s", p, exc)
-                    # glob() lists directory entries by name pattern only --
-                    # a dangling symlink still matches "*.md" but can't be
-                    # read. Skip it like any other non-declaring file
-                    # instead of crashing every CLI verb that calls
-                    # detect.profile() (adversarial review finding on PR #13).
+                # glob() lists directory entries by name pattern only -- a
+                # dangling symlink still matches "*.md" but can't be read.
+                # Skip it like any other non-declaring file instead of
+                # crashing every CLI verb that calls detect.profile()
+                # (adversarial review finding on PR #13).
+                text_or_none = read_text_or_none(p, "adr")
+                if text_or_none is None:
                     continue
-                declared = _declared_adr_id(text)
+                declared = _declared_adr_id(text_or_none)
                 if declared:
                     ids_list.append(declared)
             ids = sorted(set(ids_list), key=lambda s: (int(s.split("-")[1]), s))
@@ -416,13 +345,11 @@ def _adrs(root: Path) -> tuple[Path | None, tuple[str, ...]]:
             # convention (mirrors _invariants()'s CONTRACT.md assumption),
             # so every mention is a real declaration -- scanning the whole
             # file, not just its first match, is correct here.
-            try:
-                text = path.read_text(encoding="utf-8", errors="replace")
-            except OSError as exc:
-                logger.debug("adr: %s exists but is unreadable: %s", path, exc)
+            index_text = read_text_or_none(path, "adr")
+            if index_text is None:
                 continue
             ids = sorted(
-                set(_ADR_ID.findall(text)),
+                set(_ADR_ID.findall(index_text)),
                 key=lambda s: (int(s.split("-")[1]), s),
             )
         else:
@@ -453,10 +380,8 @@ def detect_dialect(spec_paths: list[Path]) -> str:
     upstream = harness = speckit = 0
     votes: dict[str, list[str]] = {"upstream": [], "harness": [], "speckit": []}
     for path in spec_paths:
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError as exc:
-            logger.debug("dialect: cannot read %s: %s", path, exc)
+        text = read_text_or_none(path, "dialect")
+        if text is None:
             continue
         if is_upstream_marked(text):
             upstream += 1

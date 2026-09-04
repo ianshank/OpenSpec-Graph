@@ -1,0 +1,33 @@
+{"body": "", "label": false, "note": "heading-only noun", "text": "MCP Configuration"}
+{"body": "", "label": false, "note": "heading-only noun", "text": "Truthful Coverage Claims"}
+{"body": "", "label": false, "note": "heading-only noun", "text": "Egress Policy"}
+{"body": "The system MUST deny any outbound connection not on the allowlist.", "label": true, "note": "body MUST", "text": "Egress Policy"}
+{"body": "The tool SHALL create exactly one tag per release.", "label": true, "note": "body SHALL", "text": "Tag Creation"}
+{"body": "The tool shall create exactly one tag per release.", "label": true, "note": "body lowercase shall", "text": "Tag Creation"}
+{"body": "The client must retry idempotent requests at most three times.", "label": true, "note": "body lowercase must", "text": "Retry Policy"}
+{"body": "The client MUST NOT retry non-idempotent requests.", "label": true, "note": "MUST NOT prohibition", "text": "Retry Policy"}
+{"body": "The service may record writes with an actor id.", "label": false, "note": "MAY = optional", "text": "Audit Trail"}
+{"body": "Historically, writes were recorded ad hoc and we lost several audit trails.", "label": false, "note": "context prose", "text": "Background"}
+{"body": "Marshalling of records uses the v2 wire format.", "label": false, "note": "trap: 'marshalling' contains SHALL", "text": "Serialization"}
+{"body": "The marshaller writes records in the v2 wire format.", "label": false, "note": "trap: 'marshaller' contains SHALL", "text": "Serialization"}
+{"body": "A shallow clone of depth 1 is used for CI.", "label": false, "note": "trap: 'shallow' contains SHALL", "text": "Clone depth"}
+{"body": "The menu lists mustard and ketchup as free extras.", "label": false, "note": "trap: 'mustard' contains MUST", "text": "Condiments"}
+{"body": "The Mustang model is retired from the fleet in Q3.", "label": false, "note": "trap: 'Mustang' contains MUST", "text": "Fleet"}
+{"body": "The must-have list is tracked separately from these nice-to-haves.", "label": false, "note": "trap: 'must-have' as a noun", "text": "Nice-to-haves"}
+{"body": "The flag is exposed as the env var MUST_ROTATE_KEYS.", "label": false, "note": "trap: identifier containing MUST", "text": "Rotation"}
+{"body": "Shall we keep the legacy endpoint for one more release?", "label": false, "note": "trap: interrogative 'Shall we'", "text": "Open question"}
+{"body": "Deploys must be zero-downtime.", "label": true, "note": "must, adjective complement", "text": "Deploy"}
+{"body": "", "label": true, "note": "SHALL in heading only", "text": "The system SHALL validate every manifest before apply"}
+{"body": "Validation of the manifest happens before apply.", "label": false, "note": "descriptive statement, no obligation; debatable", "text": "Manifest validation"}
+{"body": "The client mustn't retry a non-idempotent request.", "label": true, "note": "contracted prohibition", "text": "Retry budget"}
+{"body": "The client mustn’t retry a non-idempotent request.", "label": true, "note": "curly-apostrophe contraction", "text": "Retry budget"}
+{"body": "Every witness SHALL be content-addressed.", "label": true, "note": "SHALL, body", "text": "Witness store"}
+{"body": "The store must reject a witness whose hash does not match its name.", "label": true, "note": "lowercase must, body", "text": "Witness store"}
+{"body": "A bad --target MUST exit 2, never 1.", "label": true, "note": "MUST with a numeric object", "text": "Exit codes"}
+{"body": "The card shall not carry an absolute path.", "label": true, "note": "shall not prohibition", "text": "Dialect card"}
+{"body": "Every waiver MUST state a reason.", "label": true, "note": "MUST, short", "text": "Waivers"}
+{"body": "The verb must list every spec citing a removed target.", "label": true, "note": "must, body", "text": "Delta"}
+{"body": "Items on the must-fix list are triaged weekly.", "label": false, "note": "trap: must-fix compound", "text": "Bugfix list"}
+{"body": "The Mustafa plugin is retired in Q3.", "label": false, "note": "trap: proper noun containing MUST", "text": "Fleet"}
+{"body": "The operator may enable verbose logging.", "label": false, "note": "MAY = optional", "text": "Options"}
+{"body": "Shallow clones were the default until 0.2.", "label": false, "note": "trap: shallow", "text": "Background"}

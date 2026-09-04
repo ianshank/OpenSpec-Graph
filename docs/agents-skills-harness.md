@@ -3,8 +3,8 @@
 This document is about `planlint`'s own product architecture — what the tool
 *is*. It is unrelated to `.claude/agents/` and `.claude/skills/` (Claude Code
 dev-tooling used to *develop* planlint itself — spec-drafter, spec-adversary,
-planlint-verifier, and the `planlint-add-rule` / `planlint-add-eval-case`
-skills; see docs/hooks.md's
+planlint-verifier, and the `planlint-add-rule` / `planlint-add-eval-case` /
+`planlint-add-detect-shape` / `planlint-add-phrasing-case` skills; see docs/hooks.md's
 "Claude Code hooks" section): same word, three different meanings — one about
 the shipped CLI's rules, one about this repo's own contributor workflow, and
 one about the distributable Agent Skill under `skills/` (see "A third

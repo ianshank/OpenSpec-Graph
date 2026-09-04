@@ -7,7 +7,7 @@ core `make ci` gate with the enterprise gates (typecheck, security, docs).
 
 | Command | What it checks | Failure mode |
 |---|---|---|
-| `make test` | pytest + line & branch coverage + generated-artifact freshness | below floor, or a stale rule catalog / plugin manifest → exit 1 |
+| `make test` | pytest + line & branch coverage + generated-artifact freshness + detection-corpus labels + matcher-accuracy floors | below floor, a stale rule catalog / plugin manifest, a mislabelled corpus shape, or a matcher under its floor → exit 1 |
 | `make lint` | ruff across `openspec_graph`, `tests`, `tools` | any violation → exit 1 |
 | `make typecheck` | mypy (config in `pyproject.toml`) | type error → exit 1 |
 | `make security` | gitleaks (or deterministic fallback) | committed secret → exit 1 |
@@ -25,7 +25,9 @@ absent from the table above because they never fail: staleness is caught by
 
 Coverage floors are read from `pyproject.toml` at run time by
 `tools/check_coverage_floor.py` (line, `fail_under`) and
-`tools/check_branch_coverage.py` (branch, `branch_fail_under`). Every file
+`tools/check_branch_coverage.py` (branch, `branch_fail_under`), and the four
+`[tool.specgraph]` `*_pct` matcher-accuracy floors by `tools/matcher_accuracy.py`
+through the same `_common.read_pyproject_int` helper. Every file
 under `.github/workflows/` is scanned for a re-introduced literal, not just
 the continuous-integration one. The Makefile
 and workflow YAML contain **no** quality-gate thresholds (coverage floors) and
@@ -116,7 +118,14 @@ nothing compared prose against `pyproject.toml`.
   witness files, unreadable specs), and the CLI driven both in-process
   (`cli.main()`) and as a real subprocess (`tests/support.py::run_cli`,
   with coverage tracked across the subprocess boundary). This is the fast,
-  hermetic track.
+  hermetic track. `tests/test_e2e_corpus.py` extends it to the labelled
+  corpora: the real verb over every target shape, and each fixed defect
+  proven at the exit-code and stdout boundary (no false G004 on a BOM
+  Makefile, a fractional floor through `detect --diff`, a directory named
+  `Makefile` exiting 0, the hostile shape inert as a process, G002 not
+  satisfied by ordinary prose or a waiver reason, U004 on "shallow" but not
+  on "mustn't", the accuracy tool headless, the debug log naming a rejected
+  floor).
 - **Without mocks** — `make e2e-live`. The *installed* `planlint` against
   *this live repository*, with zero fixtures: `detect`,
   `validate --fail-on ERROR`, `graph --format json`, `waivers`, and one
@@ -135,6 +144,93 @@ job missing from `docs/hooks.md`'s CI table is a test failure
 No `make` on your Windows box? Every recipe is two commands; run them
 directly, or use Git Bash (make installs via `choco install make -y`,
 which is what `test-windows` does).
+
+## Matcher accuracy is a measured number, not a claim
+
+Two rules read English prose rather than repository structure: **G002** (does a
+criterion name a non-success outcome) and **U004**/**S003** (is a requirement
+normative). Coverage proves their code runs and the one-fixture-per-rule map
+proves each *can* fire. Neither says how often either fires on the wrong
+sentence — and the README's "And what it got wrong" section records that two
+of the four shipped linter faults were exactly that.
+
+`tests/fixtures/phrasing/` is a hand-labelled corpus; `tools/matcher_accuracy.py`
+scores the real matcher against it and `tests/test_matcher_accuracy.py` holds
+the result to floors declared in `pyproject.toml` `[tool.specgraph]`. The
+floors are config, never Make or workflow YAML, because rule G003 says so and
+`tools/check_no_hardcoded_thresholds.py` enforces it against this repo too.
+
+| Rule | Precision | Recall | Before tiering |
+|---|---|---|---|
+| G002 | 0.919 | 0.983 | 0.38 / 0.42 |
+| U004 | 0.875 | 1.000 on the SHALL/MUST contract | 0.47 / (0.39 counted the eleven modal-variant rows now set aside; a word-boundary tightening cannot raise recall and did not) |
+
+Read those with the corpus README's three caveats: the negative examples were
+written adversarially, eleven sentences could not be labelled confidently and
+are excluded from every score, and the corpus is synthetic. It is a regression
+net, not a benchmark.
+
+Why it matters most for G002: the rule asks only whether a spec carries **at
+least one** non-success criterion, so a single false positive anywhere in the
+document switches it off for that document. Under the old flat pattern list,
+"The block renders below the header" satisfied it.
+
+`make matcher-accuracy` prints the per-pattern true/false-positive
+breakdown and checks the floors; it is a **report**, the same way
+`make graph` is, and the gate is `tests/test_matcher_accuracy.py` inside
+`make test`. A pattern that misfires more often than it fires is not a
+detector, and `test_no_negation_pattern_misfires_more_than_it_fires` fails if
+one is added. `.claude/skills/planlint-add-phrasing-case/SKILL.md` is the
+checklist for adding a sentence or a pattern.
+
+## Property-based tests
+
+`tests/test_properties.py` states five invariants over the parsers that read
+untrusted text — determinism and sorted, unique output; never raising on
+arbitrary unicode; idempotent `define` stripping; a requirement count
+independent of heading depth; and case-insensitive negation detection.
+
+`derandomize=True` is deliberate. This is a merge gate, and a gate that fails
+one run in fifty gets overridden and then deleted, so the example set is fixed
+and any failure is reproducible from its message alone. Widening the search is
+an explicit local act:
+
+```bash
+pytest tests/test_properties.py --hypothesis-seed=random
+```
+
+A counterexample found that way belongs in the example suite as a named
+regression test, the way the four documented linter faults are.
+
+Mutation testing was evaluated alongside this and **not** adopted: the
+measurement was cancelled before producing kill/survive counts, and what it
+did establish is that `mutmut` cannot run here without deselecting two of this
+repo's own self-checks (`test_new_modules_stdlib_only` rejects its injected
+import; `test_typecheck_passes_on_clean_repo` fails under the mutant
+trampolines). Adopting it needs its own change package and a real measurement.
+
+## Detection is held to a labelled corpus
+
+`detect` is the load-bearing primitive — G003's threshold locator, G004's
+target existence, G005's invariant source and H001's runnable stage are each
+only as correct as the dialect card underneath them — and it had been
+validated against two real repositories plus inline fixtures. A probe over
+twenty synthetic target repositories found five wrong detections and two
+crashes, including a UTF-8 BOM that produced a **false G004** against a valid
+repository.
+
+`tests/corpus/targets/` now holds labelled target repositories, each with the
+card a correct detector should produce, consumed by `tests/test_detect_corpus.py`
+through `dialect_card.diff_cards()`. Because that function ignores fields
+absent from the baseline, each shape asserts only its own dimension and an
+additive schema change does not churn every fixture.
+
+The hostile-Makefile shape is the one that matters most: a specimen whose
+`$(shell rm -rf …)`, bare `$(shell touch …)` and `$(eval $(shell …))` would
+fire at parse time under real GNU Make — even under `make -n`, confirmed by a
+control run — is parsed with a canary directory in place, and the canary is
+asserted intact afterwards. That turns "parsing never executes" from a
+code-review claim and an import guard into a behavioural assertion.
 
 ## No NumPy / no heavy runtime deps
 

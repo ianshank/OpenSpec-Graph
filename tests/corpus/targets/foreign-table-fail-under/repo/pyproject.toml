@@ -1,0 +1,5 @@
+[project]
+name = "demo"
+
+[tool.some_other_tool]
+fail_under = 50

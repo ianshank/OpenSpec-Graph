@@ -18,6 +18,7 @@ from .parse_semantics import (
     line_of,
     speckit_section_body,
     speckit_subsection_body,
+    strip_waiver_comments,
 )
 
 __all__ = ["parse_speckit"]
@@ -76,7 +77,8 @@ def parse_speckit(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion, 
         stop = min(candidates)
         block = text[story.start() : stop]
         for a_idx, scen in enumerate(GWT_SCENARIO.finditer(block)):
-            snippet = scen.group(0).strip()
+            # A waiver's reason text is not the scenario (see parse_harness.py).
+            snippet = strip_waiver_comments(scen.group(0)).strip()
             criteria.append(
                 Criterion(
                     ident=f"US{story_num}-AS{a_idx + 1}",
