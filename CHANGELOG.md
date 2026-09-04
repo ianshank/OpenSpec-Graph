@@ -128,6 +128,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - `tests/support.py::load_tool` replaces three verbatim copies of the
   import-a-tool-by-path helper.
 
+### Changed — `detect.py` decomposed (no public API change)
+
+- Coverage-floor discovery (`ThresholdSource`, `find_threshold`,
+  `as_threshold_number`, `scoped_fail_under`, `read_ini_fail_under` and the
+  TOML scanners) moved to `openspec_graph/thresholds.py`; the shared tolerant
+  read and POSIX-relative path helpers moved to `openspec_graph/repo_io.py`.
+  `detect` re-exports every name, including the `_threshold` and
+  `_read_ini_fail_under` aliases the tests patch, so no import in this
+  package, the tools, or an adopter's code changes. `detect.py` stays the
+  package's single `subprocess` importer (DEC-WM-009); both new modules are
+  registered in `tests/test_decomposition.py` and shown in
+  `docs/architecture/c4.md`.
+
 ### Added — planning record
 
 - **`docs/eval-corpus-plan.md`**: a peer review of two rounds of multi-model

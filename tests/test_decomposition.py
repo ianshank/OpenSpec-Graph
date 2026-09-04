@@ -43,6 +43,11 @@ _NEW_MODULES = [
     "mermaid",
     "witness",
     "rules_witness",
+    # Split out of detect.py (the last god file) by `fix-detect-corpus-defects`'s
+    # hygiene pass: threshold discovery and the shared read/path helpers. detect
+    # re-exports every public name and the two private aliases, so no caller moved.
+    "thresholds",
+    "repo_io",
 ]
 
 # Modules that must NOT import cli or graph (the orchestration/output layers).
