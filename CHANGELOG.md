@@ -74,8 +74,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **U004/S003's normative check was a substring test**, so "shallow clone",
   "Marshalling" and "mustard" read as SHALL/MUST and silenced the rule.
   `parse_semantics.NORMATIVE_MODAL` is word-bounded and refuses the
-  hyphenated compound ("must-have"). Measured after: precision 0.875, recall
-  1.000 against the rule's stated contract.
+  hyphenated compound ("must-have") and accepts the contraction "mustn't".
+  Measured after: precision 0.875; recall 1.000 against the rule's stated
+  contract -- the earlier 0.39 counted eleven "normative without SHALL/MUST"
+  rows now set aside, so the boundary fix did not raise recall and does not
+  claim to.
 - **New: `tests/fixtures/phrasing/`**, hand-labelled criterion and
   requirement corpora, with the eleven sentences the labeller could not
   decide and the eleven "normative without SHALL/MUST" requirements kept in

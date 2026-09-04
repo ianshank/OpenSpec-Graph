@@ -34,11 +34,15 @@ U004 body-blind check that affected 20 of 34 requirements across four change
 packages and was found by hand rather than by a gate. Measured against a
 hand-labelled probe set and recorded in `docs/eval-corpus-plan.md` appendix B:
 `Criterion.is_negative` scored precision 0.38 and recall 0.42;
-`Requirement.is_normative` scored precision 0.47 and recall 0.39. The same
-appendix names `\bblock(s|ed|ing)?\b` (6 false positives against 1 true) and
+`Requirement.is_normative` scored precision 0.47 (its 0.39 recall counted
+eleven rows that are normative without SHALL/MUST — a contract the rule never
+made, see DEC-PM-009 — so a boundary fix could not and did not raise it). The
+same appendix names `\bblock(s|ed|ing)?\b` (6 false positives against 1 true) and
 `\bzero\b` (5 against 1, and redundant with `non-?zero`) as the worst
 offenders, and records that every structural pattern scored zero false
-positives — the split this change's tiering is built on.
+positives on the scored set — the split this change's tiering is built on.
+Two of the eleven set-aside sentences would fire `never` and `neither`, which
+is part of why they are set aside.
 
 ---
 
@@ -79,7 +83,12 @@ positives — the split this change's tiering is built on.
   exists to remove.
 - C-PM-2: No rule's id, severity, dialect set, or message MUST change, no rule
   MUST enter or leave `RULES`, and `graph.py` MUST NOT be touched.
-- C-PM-3: This change MUST NOT add a Makefile target or a runtime dependency.
+- C-PM-3: This change MUST NOT add a runtime dependency. Any Makefile target
+  it adds MUST be a convenience over `tools/matcher_accuracy.py`, composed into
+  neither `ci` nor `pre-pr`; the enforcing gate MUST remain
+  `tests/test_matcher_accuracy.py` inside `make test`.
+- C-PM-4: A waiver comment's reason text MUST NOT reach either matcher
+  through `Criterion.text`, `Criterion.note`, or `Requirement.body`.
 
 ---
 
@@ -87,25 +96,33 @@ positives — the split this change's tiering is built on.
 
 - **DEC-PM-001:** three tiers, not one flat list and not a purely structural
   matcher. The measurement forced the split rather than decorating it: every
-  structural pattern scored zero false positives, while the bare lexical ones
-  carried all the damage. Deleting the lexical tier outright was the obvious
+  structural pattern scored zero false positives on the scored set, while the
+  bare lexical ones carried all the damage. Deleting the lexical tier outright was the obvious
   alternative and was rejected because the probe's false-negative families are
-  mostly lexical — stop/abort verbs (aborted, halts, declines, skipped,
-  dropped, ignored), "error" as a noun, status codes as the outcome. Dropping
+  mostly lexical — stop/abort verbs (aborted, halts, declines; skipped,
+  dropped and ignored in their passive forms), "error" as a noun, status
+  codes as the outcome. Dropping
   them would have traded G002's precision problem for a recall problem of the
   same size. The tier is the design, not a label: it records *why* a pattern is
   trusted, which is what tells a future author where a new pattern belongs.
 - **DEC-PM-002:** the annotation tier reads the criterion's parenthesised
-  marker and nothing else. Harness ACs are written `**AC-WM-3
-  (non-success):**`, and the parser already splits that marker into
-  `Criterion.note`. This repo's own tree uses `(non-success)` 135 times and
-  `(negative)` twice, so the marker is an author's explicit declaration, not
+  marker and nothing else, as a full match of the stripped marker rather than
+  a search. Harness ACs are written `**AC-WM-3 (non-success):**`, and the
+  parser already splits that marker into `Criterion.note`; upstream scenarios
+  and speckit snippets put a whole block of prose in `note`, and a search over
+  it simply moved the bare-word false positive to those dialects (found by
+  adversarial review). This repo's own tree uses `(non-success)` well over a
+  hundred times and `(negative)` a handful, so the marker is an author's
+  explicit declaration, not
   prose to interpret — a different kind of evidence from a word turning up in
   a sentence. Collapsing the two is precisely how the bare word "negative"
   earned its false positives, since a criterion about negative *numbers* is not
   a criterion about a failure path.
 - **DEC-PM-003:** lexical patterns refuse a following hyphen (`(?!-)`) and are
-  restricted to genuinely verbal inflections, rather than carrying an
+  restricted to verbal inflections — passive-only for verbs that are ordinary
+  software vocabulary in the active voice (skip, drop, ignore, kill,
+  terminate), an error or exception object for `raise`, an outcome position
+  for `failure` — rather than carrying an
   exclusion list of known-bad nouns. A hyphen is the grammar of attributive
   use in software prose, and it is what separates "the write is denied" from
   "denied-list entries", "the run fails" from `--cov-fail-under`, and "the
@@ -122,16 +139,22 @@ positives — the split this change's tiering is built on.
   the per-pattern breakdown in `tools/matcher_accuracy.py` exists so that
   argument can never be made again without a number attached.
 - **DEC-PM-005:** the floors live in `pyproject.toml` `[tool.specgraph]`, as
-  integer percentages, and are set **below** the measured figures. Config
+  integer percentages, and are set **below** the measured figures by a
+  recorded tolerance. Config
   rather than the Makefile because a governance tool that hard-codes its own
   thresholds is the worst possible advertisement for G003, and
   `tools/check_no_hardcoded_thresholds.py` would catch it anyway. Integers
   rather than floats so they reuse `tools/_common.read_pyproject_int`, the
   same reader the coverage gates use, instead of introducing a second config
-  parser. Below the measurement rather than at it because a floor equal to the
-  current value turns every future pattern addition into a failure even when
-  it is an improvement — raising a floor should be a deliberate act, and
-  lowering one should need a reason in the commit message.
+  parser. Each floor is chosen by how many additional errors it tolerates at
+  the current corpus size, and that count is written beside it: at the time
+  of writing G002's floors tolerate two more false positives and five misses,
+  U004's two more false positives and one miss. A floor that tolerates zero is
+  a floor at the measurement whatever its nominal distance. Slack exists
+  because a recall-gaining pattern normally costs a little precision and
+  because adversarial corpus rows are meant to keep being added — raising a
+  floor should be a deliberate act, and lowering one should need a reason in
+  the commit message.
 - **DEC-PM-006:** the one surviving U004 false positive is counted, not
   special-cased. "Shall we keep the legacy endpoint?" is a question rather
   than an obligation, and distinguishing an interrogative from a modal needs
@@ -152,8 +175,10 @@ positives — the split this change's tiering is built on.
   holding a bare list of compiled patterns will apply all of them to free
   text, which is exactly the bare-word behaviour the tiering removes.
 - **DEC-PM-009:** the undecidable rows are kept in a file that asserts nothing,
-  rather than deleted or forced into a label. Eleven of ninety-seven sentences
-  could not be labelled confidently, and that ratio is the honest floor on how
+  rather than deleted or forced into a label: they carry a `leaning`, and the
+  corpus loader refuses to score a row without a `label`. Eleven of the
+  original ninety-seven sentences could not be labelled confidently, and that
+  ratio is the honest floor on how
   much a second labeller would agree with the first; deleting them would hide
   it and flatter every score computed from what remains. The same reasoning
   keeps `requirements-modal-variants.jsonl` unscored — measuring U004 against
@@ -165,11 +190,21 @@ positives — the split this change's tiering is built on.
   reason: a copy of the matcher inside the tool would measure a copy, and the
   copy would drift from the thing that ships — leaving a green gate over a
   matcher nobody had measured.
-- **DEC-PM-011:** no new Makefile target. `tests/test_matcher_accuracy.py`
-  runs inside the suite `make test` already invokes, so the gate is on by
-  default and cannot be forgotten in a workflow; `--check` exists for a human
-  asking interactively, and one test asserts its exit code agrees with the
-  scores, so the friendly path and the gating path cannot diverge.
+- **DEC-PM-011:** `make matcher-accuracy` is a report target, not the gate.
+  It exists because the two contributor skills and the Claude Code hook need a
+  one-word command to point at, and it runs `--check --patterns` so a human
+  sees the misfire column and a non-zero exit on a breach. The gate that
+  cannot be forgotten is `tests/test_matcher_accuracy.py` inside `make test`;
+  the target is composed into neither `ci` nor `pre-pr`, one test pins that,
+  and one test asserts `--check`'s exit code agrees with the scores, so the
+  friendly path and the gating path cannot diverge.
+- **DEC-PM-012:** the waiver-reason leak is fixed here rather than deferred.
+  It is a pre-existing gap, but this package is the precision fix for exactly
+  the two matchers it feeds, and shipping a measured 0.92 precision while a
+  comment's reason text could still switch G002 off would be a number that
+  did not describe the behaviour. The fix is the one `strip_waiver_comments`
+  already applies to `verified_by`, extended to the three fields the matchers
+  read.
 
 ---
 
@@ -225,13 +260,13 @@ positives — the split this change's tiering is built on.
 - [x] **AC-PM-10:** `Criterion.negation_evidence` returns the names of the
   matching patterns in table order, and `Criterion.is_negative` is still a
   `bool` equal to whether that tuple is non-empty. (R-PM-7)
-  _Verified by:_ `pytest -k test_negation_evidence_names_the_matching_patterns` (test not yet written) · stage: `make test`
+  _Verified by:_ `pytest -k test_negation_evidence_names_the_matching_patterns` · stage: `make test`
 
 - [x] **AC-PM-11 (non-success):** `NEGATIVE_PATTERNS` is still importable from
   `openspec_graph.parse` and contains no annotation-tier pattern, so a caller
   applying the whole list to free text does not inherit the bare-word
   behaviour. (C-PM-1)
-  _Verified by:_ `pytest -k test_negative_patterns_alias_excludes_the_annotation_tier` (test not yet written) · stage: `make test`
+  _Verified by:_ `pytest -k test_negative_patterns_alias_excludes_the_annotation_tier` · stage: `make test`
 
 - [x] **AC-PM-12 (non-success):** the substring false passes are gone — a
   requirement whose only SHALL/MUST-shaped text is "shallow", "Marshalling",
@@ -240,10 +275,29 @@ positives — the split this change's tiering is built on.
   _Verified by:_ `pytest -k test_u004_meets_its_configured_accuracy_floors` · stage: `make test`
 
 - [x] **AC-PM-13:** the rule surface is unchanged — no rule id, severity,
-  dialect set, or message moved, no rule entered or left `RULES`, no Makefile
-  target was added, and this repo's own change packages still validate clean
-  under the retuned matchers. (C-PM-2, C-PM-3)
+  dialect set, or message moved, no rule entered or left `RULES`, and this
+  repo's own change packages still validate clean under the retuned matchers.
+  (C-PM-2)
   _Verified by:_ `make validate` · stage: `make validate`
+
+- [x] **AC-PM-14:** `make matcher-accuracy` is `.PHONY`, carries `##` help,
+  and appears in neither the `ci:` nor the `pre-pr:` line. (C-PM-3, DEC-PM-011)
+  _Verified by:_ `pytest -k test_makefile_has_matcher_accuracy_report_target` · stage: `make test`
+
+- [x] **AC-PM-15 (non-success):** an upstream scenario whose WHEN/THEN prose
+  mentions negative numbers is not promoted to non-success by the annotation
+  tier; only a whole marker (`non-success`, `negative`) is. (R-PM-1, DEC-PM-002)
+  _Verified by:_ `pytest -k test_annotation_tier_matches_the_whole_marker_only` · stage: `make test`
+
+- [x] **AC-PM-16 (non-success):** a waiver comment whose reason reads "the
+  coverage floor fails otherwise" leaves `negation_evidence` empty in all three
+  dialects, and one reading "the number MUST stay in pyproject" leaves the
+  requirement non-normative. (C-PM-4, DEC-PM-012)
+  _Verified by:_ `pytest -k test_waiver_reason_text_is_invisible_to_both_matchers` · stage: `make test`
+
+- [x] **AC-PM-17:** the contracted prohibition "mustn't" (straight or curly
+  apostrophe) is normative; the compound "must-fix" is not. (R-PM-6)
+  _Verified by:_ `pytest -k test_contracted_prohibition_is_normative` · stage: `make test`
 
 ---
 
@@ -256,7 +310,7 @@ spec.
 
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
-| Focused | `make test` | AC-PM-1..12 (AC-PM-10 and AC-PM-11 hold by construction until their named tests are written) |
+| Focused | `make test` | AC-PM-1..12, AC-PM-14..17 |
 | Self-check | `make validate` | AC-PM-13 — this repo's own change packages stay clean under the retuned matchers |
 | Config discipline | `make thresholds` | no accuracy floor appears in the Makefile or any workflow YAML; every one is read from `pyproject.toml` |
 | Full | `make pre-pr` | full regression, lint, typecheck, security, docs, thresholds |

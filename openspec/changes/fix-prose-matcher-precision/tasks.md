@@ -42,16 +42,19 @@
 
 ## Milestone 3 — Build the labelled corpus  [DONE]
 
-- `tests/fixtures/phrasing/criteria.jsonl`: 86 hand-labelled criterion
-  sentences, roughly half of them success sentences deliberately seeded with
+- `tests/fixtures/phrasing/criteria.jsonl`: hand-labelled criterion
+  sentences (grown across two adversarial review rounds), roughly half of
+  them success sentences deliberately seeded with
   a trigger word the old matcher used ("zero-downtime deploy completes", "the
   failover succeeds", "blocked-user list is exported"). One JSON object per
-  line: `text`, `label`, `note`.
+  line: `text` and `label` (`note` on requirement rows).
 - `tests/fixtures/phrasing/criteria-ambiguous.jsonl`: the 11 sentences the
-  labeller could not decide, kept as the honest floor on inter-rater
-  agreement and scored by nothing (R-PM-8, DEC-PM-009).
-- `tests/fixtures/phrasing/requirements.jsonl`: 21 labelled requirement texts,
-  including the substring traps that used to read as normative.
+  labeller could not decide, carrying a `leaning` rather than a `label` so the
+  loader refuses to score them; kept as the honest floor on inter-rater
+  agreement (R-PM-8, DEC-PM-009).
+- `tests/fixtures/phrasing/requirements.jsonl`: labelled requirement texts,
+  including the substring traps that used to read as normative and the
+  contracted prohibition "mustn't".
 - `tests/fixtures/phrasing/requirements-modal-variants.jsonl`: 11 rows that
   are normative in spirit without SHALL/MUST, kept as documentation of an
   open design question rather than scored as misses against a contract U004
@@ -73,15 +76,16 @@
   to enforce the floors and `--patterns` to print the breakdown (R-PM-9).
 - `pyproject.toml` `[tool.specgraph]`: add `g002_min_precision_pct`,
   `g002_min_recall_pct`, `u004_min_precision_pct`, `u004_min_recall_pct`
-  beside `branch_fail_under`, each set below the measured figure, with a
-  comment saying that raising one is deliberate and lowering one needs a
-  reason in the commit message (R-PM-2, DEC-PM-005).
+  beside `branch_fail_under`, each set below the measured figure by a
+  recorded tolerance (how many additional errors it absorbs at the current
+  corpus size), with a comment saying that raising one is deliberate and
+  lowering one needs a reason in the commit message (R-PM-2, DEC-PM-005).
 - `tools/matcher_accuracy.py`: read each floor through
   `tools/_common.read_pyproject_int` — the reader the coverage gates already
   use — and treat a missing key as a reported failure, never a skip, matching
   `tools/check_branch_coverage.py`'s posture (R-PM-3).
-- `tests/test_matcher_accuracy.py`: 14 tests loading the tool in-process the
-  way `test_skill_contract.py` does, covering the two floor checks, the
+- `tests/test_matcher_accuracy.py`: tests loading the tool through
+  `tests/support.load_tool`, covering the two floor checks, the
   per-pattern misfire check, the case-insensitivity and name-uniqueness
   structural checks, the annotation-tier boundary, corpus shape and balance,
   the unscored files, the configured-floor check for every rule/metric pair,
@@ -97,8 +101,12 @@
   one place.
 - Confirm the rule surface is untouched: no id, severity, dialect set, or
   message moved; nothing entered or left `RULES`; the README rules table and
-  `graph.py` are unedited; no Makefile target was added (C-PM-2, C-PM-3,
-  DEC-PM-011).
+  `graph.py` are unedited; `make matcher-accuracy` is a report composed into
+  neither `ci` nor `pre-pr` (C-PM-2, C-PM-3, DEC-PM-011).
+- Adversarial review round: annotation tier as a full marker match, waiver
+  reason text stripped from the three fields the matchers read, weak verbs
+  re-anchored, U004 accepts "mustn't", floors re-set by tolerance
+  (DEC-PM-002, DEC-PM-003, DEC-PM-005, DEC-PM-012; AC-PM-14..17).
 - Dogfood: run `planlint validate` against this repo with this change package
   present, so the retuned G002 is exercised against this document's own
   `(non-success)` criteria.

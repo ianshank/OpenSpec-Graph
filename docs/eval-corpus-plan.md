@@ -339,7 +339,7 @@ line coverage 98.3, branch 96.6, 31 specs clean, mypy and ruff clean):
 | 1 | `fix-detect-corpus-defects` | Four defects fixed; 13-shape labelled corpus under `tests/corpus/targets/`; hostile-Makefile canary test; 48 new tests |
 | 2 | `add-parser-property-tests` | Five properties, dev-only `hypothesis` extra, runtime dependencies still empty |
 | 3 | deferred | See D3: mutmut cannot run here without deselecting repo self-checks; needs its own package |
-| 4 | `fix-prose-matcher-precision` | Three-tier negation table; word-bounded `is_normative`; labelled phrasing corpus; config-driven floors; 14 new tests. G002 precision 0.38 → 0.919, recall 0.42 → 0.983 (after the review widened the corpus); U004 0.47 → 0.875, 0.39 → 1.000 |
+| 4 | `fix-prose-matcher-precision` | Three-tier negation table; word-bounded `is_normative`; labelled phrasing corpus; config-driven floors; 14 new tests. G002 precision 0.38 → 0.919, recall 0.42 → 0.983 (after the review widened the corpus); U004 precision 0.47 → 0.875; recall 1.000 on the SHALL/MUST contract (the 0.39 before counted the eleven modal-variant rows now set aside, so the regex change did not raise it) |
 | 5 | Agents repo | Not in this repository; the four-file change is specified in D6 and appendix D |
 | 6 | blocked | `claude plugin eval` is early-access and not enabled on this account |
 | 7 | deferred by design | No results directory exists to export |

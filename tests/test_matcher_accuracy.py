@@ -76,12 +76,14 @@ def test_the_ambiguous_and_variant_files_assert_nothing() -> None:
     design question from the one U004's message actually claims to answer.
     Scoring either would measure a contract the rules never made.
     """
-    for name in ("criteria-ambiguous.jsonl", "requirements-modal-variants.jsonl"):
-        rows = accuracy.load_rows(CORPUS_DIR / name)
-        assert rows, f"{name} exists but is empty"
+    ambiguous = accuracy.load_rows(CORPUS_DIR / "criteria-ambiguous.jsonl", require_label=False)
+    variants = accuracy.load_rows(CORPUS_DIR / "requirements-modal-variants.jsonl")
+    assert ambiguous and variants, "a set-aside file is empty"
+    # An undecidable sentence carries a leaning, never a label: the loader's
+    # label requirement is what stops it being scored by accident.
+    assert all("label" not in r and isinstance(r.get("leaning"), bool) for r in ambiguous)
     scored = {r["text"] for r in accuracy.load_rows(accuracy.CRITERIA_CORPUS)}
-    documented = {r["text"] for r in accuracy.load_rows(CORPUS_DIR / "criteria-ambiguous.jsonl")}
-    assert not (scored & documented), "a sentence is both scored and set aside as ambiguous"
+    assert not (scored & {r["text"] for r in ambiguous}), "a sentence is both scored and set aside"
 
 
 # --- the floors -------------------------------------------------------------
@@ -288,3 +290,71 @@ def test_main_report_and_check_exit_codes(
     monkeypatch.setattr(accuracy, "_floor", lambda key: 100)
     assert accuracy.main(["matcher_accuracy.py", "--check"]) == 1
     assert "FAIL:" in capsys.readouterr().err
+
+
+# --- the tier boundary and the waiver leak, through the real parsers -------
+
+
+def test_annotation_tier_matches_the_whole_marker_only() -> None:
+    """``(negative)`` is a declaration; "negative" inside a block is a word.
+
+    Upstream scenarios put the entire scenario block in ``Criterion.note``,
+    so a search over ``note`` moved the bare-word false positive from harness
+    prose to upstream prose. A full match on the stripped marker closes it.
+    """
+    from openspec_graph.parse_semantics import negation_matches
+    from openspec_graph.parse_upstream import parse_upstream
+
+    assert negation_matches("non-success", "x") == ("annotated_non_success", "non_success")
+    assert negation_matches(" (negative) ", "x") == ("annotated_non_success",)
+    assert "annotated_non_success" not in negation_matches("WHEN a negative number is formatted", "")
+    assert negation_matches(None, None) == ()  # type: ignore[arg-type]
+
+    _reqs, crits = parse_upstream(
+        "## ADDED Requirements\n\n### Requirement: Formatting\n\n"
+        "#### Scenario: Negatives\n- **WHEN** a negative number is formatted\n"
+        "- **THEN** a minus sign is shown\n"
+    )
+    assert crits and crits[0].negation_evidence == ()
+
+
+def test_waiver_reason_text_is_invisible_to_both_matchers() -> None:
+    """The recurring bug class, closed for the matchers as it was for
+    ``verified_by``: a waiver's reason is not the criterion's prose."""
+    from openspec_graph.parse_harness import parse_harness
+    from openspec_graph.parse_speckit import parse_speckit
+    from openspec_graph.parse_upstream import parse_upstream
+
+    _r, crits = parse_harness(
+        "## Acceptance Criteria\n\n- [ ] **AC-XY-1:** The report renders. "
+        "<!-- specgraph:allow G003 the coverage floor fails otherwise --> (R-XY-1)\n"
+    )
+    # strip_waiver_comments blanks the comment to spaces (so line numbers
+    # elsewhere stay true); what matters is that the reason's words are gone.
+    assert "fails" not in crits[0].text and "(R-XY-1)" in crits[0].text
+    assert crits[0].negation_evidence == ()
+
+    reqs, crits = parse_upstream(
+        "## ADDED Requirements\n\n### Requirement: Floors\n"
+        "The floor is configurable. <!-- specgraph:allow G003 the number MUST stay in pyproject -->\n\n"
+        "#### Scenario: Read\n- **WHEN** the floor is read\n"
+        "- **THEN** it is shown <!-- specgraph:allow G003 the run fails without make -->\n"
+    )
+    assert reqs[0].is_normative is False
+    assert crits[0].negation_evidence == ()
+
+    _r, crits = parse_speckit(
+        "### User Story 1 - Read (Priority: P1)\n\n"
+        "1. **Given** a floor, **When** it is read, **Then** it is shown "
+        "<!-- specgraph:allow G003 the run fails without make -->\n"
+    )
+    assert crits and crits[0].negation_evidence == ()
+
+
+def test_contracted_prohibition_is_normative() -> None:
+    from openspec_graph.parse_model import Requirement
+
+    for body in ("The client mustn't retry.", "The client mustn\u2019t retry.", "It MUSTN'T."):
+        assert Requirement(ident="R", text="x", kind="shall", body=body).is_normative, body
+    assert not Requirement(ident="R", text="x", kind="shall", body="The must-fix list.").is_normative
+

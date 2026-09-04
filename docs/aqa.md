@@ -156,7 +156,7 @@ floors are config, never Make or workflow YAML, because rule G003 says so and
 | Rule | Precision | Recall | Before tiering |
 |---|---|---|---|
 | G002 | 0.919 | 0.983 | 0.38 / 0.42 |
-| U004 | 0.875 | 1.000 | 0.47 / 0.39 |
+| U004 | 0.875 | 1.000 on the SHALL/MUST contract | 0.47 / (0.39 counted the eleven modal-variant rows now set aside; a word-boundary tightening cannot raise recall and did not) |
 
 Read those with the corpus README's three caveats: the negative examples were
 written adversarially, eleven sentences could not be labelled confidently and

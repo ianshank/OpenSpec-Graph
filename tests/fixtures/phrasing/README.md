@@ -33,7 +33,7 @@ and updated here by hand:
 | Rule | Precision | Recall | Before |
 |---|---|---|---|
 | G002 | 0.919 | 0.983 | 0.38 / 0.42 |
-| U004 | 0.875 | 1.000 | 0.47 / 0.39 |
+| U004 | 0.875 | 1.000 on the SHALL/MUST contract | 0.47 / (0.39 counted the eleven modal-variant rows now set aside; a word-boundary tightening cannot raise recall and did not) |
 
 U004's one remaining false positive is the interrogative "Shall we keep the
 legacy endpoint?" — a question rather than an obligation. Distinguishing the

@@ -16,7 +16,12 @@ def parse_upstream(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion,
             text=m.group(2),
             kind="shall",
             level=len(m.group(1)),
-            body=text[m.end() : (req_matches[i + 1].start() if i + 1 < len(req_matches) else len(text))],
+            # Waiver reasons are not requirement prose: "the number MUST stay
+            # in pyproject" inside a comment made a non-normative requirement
+            # read as normative and silenced U004.
+            body=strip_waiver_comments(
+                text[m.end() : (req_matches[i + 1].start() if i + 1 < len(req_matches) else len(text))]
+            ),
         )
         for i, m in enumerate(req_matches)
     )
@@ -40,8 +45,11 @@ def parse_upstream(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion,
         criteria.append(
             Criterion(
                 ident=f"SCEN-{idx + 1}",
-                text=match.group(2),
-                note=block,
+                text=strip_waiver_comments(match.group(2)).strip(),
+                # The stripped block, for the same reason as verified_by: the
+                # negation matcher reads `note`, and a waiver's reason text
+                # inside the scenario is not the scenario.
+                note=verified_by,
                 verified_by=verified_by,
                 requirement_refs=(owning,),
                 line=line_of(text, match.start()),

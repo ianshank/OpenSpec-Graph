@@ -25,12 +25,13 @@ affected 20 of 34 requirements across four change packages and was found by
 hand. Measured directly and recorded in `docs/eval-corpus-plan.md` appendix B
 against a hand-labelled probe set: `Criterion.is_negative` scored precision
 0.38 and recall 0.42 (18 true positives against 29 false ones), and
-`Requirement.is_normative` scored precision 0.47 and recall 0.39. The same
-document's ground-truth table names the offending regexes —
+`Requirement.is_normative` scored precision 0.47 (recall 0.39 on a set that
+counted eleven "normative without SHALL/MUST" rows, a contract the rule never
+made — see DEC-PM-009). The same document's ground-truth table names the offending regexes —
 `\bblock(s|ed|ing)?\b` at 6 false positives against 1 true, `\bzero\b` at 5
 against 1 and redundant with `non-?zero` — and records that every *structural*
 pattern (`opens no`, `no X is created`, `neither`, `cannot`, `never`,
-`non-success`) scored zero false positives. `docs/eval-corpus-plan.md`'s D4
+`non-success`) scored zero false positives on the scored set. `docs/eval-corpus-plan.md`'s D4
 decision is the planning artifact this change implements.
 
 ## What Changes
@@ -42,7 +43,8 @@ decision is the planning artifact this change implements.
   `annotation` (matched against the criterion's own parenthesised marker
   only), `structural` (grammar meaning absence or refusal, wherever it
   appears), `lexical` (words whose verb forms mean failure, restricted to
-  genuinely verbal inflections and refusing a following hyphen). Bare `zero`,
+  verbal inflections — passive-only for the weak verbs — and refusing a
+  following hyphen). Bare `zero`,
   bare `block`, bare `without`, bare `nothing` and bare `negative` are removed
   or re-anchored on the measured evidence. `NEGATIVE_PATTERNS` survives as a
   derived, backwards-compatible alias excluding the annotation tier, still
@@ -56,9 +58,10 @@ decision is the planning artifact this change implements.
   `graph.py` and G002 itself untouched. `Requirement.is_normative` uses
   `NORMATIVE_MODAL`.
 - `tests/fixtures/phrasing/`: a new hand-labelled corpus —
-  `criteria.jsonl` (86 scored rows), `criteria-ambiguous.jsonl` (11 rows the
-  labeller could not decide, scored by nothing), `requirements.jsonl` (21
-  scored rows), `requirements-modal-variants.jsonl` (11 rows normative in
+  `criteria.jsonl` (scored rows, grown by two adversarial review rounds),
+  `criteria-ambiguous.jsonl` (the rows the labeller could not decide, carrying
+  a `leaning` rather than a `label` so nothing can score them),
+  `requirements.jsonl` (scored rows), `requirements-modal-variants.jsonl` (11 rows normative in
   spirit without SHALL/MUST, a separate open design question), and a
   `README.md` recording the measurement, the labelling rule, and three honest
   limitations.
@@ -71,7 +74,7 @@ decision is the planning artifact this change implements.
   `g002_min_precision_pct`, `g002_min_recall_pct`, `u004_min_precision_pct`,
   `u004_min_recall_pct` — beside the existing `branch_fail_under`, read with
   the same `tools/_common.read_pyproject_int` the coverage gates use.
-- `tests/test_matcher_accuracy.py`: 14 new tests holding both matchers to
+- `tests/test_matcher_accuracy.py`: new tests holding both matchers to
   those floors, proving no pattern misfires more than it fires, pinning the
   tier boundary and the case-insensitivity of every pattern, and asserting
   that a missing floor is a loud failure rather than a skip.
@@ -79,6 +82,11 @@ decision is the planning artifact this change implements.
   records this package against plan item 4, with the before/after figures.
 
 ## Non-Goals
+
+- No change to which *text* the matchers see beyond the waiver fix: a
+  waiver comment's reason is now stripped from `Criterion.text`/`note` and
+  `Requirement.body` (the class `strip_waiver_comments` already closed for
+  `verified_by`); nothing else about parsing moves.
 
 - No widening of what counts as normative. U004's own message says the
   requirement "uses no SHALL/MUST", so that is the contract measured. "is
@@ -90,13 +98,15 @@ decision is the planning artifact this change implements.
   message. Nothing enters the `RULES` registry or the README rules table; this
   is a precision fix beneath two existing rules, so a reader's mental model of
   the rule set is unchanged.
-- No new Makefile target. The gate rides in the existing pytest suite, which
-  `make test` already runs; the scorer's `--check` mode exists for a human
-  asking the same question interactively, and adding a target for one script
-  the suite already exercises would be a second place for the two to disagree.
-- No floor set at the measured value. A floor equal to the current figure
-  turns every future pattern addition into a failure even when it improves
-  things, so each is set deliberately below the measurement.
+- No Makefile-only gate. `make matcher-accuracy` exists as a one-word report
+  for a human, a skill checklist, or the Claude Code hook to point at (it runs
+  `--check --patterns`, so it exits non-zero on a breach), but the gate that
+  cannot be forgotten is `tests/test_matcher_accuracy.py` inside `make test`,
+  and the target is composed into neither `ci` nor `pre-pr`.
+- No floor set at the measured value. Each floor is chosen by how many
+  additional errors it tolerates at the current corpus size, and that count is
+  recorded beside it in `pyproject.toml`; a floor that tolerates zero is a floor
+  at the measurement whatever its nominal distance.
 - No special case for the one remaining U004 false positive. The interrogative
   "Shall we keep the legacy endpoint?" is a question rather than an
   obligation; telling the two apart needs more than a lexical test, so it is

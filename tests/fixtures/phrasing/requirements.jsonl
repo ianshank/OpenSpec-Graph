@@ -19,3 +19,15 @@
 {"body": "Deploys must be zero-downtime.", "label": true, "note": "must, adjective complement", "text": "Deploy"}
 {"body": "", "label": true, "note": "SHALL in heading only", "text": "The system SHALL validate every manifest before apply"}
 {"body": "Validation of the manifest happens before apply.", "label": false, "note": "descriptive statement, no obligation; debatable", "text": "Manifest validation"}
+{"body": "The client mustn't retry a non-idempotent request.", "label": true, "note": "contracted prohibition", "text": "Retry budget"}
+{"body": "The client mustn’t retry a non-idempotent request.", "label": true, "note": "curly-apostrophe contraction", "text": "Retry budget"}
+{"body": "Every witness SHALL be content-addressed.", "label": true, "note": "SHALL, body", "text": "Witness store"}
+{"body": "The store must reject a witness whose hash does not match its name.", "label": true, "note": "lowercase must, body", "text": "Witness store"}
+{"body": "A bad --target MUST exit 2, never 1.", "label": true, "note": "MUST with a numeric object", "text": "Exit codes"}
+{"body": "The card shall not carry an absolute path.", "label": true, "note": "shall not prohibition", "text": "Dialect card"}
+{"body": "Every waiver MUST state a reason.", "label": true, "note": "MUST, short", "text": "Waivers"}
+{"body": "The verb must list every spec citing a removed target.", "label": true, "note": "must, body", "text": "Delta"}
+{"body": "Items on the must-fix list are triaged weekly.", "label": false, "note": "trap: must-fix compound", "text": "Bugfix list"}
+{"body": "The Mustafa plugin is retired in Q3.", "label": false, "note": "trap: proper noun containing MUST", "text": "Fleet"}
+{"body": "The operator may enable verbose logging.", "label": false, "note": "MAY = optional", "text": "Options"}
+{"body": "Shallow clones were the default until 0.2.", "label": false, "note": "trap: shallow", "text": "Background"}

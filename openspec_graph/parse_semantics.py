@@ -165,8 +165,13 @@ THRESHOLD_ALLOWLIST = (
 #   annotation -- the author said so. Harness-dialect criteria carry a
 #                 parenthesised marker ("**AC-WM-3 (non-success):**"), which is
 #                 an explicit declaration, not prose to be interpreted. Matched
-#                 against the annotation ONLY, so a criterion merely discussing
-#                 negative numbers is not promoted by the word.
+#                 against the WHOLE marker (a full match, not a search), so a
+#                 criterion merely discussing negative numbers is not promoted
+#                 by the word -- and neither is an upstream scenario, whose
+#                 `Criterion.note` is the entire scenario block rather than a
+#                 marker (an adversarial review found the bare-word false
+#                 positive had simply moved dialects when this tier matched by
+#                 search).
 #   structural -- grammar that means absence or refusal wherever it appears
 #                 ("cannot", "no X is created", "writes no", "exits 2"). Every
 #                 pattern in this tier scored zero false positives.
@@ -206,7 +211,7 @@ def _negation(name: str, tier: str, source: str) -> NegationPattern:
 
 NEGATION_PATTERNS: tuple[NegationPattern, ...] = (
     # -- annotation: matched against the criterion's own marker only ---------
-    _negation("annotated_non_success", ANNOTATION_TIER, r"\b(?:non-success|negative)\b"),
+    _negation("annotated_non_success", ANNOTATION_TIER, r"(?:non-success|negative)"),
     # -- structural ---------------------------------------------------------
     _negation("non_success", STRUCTURAL_TIER, r"\bnon-success\b"),
     # A prohibition is always an obligation about a failure path.
@@ -356,19 +361,31 @@ def negation_matches(note: str, text: str) -> tuple[str, ...]:
     """Names of every negation pattern matching this criterion, in table order.
 
     ``note`` is the criterion's own parenthesised annotation and ``text`` its
-    prose. Annotation-tier patterns see only ``note`` -- that separation is the
-    whole point of the tier, since "negative" as a declared marker and
-    "negative" in a sentence about numbers are different claims.
+    prose. Annotation-tier patterns must match the whole of ``note`` (stripped)
+    -- that separation is the whole point of the tier, since "negative" as a
+    declared marker and "negative" in a sentence about numbers are different
+    claims. A dialect whose ``note`` is a block of prose (upstream scenarios,
+    speckit snippets) therefore never triggers the annotation tier; its prose
+    is judged by the structural and lexical tiers like any other prose.
 
     Returns names rather than a bare bool so a caller can report *why* a
     criterion counted, which is what makes a G002 finding arguable instead of
     mysterious. :attr:`parse_model.Criterion.is_negative` is the boolean view.
     """
+    note = note or ""
+    text = text or ""
+    # The harness parser already strips the marker's parentheses; tolerate a
+    # caller that hands them over intact, and any surrounding whitespace.
+    marker = note.strip().strip("()").strip()
     blob = f"{note} {text}"
     return tuple(
         p.name
         for p in NEGATION_PATTERNS
-        if p.pattern.search(note if p.tier == ANNOTATION_TIER else blob)
+        if (
+            p.pattern.fullmatch(marker)
+            if p.tier == ANNOTATION_TIER
+            else p.pattern.search(blob)
+        )
     )
 
 
@@ -394,7 +411,10 @@ def negation_matches(note: str, text: str) -> tuple[str, ...]:
 # obligation, but distinguishing the two needs more than a lexical test, and
 # it is counted honestly against U004's measured precision rather than
 # special-cased away.
-NORMATIVE_MODAL = re.compile(r"\b(?:SHALL|MUST)\b(?!-)", re.IGNORECASE)
+# The contracted prohibition ("mustn't", straight or curly apostrophe) is a
+# MUST NOT and counts; without the optional group `\bmust` has no boundary
+# before the `n` and a contracted prohibition would draw a U004.
+NORMATIVE_MODAL = re.compile(r"\b(?:SHALL|MUST)(?:N['\u2019]T)?\b(?!-)", re.IGNORECASE)
 
 
 # Backwards-compatible view for callers that only ever wanted the compiled

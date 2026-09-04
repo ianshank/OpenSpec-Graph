@@ -116,16 +116,24 @@ branch_fail_under = 80
 #
 # Integer percentages so they reuse `_common.read_pyproject_int`, the reader
 # the coverage gates already use, instead of adding a second config parser.
-# Set below the measured figures, not at them: a floor equal to the current
-# value turns every future pattern addition into a failure even when it is an
-# improvement. Measured when these landed -- G002 0.919/0.983, U004 0.875/1.000.
+#
+# Each floor is chosen by how many ADDITIONAL errors it tolerates at the
+# current corpus size, and that count is recorded here, because a floor that
+# tolerates zero is a floor at the measurement whatever its nominal distance.
+# Slack exists for two honest reasons: a recall-gaining pattern normally costs
+# a little precision, and adversarial corpus rows are meant to keep being
+# added. Measured when these landed (re-measure with `make matcher-accuracy`):
+#   G002  precision 0.919 (57/62), recall 0.983 (57/58), n=119
+#         -> 88 tolerates two more false positives; 90 tolerates five misses
+#   U004  precision 0.938 (15/16), recall 1.000 (15/15), n=33
+#         -> 82 tolerates two more false positives; 90 tolerates one miss
 #
 # Raising a floor is a deliberate act. Lowering one needs a reason in the
 # commit message, because it means the matcher got worse.
 g002_min_precision_pct = 88
 g002_min_recall_pct = 90
-u004_min_precision_pct = 80
-u004_min_recall_pct = 95
+u004_min_precision_pct = 82
+u004_min_recall_pct = 90
 
 [project.optional-dependencies]
 # tomli backports stdlib tomllib (3.11+) for coverage.process_startup()'s

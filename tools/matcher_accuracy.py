@@ -124,8 +124,12 @@ class Score:
         return int(self.recall * 100)
 
 
-def load_rows(path: Path) -> list[dict[str, object]]:
-    """Read one JSON object per line, ignoring blank lines."""
+def load_rows(path: Path, *, require_label: bool = True) -> list[dict[str, object]]:
+    """Read one JSON object per line, ignoring blank lines.
+
+    ``require_label=False`` is for the set-aside files, whose rows carry a
+    ``leaning`` rather than a ``label`` precisely so nothing can score them.
+    """
     if not path.exists():
         raise FileNotFoundError(f"labelled corpus missing: {path}")
     rows: list[dict[str, object]] = []
@@ -144,7 +148,7 @@ def load_rows(path: Path) -> list[dict[str, object]]:
             raise ValueError(f"{path.name} line {number}: expected an object, got {type(row).__name__}")
         if not isinstance(row.get("text"), str) or not row["text"].strip():
             raise ValueError(f"{path.name} line {number}: missing or empty 'text'")
-        if not isinstance(row.get("label"), bool):
+        if require_label and not isinstance(row.get("label"), bool):
             raise ValueError(f"{path.name} line {number}: 'label' must be true or false")
         rows.append(row)
     return rows
