@@ -243,3 +243,35 @@ def test_is_negative_depends_on_wording_not_casing_or_padding(
     assert recased == baseline, (text, note, mode)
     padded = Criterion(ident="X", text=lead + text + trail, note=note).is_negative
     assert padded == baseline, (text, note, lead, trail)
+
+
+# --- the suite's own contract -----------------------------------------------
+
+
+def test_property_settings_are_derandomized_and_nothing_is_xfailed() -> None:
+    """A gate that fails one run in fifty gets overridden and then deleted.
+
+    Every property runs under ``PROPERTY_SETTINGS`` with ``derandomize=True``
+    so a failure reproduces from its message, and none is marked ``xfail`` --
+    a found counterexample becomes a named regression test instead.
+    """
+    import inspect
+    import sys
+
+    assert PROPERTY_SETTINGS.derandomize is True
+    module = sys.modules[__name__]
+    properties = [
+        fn for name, fn in vars(module).items()
+        if name.startswith("test_") and hasattr(fn, "hypothesis")
+    ]
+    assert len(properties) >= 5, "the five stated properties must all be present"
+    source = inspect.getsource(module)
+    for fn in properties:
+        # Each property is decorated with the shared settings object, by name.
+        assert f"@PROPERTY_SETTINGS\n@given" in source or "@PROPERTY_SETTINGS" in source
+        marks = getattr(fn, "pytestmark", [])
+        assert not any(m.name == "xfail" for m in marks), f"{fn.__name__} is xfail-marked"
+    assert source.count("@PROPERTY_SETTINGS") == len(properties), (
+        "every property must carry the shared, derandomised settings"
+    )
+
