@@ -132,7 +132,7 @@ def read_text_or_none(path: Path, what: str) -> str | None:
     try:
         return path.read_text(encoding="utf-8-sig", errors="replace")
     except OSError as exc:
-        logger.debug("%s: %s exists but could not be read: %s", what, path, exc)
+        logger.debug("%s: could not read %s: %s", what, path, exc)
         return None
 
 

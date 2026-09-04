@@ -7,7 +7,7 @@ got wrong"): **G002** asks whether a criterion names a non-success outcome, and
 map proves such a rule *can* fire. It cannot say how often it fires on the
 wrong sentence.
 
-This is the module that says. It scores
+This module measures that. It scores
 :data:`openspec_graph.parse_semantics.NEGATION_PATTERNS` and
 ``Requirement.is_normative`` against ``tests/fixtures/phrasing/`` and reports
 precision and recall per rule, plus a per-pattern true/false-positive

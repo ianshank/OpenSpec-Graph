@@ -6,7 +6,7 @@ Hand-labelled sentences used to measure the accuracy of two matchers:
 |---|---|---|
 | `criteria.jsonl` | 119 | `Criterion.is_negative` (rule **G002**) |
 | `criteria-ambiguous.jsonl` | 11 | nothing — see below |
-| `requirements.jsonl` | 21 | `Requirement.is_normative` (rules **U004**, **S003**) |
+| `requirements.jsonl` | 33 | `Requirement.is_normative` (rules **U004**, **S003**) |
 | `requirements-modal-variants.jsonl` | 11 | nothing — see below |
 
 Each row is one JSON object: `text` (and `body` for requirements), plus

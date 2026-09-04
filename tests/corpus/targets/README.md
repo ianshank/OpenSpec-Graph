@@ -52,6 +52,7 @@ were first written; the fixes landed with them.
 | `inline-table-fail-under` | `threshold` = null | `report = { fail_under = 90 }` is valid TOML the scanner does not read. Pinned as a documented limit (`docs/next-steps.md` 7a) so supporting it is a decision. |
 | `array-of-tables-fail-under` | `threshold` = null | `[[tool.coverage.report]]` is an array of tables, never the table holding a floor. |
 | `quoted-string-fail-under` | `threshold` = null | `fail_under = "90"` is a string; coverage.py rejects it and so does planlint, rather than guessing. |
+| `shell-call-with-colon` | `make_targets` = all, build | A top-level `$(shell …)` or `$(info …)` whose argument contains a colon (a Windows drive path, `a:b`) is a function call, not a rule. The rule regex used to mint `touch` and `C` as targets; the Windows CI leg found it through the hostile shape. |
 
 Three further cases are generated inside the test rather than committed,
 because a directory cannot be represented as a file in git and a large

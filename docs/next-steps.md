@@ -100,14 +100,15 @@ over-engineering.
    other gates.
 
 7a. **`scoped_fail_under` reads the common TOML forms, not all of them** —
-   `[tool.coverage.report]` as a plain table header is the only shape
-   recognised. A quoted header (`["tool"."coverage"."report"]`), a dotted key
-   at top level (`tool.coverage.report.fail_under = 90`), or an inline table
-   (`report = { fail_under = 90 }`) reads as "no floor". The old whole-file
-   regex caught only the quoted-header form, and only by accident of matching
-   under every table (which is how it also attributed floors from unrelated
-   tables to this one); the dotted-key and inline-table forms were never read
-   by either implementation. The trade was made deliberately. A stdlib
+   `[tool.coverage.report]` as a table header — plain, spaced, or with quoted
+   segments (`["tool"."coverage"."report"]`) — is recognised, and lines
+   inside multi-line strings and arrays under it are skipped. A dotted key at
+   top level (`tool.coverage.report.fail_under = 90`) or an inline table
+   (`report = { fail_under = 90 }`) reads as "no floor"; both are pinned in
+   `tests/corpus/targets/` as limits. Neither was ever read by the old
+   whole-file regex either (which matched under every table, and so also
+   attributed floors from unrelated tables to this one). The trade was made
+   deliberately. A stdlib
    `tomllib` parse would cover every form but only on 3.11+, and detection
    must be byte-identical across the whole matrix. Revisit when 3.10 leaves
    the matrix.
